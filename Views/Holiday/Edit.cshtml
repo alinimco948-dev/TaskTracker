@@ -1,0 +1,95 @@
+﻿@model TaskTracker.Models.Entities.Holiday
+@{
+    ViewData["Title"] = "Edit Holiday";
+
+    var weekdays = new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+    var isWeekly = Model.IsWeekly;
+}
+
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-semibold mb-4">Edit Holiday</h2>
+
+        <form asp-action="Edit" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Holiday Type</label>
+                <div class="flex space-x-4">
+                    <label class="flex items-center">
+                        <input type="radio" name="holidayType" value="specific" class="mr-2"
+                               @(isWeekly ? "" : "checked") onchange="toggleHolidayType()">
+                        <span class="text-sm">Specific Date</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="holidayType" value="weekly" class="mr-2"
+                               @(isWeekly ? "checked" : "") onchange="toggleHolidayType()">
+                        <span class="text-sm">Weekly Recurring</span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="specificDateSection" class="@(isWeekly ? "hidden" : "")">
+                <div class="mb-4">
+                    <label asp-for="HolidayDate" class="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                    <input asp-for="HolidayDate" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                           value="@Model.HolidayDate.ToString("yyyy-MM-dd")"
+                           disabled="@(isWeekly ? "disabled" : null)">
+                    <span asp-validation-for="HolidayDate" class="text-xs text-red-500"></span>
+                </div>
+            </div>
+
+            <div id="weeklySection" class="@(isWeekly ? "" : "hidden")">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Day of Week *</label>
+                    <select id="WeekDay" name="WeekDay" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            disabled="@(isWeekly ? null : "disabled")">
+                        <option value="">Select a day</option>
+                        @for (int i = 0; i < weekdays.Length; i++)
+                        {
+                            var isSelected = Model.WeekDay == i;
+                            <option value="@i" selected="@(isSelected ? "selected" : null)">@weekdays[i]</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="Description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea asp-for="Description" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">@Model.Description</textarea>
+            </div>
+
+            <div class="flex justify-end space-x-2">
+                <a href="@Url.Action("Index")" class="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</a>
+                <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">Update Holiday</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function toggleHolidayType() {
+        var type = document.querySelector('input[name="holidayType"]:checked').value;
+        var specificSection = document.getElementById('specificDateSection');
+        var weeklySection = document.getElementById('weeklySection');
+        var specificInput = document.getElementById('HolidayDate');
+        var weeklySelect = document.getElementById('WeekDay');
+
+        if (type === 'specific') {
+            specificSection.classList.remove('hidden');
+            weeklySection.classList.add('hidden');
+            weeklySelect.disabled = true;
+            specificInput.disabled = false;
+        } else {
+            specificSection.classList.add('hidden');
+            weeklySection.classList.remove('hidden');
+            weeklySelect.disabled = false;
+            specificInput.disabled = true;
+        }
+    }
+</script>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,68 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - TaskTracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        body { background-color: #f3f4f6; }
+        .sidebar { transition: all 0.3s ease; }
+        .sidebar.collapsed { width: 80px; }
+        .sidebar.collapsed .sidebar-text { display: none; }
+        .animate-slide-in { animation: slideIn 0.3s ease-out; }
+        @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex h-screen bg-gray-100">
+        @await Html.PartialAsync("_Sidebar")
+        <div class="flex-1 flex flex-col overflow-hidden" id="main-content">
+            @await Html.PartialAsync("_TopNav")
+            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4">
+                <div class="container mx-auto">
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded shadow animate-slide-in">
+                            <div class="flex items-center"><i class="fas fa-check-circle mr-2"></i><p>@TempData["SuccessMessage"]</p></div>
+                        </div>
+                    }
+                    @if (TempData["ErrorMessage"] != null)
+                    {
+                        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow animate-slide-in">
+                            <div class="flex items-center"><i class="fas fa-exclamation-circle mr-2"></i><p>@TempData["ErrorMessage"]</p></div>
+                        </div>
+                    }
+                    @RenderBody()
+                </div>
+            </main>
+            <footer class="bg-white border-t border-gray-200 p-3 text-xs text-gray-600">
+                <div class="container mx-auto flex justify-between items-center">
+                    <div>&copy; @DateTime.Now.Year - TaskTracker v1.0.0</div>
+                    <div><span class="text-gray-400">Last updated: @DateTime.Now.ToString("MMM dd, yyyy HH:mm")</span></div>
+                </div>
+            </footer>
+        </div>
+    </div>
+    <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        function showNotification(message, type = 'info') {
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', warning: 'bg-yellow-500', info: 'bg-blue-500' };
+            const notification = $(`<div class="px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ${colors[type]} animate-slide-in flex items-center"><i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i><span>${message}</span></div>`);
+            $('#notification-container').append(notification);
+            setTimeout(() => { notification.fadeOut(300, function() { $(this).remove(); }); }, 3000);
+        }
+        function formatDate(date) { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+        function getInitials(name) { return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2); }
+        function toggleSidebar() { $('#sidebar').toggleClass('collapsed'); $('.sidebar-text').toggleClass('hidden'); localStorage.setItem('sidebarCollapsed', $('#sidebar').hasClass('collapsed')); }
+        $(document).ready(function() { if (localStorage.getItem('sidebarCollapsed') === 'true') { $('#sidebar').addClass('collapsed'); $('.sidebar-text').addClass('hidden'); } });
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

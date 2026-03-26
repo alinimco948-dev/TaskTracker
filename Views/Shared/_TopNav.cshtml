@@ -1,0 +1,43 @@
+﻿<header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <h1 class="text-xl font-semibold text-gray-800">@ViewData["Title"]</h1>
+            @if (ViewData["Subtitle"] != null)
+            {
+                <span class="text-sm text-gray-500">@ViewData["Subtitle"]</span>
+            }
+        </div>
+        <div class="flex items-center space-x-4">
+            <div class="relative hidden md:block">
+                <input type="text" placeholder="Search..." class="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64">
+                <i class="fas fa-search absolute left-3 top-3 text-gray-400 text-sm"></i>
+            </div>
+            <div class="relative">
+                <button onclick="toggleQuickActions()" class="p-2 text-gray-600 hover:text-blue-600 transition"><i class="fas fa-plus-circle text-lg"></i></button>
+                <div id="quick-actions-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                    <a href="@Url.Action("Create", "Employee")" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-user-plus mr-2 text-blue-500"></i>Add Employee</a>
+                    <a href="@Url.Action("Create", "Branch")" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-store mr-2 text-green-500"></i>Add Branch</a>
+                    <a href="@Url.Action("Create", "Department")" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-building mr-2 text-purple-500"></i>Add Department</a>
+                    <a href="@Url.Action("Create", "Task")" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-tasks mr-2 text-yellow-500"></i>Add Task</a>
+                </div>
+            </div>
+            <div class="relative">
+                <button onclick="toggleUserMenu()" class="flex items-center space-x-2 focus:outline-none">
+                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white"><span class="text-sm font-semibold">AD</span></div>
+                    <i class="fas fa-chevron-down text-xs text-gray-500"></i>
+                </button>
+                <div id="user-menu-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                    <div class="px-4 py-3 border-b border-gray-100"><p class="text-sm font-medium text-gray-900">Admin User</p><p class="text-xs text-gray-500">admin@tasktracker.com</p></div>
+                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-user mr-2"></i>Profile</a>
+                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-cog mr-2"></i>Settings</a>
+                    <a href="#" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100"><i class="fas fa-sign-out-alt mr-2"></i>Sign Out</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+<script>
+    function toggleQuickActions() { $('#quick-actions-dropdown').slideToggle(200); $('#user-menu-dropdown').slideUp(200); }
+    function toggleUserMenu() { $('#user-menu-dropdown').slideToggle(200); $('#quick-actions-dropdown').slideUp(200); }
+    $(document).click(function(event) { if (!$(event.target).closest('.relative').length) { $('#quick-actions-dropdown').slideUp(200); $('#user-menu-dropdown').slideUp(200); } });
+</script>

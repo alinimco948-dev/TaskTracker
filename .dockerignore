@@ -1,0 +1,17 @@
+bin/
+obj/
+.vs/
+.git/
+.gitignore
+*.user
+*.suo
+*.log
+*.tmp
+*.pid
+*.secrets
+.env
+.DS_Store
+README.md
+*.md
+.vscode/
+.idea/

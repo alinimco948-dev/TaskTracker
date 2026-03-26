@@ -1,0 +1,48 @@
+﻿@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+}
+
+<aside id="sidebar" class="sidebar w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col shadow-xl">
+    <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-tasks text-2xl text-blue-400"></i>
+            <span class="sidebar-text font-bold text-xl tracking-tight">TaskTracker</span>
+        </div>
+        <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white transition"><i class="fas fa-bars"></i></button>
+    </div>
+    <nav class="flex-1 overflow-y-auto py-4">
+        <ul class="space-y-1 px-2">
+            <li><a href="@Url.Action("Index", "Home")" class="flex items-center space-x-3 px-3 py-2 rounded-lg transition-all @(controller == "Home" ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700")"><i class="fas fa-tachometer-alt w-5"></i><span class="sidebar-text">Dashboard</span></a></li>
+            <li><a href="@Url.Action("Index", "Employee")" class="flex items-center space-x-3 px-3 py-2 rounded-lg transition-all @(controller == "Employee" ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700")"><i class="fas fa-users w-5"></i><span class="sidebar-text">Employees</span></a></li>
+            <li><a href="@Url.Action("Index", "Branch")" class="flex items-center space-x-3 px-3 py-2 rounded-lg transition-all @(controller == "Branch" ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700")"><i class="fas fa-store w-5"></i><span class="sidebar-text">Branches</span></a></li>
+            <li><a href="@Url.Action("Index", "Department")" class="flex items-center space-x-3 px-3 py-2 rounded-lg transition-all @(controller == "Department" ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700")"><i class="fas fa-building w-5"></i><span class="sidebar-text">Departments</span></a></li>
+            <li><a href="@Url.Action("Index", "Task")" class="flex items-center space-x-3 px-3 py-2 rounded-lg transition-all @(controller == "Task" ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700")"><i class="fas fa-tasks w-5"></i><span class="sidebar-text">Tasks</span></a></li>
+            <li>
+                <div class="relative">
+                    <button onclick="toggleReportsDropdown()" class="w-full flex items-center justify-between space-x-3 px-3 py-2 rounded-lg transition-all text-gray-300 hover:bg-gray-700">
+                        <div class="flex items-center space-x-3"><i class="fas fa-chart-bar w-5"></i><span class="sidebar-text">Reports</span></div>
+                        <i class="fas fa-chevron-down text-xs transition-transform sidebar-text" id="reports-chevron"></i>
+                    </button>
+                    <div id="reports-dropdown" class="hidden mt-1 ml-8 space-y-1">
+                        <a href="@Url.Action("EmployeePerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"><i class="fas fa-user mr-2"></i>Employee Performance</a>
+                        <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"><i class="fas fa-store mr-2"></i>Branch Performance</a>
+                        <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"><i class="fas fa-building mr-2"></i>Department Performance</a>
+                        <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"><i class="fas fa-check-circle mr-2"></i>Task Completion</a>
+                        <a href="@Url.Action("AuditLog", "Report")" class="block px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"><i class="fas fa-history mr-2"></i>Audit Log</a>
+                        <a href="@Url.Action("Custom", "Report")" class="block px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"><i class="fas fa-sliders-h mr-2"></i>Custom Report</a>
+                    </div>
+                </div>
+            </li>
+            <li><a href="@Url.Action("Index", "Holiday")" class="flex items-center space-x-3 px-3 py-2 rounded-lg transition-all @(controller == "Holiday" ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700")"><i class="fas fa-calendar-alt w-5"></i><span class="sidebar-text">Holidays</span></a></li>
+        </ul>
+    </nav>
+    <div class="p-4 border-t border-gray-700">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center"><span class="text-sm font-semibold">AD</span></div>
+            <div class="sidebar-text"><div class="text-sm font-medium">Admin User</div><div class="text-xs text-gray-400">Administrator</div></div>
+        </div>
+    </div>
+</aside>
+<script>
+    function toggleReportsDropdown() { $('#reports-dropdown').slideToggle(200); $('#reports-chevron').toggleClass('rotate-180'); }
+</script>

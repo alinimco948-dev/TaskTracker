@@ -1,0 +1,103 @@
+﻿@model TaskTracker.Models.ViewModels.AuditLogReportViewModel
+@{
+    ViewData["Title"] = "Audit Log Report";
+}
+
+<div class="space-y-6">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input type="date" name="startDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@ViewBag.StartDate">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input type="date" name="endDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@ViewBag.EndDate">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                <select name="action" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Actions</option>
+                    @foreach (var act in ViewBag.Actions)
+                    {
+                        <option value="@act" selected="@(act == ViewBag.SelectedAction)">@act</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Entity Type</label>
+                <select name="entityType" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Entities</option>
+                    @foreach (var type in ViewBag.EntityTypes)
+                    {
+                        <option value="@type" selected="@(type == ViewBag.SelectedEntityType)">@type</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                    <i class="fas fa-search mr-2"></i>Filter
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Total Events</div>
+            <div class="text-3xl font-bold">@Model.TotalEvents</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 class="font-semibold mb-4">Events by Action</h3>
+            <div class="space-y-2">
+                @foreach (var action in Model.EventsByAction)
+                {
+                    <div class="flex justify-between items-center">
+                        <span>@action.Key</span>
+                        <span class="font-bold">@action.Value</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 class="font-semibold mb-4">Events by Entity</h3>
+            <div class="space-y-2">
+                @foreach (var entity in Model.EventsByEntity)
+                {
+                    <div class="flex justify-between items-center">
+                        <span>@entity.Key</span>
+                        <span class="font-bold">@entity.Value</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="p-4 border-b border-gray-200">
+            <h3 class="font-semibold">Event Details</h3>
+        </div>
+        <div class="overflow-x-auto p-4">
+            <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50"><th class="px-4 py-2 text-left">Timestamp</th><th class="px-4 py-2 text-left">User</th><th class="px-4 py-2 text-left">Action</th><th class="px-4 py-2 text-left">Entity</th><th class="px-4 py-2 text-left">Description</th><th class="px-4 py-2 text-left">IP Address</th></tr></thead>
+                <tbody>
+                    @foreach (var evt in Model.Events)
+                    {
+                        <tr class="border-t">
+                            <td class="px-4 py-2">@evt.Timestamp.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td class="px-4 py-2">@evt.UserName</td>
+                            <td class="px-4 py-2">@evt.Action</td>
+                            <td class="px-4 py-2">@evt.EntityType</td>
+                            <td class="px-4 py-2">@evt.Description</td>
+                            <td class="px-4 py-2">@evt.IpAddress</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,238 @@
+﻿@model TaskTracker.Models.ViewModels.EmployeeViewModel
+@{
+    ViewData["Title"] = "Create Employee";
+}
+
+<div class="container mx-auto px-4 py-8 max-w-3xl">
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Create New Employee</h1>
+                <p class="text-gray-600 mt-1">Add a new employee to the system</p>
+            </div>
+            <a href="@Url.Action("Index")" class="text-gray-600 hover:text-gray-800 transition flex items-center">
+                <i class="fas fa-arrow-left mr-2"></i> Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+        <div class="p-6">
+            <form asp-action="Create" method="post">
+                @Html.AntiForgeryToken()
+
+                <div asp-validation-summary="ModelOnly" class="mb-6 p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200"></div>
+
+                <!-- Basic Information Section -->
+                <div class="bg-gray-50 rounded-lg p-5 mb-6">
+                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-user-circle text-blue-500 mr-2"></i>
+                        Basic Information
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label asp-for="Name" class="block text-sm font-medium text-gray-700 mb-1">
+                                Full Name <span class="text-red-500">*</span>
+                            </label>
+                            <input asp-for="Name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="e.g., Ahmed Hassan" />
+                            <span asp-validation-for="Name" class="text-xs text-red-600 mt-1 block"></span>
+                        </div>
+                        
+                        <div>
+                            <label asp-for="EmployeeId" class="block text-sm font-medium text-gray-700 mb-1">
+                                Employee ID <span class="text-red-500">*</span>
+                            </label>
+                            <input asp-for="EmployeeId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="e.g., EMP001" />
+                            <span asp-validation-for="EmployeeId" class="text-xs text-red-600 mt-1 block"></span>
+                        </div>
+                        
+                        <div>
+                            <label asp-for="Email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                            <input asp-for="Email" type="email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="employee@company.com" />
+                            <span asp-validation-for="Email" class="text-xs text-red-600 mt-1 block"></span>
+                        </div>
+                        
+                        <div>
+                            <label asp-for="Phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                            <input asp-for="Phone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="+252 63 1234567" />
+                            <span asp-validation-for="Phone" class="text-xs text-red-600 mt-1 block"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Employment Information Section -->
+                <div class="bg-gray-50 rounded-lg p-5 mb-6">
+                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-briefcase text-green-500 mr-2"></i>
+                        Employment Information
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label asp-for="Position" class="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                            <input asp-for="Position" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="e.g., Cashier, Manager, Supervisor" />
+                            <span asp-validation-for="Position" class="text-xs text-red-600 mt-1 block"></span>
+                        </div>
+                        
+                        <div>
+                            <label asp-for="DepartmentId" class="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                            <select asp-for="DepartmentId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">Select Department</option>
+                                @if (ViewBag.Departments != null)
+                                {
+                                    @foreach (var dept in ViewBag.Departments)
+                                    {
+                                        <option value="@dept.Id">@dept.Name</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="DepartmentId" class="text-xs text-red-600 mt-1 block"></span>
+                        </div>
+                        
+                        <div>
+                            <label asp-for="HireDate" class="block text-sm font-medium text-gray-700 mb-1">Hire Date</label>
+                            <input asp-for="HireDate" type="date" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                            <span asp-validation-for="HireDate" class="text-xs text-red-600 mt-1 block"></span>
+                            <p class="text-xs text-gray-500 mt-1">Leave empty if not applicable</p>
+                        </div>
+                        
+                        <div>
+                            <label asp-for="ManagerId" class="block text-sm font-medium text-gray-700 mb-1">Reports To (Manager)</label>
+                            <select asp-for="ManagerId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">None (Top Level / No Manager)</option>
+                                @if (ViewBag.Managers != null)
+                                {
+                                    @foreach (var mgr in ViewBag.Managers)
+                                    {
+                                        <option value="@mgr.Id">@mgr.Name - @mgr.Position</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="ManagerId" class="text-xs text-red-600 mt-1 block"></span>
+                            <p class="text-xs text-blue-600 mt-1">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Leave empty if this employee doesn't report to anyone (e.g., CEO, Director)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Address Information Section -->
+                <div class="bg-gray-50 rounded-lg p-5 mb-6">
+                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-map-marker-alt text-purple-500 mr-2"></i>
+                        Address Information
+                    </h3>
+                    
+                    <div>
+                        <label asp-for="Address" class="block text-sm font-medium text-gray-700 mb-1">Full Address</label>
+                        <textarea asp-for="Address" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="Street address, city, postal code..."></textarea>
+                        <span asp-validation-for="Address" class="text-xs text-red-600 mt-1 block"></span>
+                    </div>
+                </div>
+
+                <!-- Status Section -->
+                <div class="bg-gray-50 rounded-lg p-5 mb-6">
+                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-toggle-on text-yellow-500 mr-2"></i>
+                        Status
+                    </h3>
+                    
+                    <div class="flex items-center">
+                        <label class="flex items-center cursor-pointer">
+                            <input asp-for="IsActive" type="checkbox" class="sr-only peer" checked />
+                            <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            <span class="ms-3 text-sm font-medium text-gray-700">Active Employee</span>
+                        </label>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Inactive employees won't appear in task assignments</p>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <a href="@Url.Action("Index")" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                        <i class="fas fa-times mr-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                        <i class="fas fa-save mr-2"></i>Create Employee
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Help Card -->
+    <div class="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4">
+        <div class="flex items-start">
+            <i class="fas fa-lightbulb text-yellow-500 mt-0.5 mr-3"></i>
+            <div class="flex-1">
+                <h4 class="text-sm font-semibold text-gray-800 mb-1">Quick Tips</h4>
+                <ul class="text-xs text-gray-600 space-y-1">
+                    <li>• <strong>Employee ID</strong> should be unique across the system</li>
+                    <li>• <strong>Manager field</strong> is optional - leave empty for top-level employees (CEO, Directors, etc.)</li>
+                    <li>• After creation, you can assign the employee to branches from their details page</li>
+                    <li>• Inactive employees won't appear in daily task boards</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            // Toggle checkbox display
+            updateToggleDisplay('IsActive');
+        });
+
+        function updateToggleDisplay(id) {
+            var checkbox = document.getElementById(id);
+            if (!checkbox) return;
+            
+            var toggleDiv = checkbox.nextElementSibling;
+            var circle = toggleDiv.querySelector('.absolute');
+            
+            if (checkbox.checked) {
+                toggleDiv.classList.remove('bg-gray-200');
+                toggleDiv.classList.add('bg-blue-600');
+                if (circle) circle.style.transform = 'translateX(24px)';
+            } else {
+                toggleDiv.classList.remove('bg-blue-600');
+                toggleDiv.classList.add('bg-gray-200');
+                if (circle) circle.style.transform = 'translateX(4px)';
+            }
+        }
+        
+        // Listen for checkbox changes
+        $('#IsActive').on('change', function() {
+            updateToggleDisplay('IsActive');
+        });
+    </script>
+}
+
+<style>
+    .toggle-indicator {
+        transition: background-color 0.2s ease;
+        cursor: pointer;
+    }
+    
+    input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+    
+    select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+</style>

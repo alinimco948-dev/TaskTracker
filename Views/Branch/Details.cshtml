@@ -1,0 +1,218 @@
+﻿@model TaskTracker.Models.ViewModels.BranchDetailsViewModel
+@{
+    ViewData["Title"] = "Branch Details";
+
+    // Calculate initials for display
+    var initials = "?";
+    if (!string.IsNullOrEmpty(Model.Name))
+    {
+        var nameParts = Model.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (nameParts.Length == 1)
+            initials = nameParts[0].Substring(0, 1).ToUpper();
+        else if (nameParts.Length >= 2)
+            initials = (nameParts[0][0].ToString() + nameParts[^1][0].ToString()).ToUpper();
+    }
+}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Left Column - Branch Info Card -->
+    <div class="lg:col-span-1">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="bg-gradient-to-r from-green-600 to-green-800 px-6 py-4">
+                <h3 class="text-lg font-semibold text-white">Branch Information</h3>
+            </div>
+
+            <div class="p-6 text-center border-b">
+                <div class="w-24 h-24 mx-auto rounded-full bg-green-100 flex items-center justify-center mb-4">
+                    <span class="text-3xl font-bold text-green-600">@initials</span>
+                </div>
+                <h2 class="text-xl font-bold text-gray-900">@Model.Name</h2>
+                <p class="text-gray-500">@Model.Code</p>
+                <div class="mt-2">
+                    @if (Model.IsActive)
+                    {
+                        <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Active</span>
+                    }
+                    else
+                    {
+                        <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">Inactive</span>
+                    }
+                </div>
+            </div>
+
+            <div class="p-4 border-b">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
+                <div class="space-y-2 text-sm">
+                    <div class="flex items-center">
+                        <i class="fas fa-map-marker-alt text-gray-400 w-5"></i>
+                        <span class="text-gray-600">@(!string.IsNullOrEmpty(Model.Address) ? Model.Address : "No address provided")</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-phone text-gray-400 w-5"></i>
+                        <span class="text-gray-600">@(!string.IsNullOrEmpty(Model.Phone) ? Model.Phone : "No phone provided")</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-envelope text-gray-400 w-5"></i>
+                        <span class="text-gray-600">@(!string.IsNullOrEmpty(Model.Email) ? Model.Email : "No email provided")</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-b">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">Department</h4>
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <div class="font-medium">@Model.Department</div>
+                </div>
+            </div>
+
+            <div class="p-4">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">Additional Info</h4>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Created:</span>
+                        <span class="font-medium">@Model.CreatedAt.ToString("MMM dd, yyyy")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Notes:</span>
+                        <span class="text-gray-600">@(!string.IsNullOrEmpty(Model.Notes) ? Model.Notes : "None")</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-gray-50 flex space-x-2">
+                <a href="@Url.Action("Edit", new { id = Model.Id })" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition text-center">
+                    <i class="fas fa-edit mr-2"></i>Edit
+                </a>
+                <a href="@Url.Action("BranchPerformance", "Report", new { branchId = Model.Id })" class="flex-1 px-4 py-2 border border-gray-300 bg-white rounded-lg text-sm font-medium hover:bg-gray-50 transition text-center">
+                    <i class="fas fa-chart-bar mr-2"></i>Reports
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column - Stats and Data -->
+    <div class="lg:col-span-2 space-y-6">
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-3 gap-4">
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-2xl font-bold text-green-600">@Model.EmployeeCount</div>
+                <div class="text-xs text-gray-500">Current Employees</div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-2xl font-bold text-blue-600">@Model.CompletionRate%</div>
+                <div class="text-xs text-gray-500">Task Completion</div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-2xl font-bold text-purple-600">@Model.TotalTasks</div>
+                <div class="text-xs text-gray-500">Total Tasks</div>
+            </div>
+        </div>
+
+        <!-- Current Employees -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b">
+                <h3 class="text-lg font-semibold">Current Employees</h3>
+            </div>
+            <div class="p-6">
+                @if (Model.CurrentEmployees != null && Model.CurrentEmployees.Any())
+                {
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        @foreach (var emp in Model.CurrentEmployees)
+                        {
+                            <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                                <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                                    <span class="text-xs font-semibold text-green-600">@emp.Initials</span>
+                                </div>
+                                <div>
+                                    <div class="font-medium text-sm">@emp.Name</div>
+                                    <div class="text-xs text-gray-500">@emp.Position</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-center text-gray-500 py-4">No employees currently assigned to this branch</p>
+                }
+            </div>
+        </div>
+
+        <!-- Hidden Tasks -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b">
+                <h3 class="text-lg font-semibold">Task Visibility</h3>
+            </div>
+            <div class="p-6">
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Visible Tasks</h4>
+                <div class="flex flex-wrap gap-2 mb-4">
+                    @if (ViewBag.AllTasks != null)
+                    {
+                        var visibleTasks = ((IEnumerable<TaskTracker.Models.ViewModels.TaskListViewModel>)ViewBag.AllTasks)
+                        .Where(t => !Model.HiddenTasks.Contains(t.Name));
+
+                        if (visibleTasks.Any())
+                        {
+                            @foreach (var task in visibleTasks)
+                            {
+                                <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">@task.Name</span>
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-gray-500 text-sm">No visible tasks</p>
+                        }
+                    }
+                </div>
+
+                @if (Model.HiddenTasks.Any())
+                {
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Hidden Tasks</h4>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach (var task in Model.HiddenTasks)
+                        {
+                            <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">@task</span>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Recent Tasks -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b">
+                <h3 class="text-lg font-semibold">Recent Tasks</h3>
+            </div>
+            <div class="p-6">
+                @if (Model.RecentTasks != null && Model.RecentTasks.Any())
+                {
+                    <div class="space-y-3">
+                        @foreach (var task in Model.RecentTasks)
+                        {
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div>
+                                    <div class="font-medium text-sm">@task.TaskName</div>
+                                    <div class="text-xs text-gray-500">@task.Date.ToString("MMM dd, yyyy")</div>
+                                </div>
+                                <div>
+                                    @if (task.IsCompleted)
+                                    {
+                                        <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Completed</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">Pending</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-center text-gray-500 py-4">No recent tasks for this branch</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>

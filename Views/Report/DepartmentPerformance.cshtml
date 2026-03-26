@@ -1,0 +1,126 @@
+﻿@model TaskTracker.Models.ViewModels.DepartmentPerformanceViewModel
+@{
+    ViewData["Title"] = "Department Performance Report";
+}
+
+<div class="space-y-6">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Select Department</label>
+                <select name="departmentId" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Choose a department...</option>
+                    @foreach (var dept in ViewBag.Departments)
+                    {
+                        <option value="@dept.Id" selected="@(dept.Id == Model?.DepartmentId)">@dept.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input type="date" name="startDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@ViewBag.StartDate">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input type="date" name="endDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@ViewBag.EndDate">
+            </div>
+            <div>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                    <i class="fas fa-sync-alt mr-2"></i>Generate
+                </button>
+            </div>
+        </form>
+    </div>
+
+    @if (Model != null && Model.DepartmentId > 0)
+    {
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold">@Model.DepartmentName</h2>
+                    <p class="text-gray-500">@Model.DepartmentCode</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-gray-500">Report Period</div>
+                    <div class="font-medium">@Model.StartDate.ToString("MMM dd, yyyy") - @Model.EndDate.ToString("MMM dd, yyyy")</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-sm text-gray-500 mb-1">Total Branches</div>
+                <div class="text-3xl font-bold">@Model.TotalBranches</div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-sm text-gray-500 mb-1">Active Branches</div>
+                <div class="text-3xl font-bold text-green-600">@Model.ActiveBranches</div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-sm text-gray-500 mb-1">Total Employees</div>
+                <div class="text-3xl font-bold text-blue-600">@Model.TotalEmployees</div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-sm text-gray-500 mb-1">Active Employees</div>
+                <div class="text-3xl font-bold text-purple-600">@Model.ActiveEmployees</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 class="font-semibold mb-4">Top Performing Branches</h3>
+                @if (Model.TopBranches.Any())
+                {
+                    <div class="space-y-3">
+                        @foreach (var branch in Model.TopBranches)
+                        {
+                            <div class="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                                <span class="font-medium">@branch.BranchName</span>
+                                <span class="text-green-600 font-bold">@branch.CompletionRate%</span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-gray-500 text-center py-4">No data available</p>
+                }
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 class="font-semibold mb-4">Branches Needing Attention</h3>
+                @if (Model.BottomBranches.Any())
+                {
+                    <div class="space-y-3">
+                        @foreach (var branch in Model.BottomBranches)
+                        {
+                            <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                                <span class="font-medium">@branch.BranchName</span>
+                                <span class="text-red-600 font-bold">@branch.CompletionRate%</span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-gray-500 text-center py-4">No data available</p>
+                }
+            </div>
+        </div>
+
+        @if (Model.Insights.Any())
+        {
+            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg shadow-sm border border-blue-200 p-6">
+                <h3 class="text-lg font-semibold mb-3 flex items-center">
+                    <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>Department Insights
+                </h3>
+                <ul class="space-y-2">
+                    @foreach (var insight in Model.Insights)
+                    {
+                        <li class="flex items-start"><i class="fas fa-chevron-right text-blue-400 mt-1 mr-2 text-xs"></i><span>@insight</span></li>
+                    }
+                </ul>
+            </div>
+        }
+    }
+</div>

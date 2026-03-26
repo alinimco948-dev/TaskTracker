@@ -1,0 +1,910 @@
+﻿@using TaskTracker.Models.ViewModels
+@model EmployeePerformanceViewModel
+@{
+    ViewData["Title"] = "Employee Performance Report";
+    
+    // Calculate additional metrics
+    var hasStruggleTasks = Model.TaskBreakdown != null && Model.TaskBreakdown.Any(t => t.Value.CompletionRate < 60 || t.Value.OnTimeRate < 50 || t.Value.Pending > 0);
+    var highPriorityTasks = Model.TaskBreakdown?.Where(t => t.Value.Pending >= 3 || t.Value.Late >= 3 || t.Value.CompletionRate < 40).ToList() ?? new List<KeyValuePair<string, TaskPerformanceStats>>();
+    var needsImprovementTasks = Model.TaskBreakdown?.Where(t => t.Value.CompletionRate >= 40 && t.Value.CompletionRate < 70).ToList() ?? new List<KeyValuePair<string, TaskPerformanceStats>>();
+    var strongTasks = Model.TaskBreakdown?.Where(t => t.Value.CompletionRate >= 90 && t.Value.OnTimeRate >= 85).ToList() ?? new List<KeyValuePair<string, TaskPerformanceStats>>();
+    
+    // Group late tasks
+    var lateTasks = Model.DailyBreakdown?.Where(d => d.Status == "Completed" && !d.IsOnTime).ToList() ?? new List<DailyPerformance>();
+    var pendingTasks = Model.DailyBreakdown?.Where(d => d.Status != "Completed").ToList() ?? new List<DailyPerformance>();
+    var completedOnTime = Model.DailyBreakdown?.Where(d => d.Status == "Completed" && d.IsOnTime).ToList() ?? new List<DailyPerformance>();
+    
+    // Group by task for cover sheet summary
+    var pendingByTask = pendingTasks.GroupBy(t => t.TaskName).Select(g => new {
+        TaskName = g.Key,
+        Count = g.Count(),
+        Dates = g.Select(t => t.Date.ToString("MMM dd")).Distinct().OrderBy(d => d).ToList(),
+        DateObjects = g.Select(t => t.Date).Distinct().OrderBy(d => d).ToList(),
+        Details = g.OrderByDescending(t => t.Date).ToList()
+    }).OrderByDescending(t => t.Count).ToList();
+    
+    var lateByTask = lateTasks.GroupBy(t => t.TaskName).Select(g => new {
+        TaskName = g.Key,
+        Count = g.Count(),
+        Dates = g.Select(t => t.Date.ToString("MMM dd")).Distinct().OrderBy(d => d).ToList(),
+        DateObjects = g.Select(t => t.Date).Distinct().OrderBy(d => d).ToList(),
+        Details = g.OrderByDescending(t => t.Date).ToList()
+    }).OrderByDescending(t => t.Count).ToList();
+    
+    // Helper function to format delay text
+    string GetDelayText(DateTime deadline, DateTime? completionTime)
+    {
+        if (!completionTime.HasValue) return "Pending";
+        
+        var completedTime = completionTime.Value;
+        
+        if (completedTime < deadline)
+        {
+            var diff = deadline - completedTime;
+            if (diff.TotalDays >= 1) return $"{diff.TotalDays:F0}d early";
+            if (diff.TotalHours >= 1) return $"{diff.TotalHours:F0}h early";
+            if (diff.TotalMinutes >= 1) return $"{diff.TotalMinutes:F0}m early";
+            return "Early";
+        }
+        
+        if (completedTime <= deadline.AddSeconds(30)) return "On time";
+        
+        var lateDiff = completedTime - deadline;
+        if (lateDiff.TotalMinutes < 60) return $"{lateDiff.TotalMinutes:F0}m late";
+        if (lateDiff.TotalHours < 24) return $"{lateDiff.TotalHours:F0}h late";
+        return $"{lateDiff.TotalDays:F0}d late";
+    }
+    
+    // Function to format date range for cover sheet
+    string FormatDateRange(List<DateTime> dates)
+    {
+        if (!dates.Any()) return "No dates";
+        if (dates.Count == 1) return dates[0].ToString("MMM dd");
+        if (dates.Count == 2) return $"{dates[0]:MMM dd}, {dates[1]:MMM dd}";
+        
+        var first = dates.First();
+        var last = dates.Last();
+        
+        // Check if dates are consecutive
+        var isConsecutive = true;
+        for (int i = 1; i < dates.Count; i++)
+        {
+            if ((dates[i] - dates[i-1]).Days != 1)
+            {
+                isConsecutive = false;
+                break;
+            }
+        }
+        
+        if (isConsecutive && dates.Count > 2)
+        {
+            return $"{first:MMM dd} - {last:MMM dd}";
+        }
+        
+        return $"{first:MMM dd}, {last:MMM dd} +{dates.Count - 2} more";
+    }
+}
+
+<div class="space-y-6">
+    <!-- Filter Section -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Select Employee</label>
+                <select name="employeeId" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Choose an employee...</option>
+                    @if (ViewBag.Employees != null)
+                    {
+                        @foreach (var emp in ViewBag.Employees)
+                        {
+                            <option value="@emp.Id" selected="@(emp.Id == Model?.EmployeeId)">@emp.Name - @emp.Position</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input type="date" name="startDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@ViewBag.StartDate">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input type="date" name="endDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@ViewBag.EndDate">
+            </div>
+            <div>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                    <i class="fas fa-sync-alt mr-2"></i>Generate
+                </button>
+            </div>
+        </form>
+    </div>
+
+    @if (Model != null && Model.EmployeeId > 0 && Model.DailyBreakdown != null && Model.DailyBreakdown.Any())
+    {
+        <!-- Employee Header with Performance Score Card -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="w-20 h-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border-2 border-white">
+                        @{
+                            var initials = "?";
+                            if (!string.IsNullOrEmpty(Model.EmployeeName))
+                            {
+                                var nameParts = Model.EmployeeName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                                if (nameParts.Length == 1)
+                                {
+                                    initials = nameParts[0].Substring(0, 1).ToUpper();
+                                }
+                                else if (nameParts.Length >= 2)
+                                {
+                                    initials = (nameParts[0][0].ToString() + nameParts[^1][0].ToString()).ToUpper();
+                                }
+                            }
+                        }
+                        <span class="text-3xl font-bold text-white">@initials</span>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold">@Model.EmployeeName</h2>
+                        <p class="text-blue-100">@Model.EmployeeIdNumber | @Model.Department | @Model.Position</p>
+                        <p class="text-blue-100 text-sm mt-1">@Model.StartDate.ToString("MMM dd, yyyy") - @Model.EndDate.ToString("MMM dd, yyyy")</p>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <div class="text-sm text-blue-100 mb-1">Overall Performance Score</div>
+                    <div class="text-5xl font-bold">@Model.OverallScore%</div>
+                    <div class="text-xs text-blue-100 mt-1">
+                        @if (Model.OverallScore >= 90)
+                        {
+                            <span>🏆 Excellent - Top Performer</span>
+                        }
+                        else if (Model.OverallScore >= 75)
+                        {
+                            <span>⭐ Good - Above Average</span>
+                        }
+                        else if (Model.OverallScore >= 60)
+                        {
+                            <span>📈 Satisfactory - Meets Expectations</span>
+                        }
+                        else
+                        {
+                            <span>⚠️ Needs Improvement</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm text-gray-500 mb-1">Total Tasks</div>
+                        <div class="text-3xl font-bold">@Model.TotalTasks</div>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-tasks text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm text-gray-500 mb-1">Completed</div>
+                        <div class="text-3xl font-bold text-green-600">@Model.CompletedTasks</div>
+                        <div class="text-xs text-gray-400">@Model.CompletionRate% completion</div>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm text-gray-500 mb-1">On Time</div>
+                        <div class="text-3xl font-bold text-blue-600">@Model.OnTimeTasks</div>
+                        <div class="text-xs text-gray-400">@Model.OnTimeRate% of completed</div>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-clock text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm text-gray-500 mb-1">Pending</div>
+                        <div class="text-3xl font-bold text-yellow-600">@Model.PendingTasks</div>
+                    </div>
+                    <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-hourglass-half text-yellow-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Trend Chart -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="p-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold">Performance Trend</h3>
+                <p class="text-xs text-gray-500 mt-1">Daily completion and on-time rates</p>
+            </div>
+            <div class="p-6">
+                <canvas id="performanceTrendChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Task Performance Matrix -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="p-4 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+                <h3 class="text-lg font-semibold flex items-center">
+                    <i class="fas fa-chart-pie text-indigo-600 mr-2"></i>
+                    📊 Task Performance Matrix
+                </h3>
+                <p class="text-xs text-gray-500 mt-1">Performance breakdown by task type</p>
+            </div>
+            <div class="p-6">
+                @if (Model.TaskBreakdown != null && Model.TaskBreakdown.Any())
+                {
+                    <div class="space-y-4">
+                        @foreach (var task in Model.TaskBreakdown.OrderBy(t => t.Key))
+                        {
+                            var stats = task.Value;
+                            var completionPercent = stats.CompletionRate;
+                            var onTimePercent = stats.OnTimeRate;
+                            var isStruggle = stats.CompletionRate < 60 || stats.OnTimeRate < 50;
+                            
+                            <div class="@(isStruggle ? "border-l-4 border-red-400 bg-red-50/30 p-3 rounded-r-lg" : "p-3")">
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="font-semibold">@task.Key</span>
+                                    <span class="text-gray-500">@stats.Completed/@stats.Total completed (@completionPercent%)</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                    <div class="bg-green-500 h-2 rounded-l-full float-left" style="width: @completionPercent%"></div>
+                                    <div class="bg-yellow-500 h-2 float-left" style="width: @(100 - completionPercent)%"></div>
+                                </div>
+                                <div class="flex justify-between text-xs mt-2">
+                                    <div class="flex gap-3">
+                                        <span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>@stats.Completed completed</span>
+                                        @if (stats.Pending > 0)
+                                        {
+                                            <span class="text-yellow-600"><i class="fas fa-clock mr-1"></i>@stats.Pending pending</span>
+                                        }
+                                        @if (stats.Late > 0)
+                                        {
+                                            <span class="text-red-600"><i class="fas fa-exclamation-triangle mr-1"></i>@stats.Late late</span>
+                                        }
+                                    </div>
+                                    <div>
+                                        @if (stats.OnTime > 0)
+                                        {
+                                            <span class="text-blue-600"><i class="fas fa-tachometer-alt mr-1"></i>@onTimePercent% on time</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-center text-gray-500 py-4">No task data available</p>
+                }
+            </div>
+        </div>
+
+        <!-- ⚠️ Struggle Tasks & Strengths Analysis -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Weaknesses / Struggle Tasks -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b bg-gradient-to-r from-red-50 to-orange-50">
+                    <h3 class="text-lg font-semibold flex items-center text-red-700">
+                        <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                        ⚠️ Areas Needing Improvement
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-1">Tasks where employee struggles</p>
+                </div>
+                <div class="p-4">
+                    @if (highPriorityTasks.Any() || needsImprovementTasks.Any())
+                    {
+                        <!-- High Priority Struggles -->
+                        @if (highPriorityTasks.Any())
+                        {
+                            <div class="mb-4">
+                                <h4 class="text-sm font-semibold text-red-700 mb-2 flex items-center">
+                                    <i class="fas fa-flag-checkered mr-1"></i> High Priority - Immediate Attention
+                                </h4>
+                                <div class="space-y-2">
+                                    @foreach (var task in highPriorityTasks)
+                                    {
+                                        <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <div class="font-semibold text-gray-800">@task.Key</div>
+                                                    <div class="text-xs text-gray-500 mt-1">
+                                                        @task.Value.Completed/@task.Value.Total completed
+                                                    </div>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div class="text-sm font-bold text-red-600">@task.Value.CompletionRate%</div>
+                                                    <div class="text-xs text-gray-500">completion rate</div>
+                                                </div>
+                                            </div>
+                                            <div class="mt-2 flex gap-3 text-xs">
+                                                @if (task.Value.Pending > 0)
+                                                {
+                                                    <span class="text-yellow-600"><i class="fas fa-clock mr-1"></i>@task.Value.Pending pending</span>
+                                                }
+                                                @if (task.Value.Late > 0)
+                                                {
+                                                    <span class="text-red-600"><i class="fas fa-hourglass-half mr-1"></i>@task.Value.Late late</span>
+                                                }
+                                                @if (task.Value.OnTimeRate < 50 && task.Value.Completed > 0)
+                                                {
+                                                    <span class="text-orange-600"><i class="fas fa-tachometer-alt mr-1"></i>@task.Value.OnTimeRate% on time</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Needs Improvement -->
+                        @if (needsImprovementTasks.Any())
+                        {
+                            <div>
+                                <h4 class="text-sm font-semibold text-yellow-700 mb-2 flex items-center">
+                                    <i class="fas fa-chart-line mr-1"></i> Needs Improvement - Monitor Progress
+                                </h4>
+                                <div class="space-y-2">
+                                    @foreach (var task in needsImprovementTasks)
+                                    {
+                                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                                            <div class="flex justify-between items-center">
+                                                <span class="font-medium text-sm">@task.Key</span>
+                                                <span class="text-xs font-bold text-yellow-700">@task.Value.CompletionRate%</span>
+                                            </div>
+                                            <div class="w-full bg-gray-200 rounded-full h-1 mt-1">
+                                                <div class="bg-yellow-500 h-1 rounded-full" style="width: @task.Value.CompletionRate%"></div>
+                                            </div>
+                                            <div class="text-xs text-gray-500 mt-1">
+                                                @task.Value.Completed/@task.Value.Total | @task.Value.Late late | @task.Value.Pending pending
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center py-6 text-green-600">
+                            <i class="fas fa-check-circle text-3xl mb-2"></i>
+                            <p class="font-medium">No Struggle Tasks Identified!</p>
+                            <p class="text-xs text-gray-500 mt-1">Employee is performing well across all task types</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Strengths / Strong Performance -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b bg-gradient-to-r from-green-50 to-emerald-50">
+                    <h3 class="text-lg font-semibold flex items-center text-green-700">
+                        <i class="fas fa-trophy text-green-600 mr-2"></i>
+                        🌟 Strengths & Strong Performance
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-1">Tasks where employee excels</p>
+                </div>
+                <div class="p-4">
+                    @if (strongTasks.Any())
+                    {
+                        <div class="space-y-2">
+                            @foreach (var task in strongTasks)
+                            {
+                                <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <div class="font-semibold text-gray-800">@task.Key</div>
+                                            <div class="text-xs text-gray-500 mt-1">
+                                                @task.Value.Completed/@task.Value.Total completed
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-sm font-bold text-green-600">@task.Value.CompletionRate%</div>
+                                            <div class="text-xs text-gray-500">completion rate</div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 flex gap-3 text-xs">
+                                        <span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>@task.Value.OnTime on time</span>
+                                        @if (task.Value.OnTimeRate >= 90)
+                                        {
+                                            <span class="text-blue-600"><i class="fas fa-rocket mr-1"></i>@task.Value.OnTimeRate% on time</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-6 text-gray-500">
+                            <i class="fas fa-chart-line text-3xl mb-2 text-gray-300"></i>
+                            <p>No strong performance identified yet</p>
+                            <p class="text-xs mt-1">Keep working to build consistency</p>
+                        </div>
+                    }
+
+                    <!-- Overall Strengths Summary -->
+                    @if (Model.Strengths != null && Model.Strengths.Any())
+                    {
+                        <div class="mt-4 pt-3 border-t border-gray-200">
+                            <h4 class="text-xs font-semibold text-gray-700 mb-2">Key Strengths</h4>
+                            <ul class="space-y-1">
+                                @foreach (var strength in Model.Strengths)
+                                {
+                                    <li class="text-xs text-gray-600 flex items-start">
+                                        <i class="fas fa-star text-yellow-500 mr-1 mt-0.5 text-[10px]"></i>
+                                        <span>@strength</span>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- 📋 Supervisor Report: COVER SHEET STYLE - Pending Tasks -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="p-4 border-b bg-gradient-to-r from-yellow-50 to-amber-50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-xl font-bold flex items-center text-yellow-700">
+                            <i class="fas fa-clock text-yellow-600 mr-2"></i>
+                            📋 PENDING TASKS REPORT
+                        </h3>
+                        <p class="text-xs text-gray-500 mt-1">Cover Sheet Summary - Tasks awaiting completion</p>
+                    </div>
+                    <div class="text-3xl font-bold text-yellow-600">@pendingTasks.Count</div>
+                </div>
+            </div>
+            <div class="p-4">
+                @if (pendingByTask.Any())
+                {
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach (var task in pendingByTask)
+                        {
+                            <div class="border-2 border-yellow-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow bg-white">
+                                <!-- Cover Sheet Header -->
+                                <div class="bg-gradient-to-r from-yellow-500 to-amber-500 px-4 py-3 text-white">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <i class="fas fa-tasks text-white mr-2"></i>
+                                            <span class="font-bold text-sm uppercase tracking-wide">COVER SHEET</span>
+                                        </div>
+                                        <span class="text-xs bg-white/20 px-2 py-0.5 rounded-full">@task.Count pending</span>
+                                    </div>
+                                    <h4 class="text-lg font-bold mt-1 truncate" title="@task.TaskName">@task.TaskName</h4>
+                                </div>
+                                
+                                <!-- Cover Sheet Content -->
+                                <div class="p-4">
+                                    <!-- Date Range Summary -->
+                                    <div class="mb-3 pb-2 border-b border-gray-200">
+                                        <div class="text-xs text-gray-500 mb-1">📅 PENDING DATES</div>
+                                        <div class="flex flex-wrap gap-1">
+                                            @foreach (var date in task.DateObjects)
+                                            {
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                    @date.ToString("MMM dd")
+                                                </span>
+                                            }
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">
+                                            @(task.DateObjects.Count) day@(task.DateObjects.Count != 1 ? "s" : "")
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status Badge -->
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-gray-500">Status:</span>
+                                        <span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
+                                            ⏳ Pending
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Expandable Details -->
+                                <div class="border-t border-gray-200 bg-gray-50">
+                                    <button onclick="toggleTaskDetails('pending-details-@task.TaskName.Replace(" ", "_")')" 
+                                            class="w-full px-4 py-2 text-left text-xs font-medium text-gray-600 hover:bg-gray-100 flex justify-between items-center">
+                                        <span><i class="fas fa-list-ul mr-1"></i> View Details (@task.Count occurrences)</span>
+                                        <i class="fas fa-chevron-down text-gray-400" id="pending-icon-@task.TaskName.Replace(" ", "_")"></i>
+                                    </button>
+                                    <div id="pending-details-@task.TaskName.Replace(" ", "_")" class="hidden p-3 bg-white border-t border-gray-100">
+                                        <div class="space-y-2">
+                                            @foreach (var detail in task.Details)
+                                            {
+                                                <div class="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                                                    <div>
+                                                        <span class="font-medium">@detail.Date.ToString("dddd, MMM dd")</span>
+                                                        <span class="text-xs text-gray-500 ml-2">@detail.BranchName</span>
+                                                    </div>
+                                                    <span class="text-xs text-yellow-600">Pending</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-12 text-green-600">
+                        <i class="fas fa-check-circle text-5xl mb-3"></i>
+                        <p class="text-lg font-medium">No Pending Tasks!</p>
+                        <p class="text-sm text-gray-500">All tasks completed on time</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- 📋 Supervisor Report: COVER SHEET STYLE - Late Tasks -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="p-4 border-b bg-gradient-to-r from-red-50 to-orange-50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-xl font-bold flex items-center text-red-700">
+                            <i class="fas fa-hourglass-half text-red-600 mr-2"></i>
+                            📋 LATE TASKS REPORT
+                        </h3>
+                        <p class="text-xs text-gray-500 mt-1">Cover Sheet Summary - Tasks completed after deadline</p>
+                    </div>
+                    <div class="text-3xl font-bold text-red-600">@lateTasks.Count</div>
+                </div>
+            </div>
+            <div class="p-4">
+                @if (lateByTask.Any())
+                {
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach (var task in lateByTask)
+                        {
+                            <div class="border-2 border-red-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow bg-white">
+                                <!-- Cover Sheet Header -->
+                                <div class="bg-gradient-to-r from-red-500 to-orange-500 px-4 py-3 text-white">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <i class="fas fa-tasks text-white mr-2"></i>
+                                            <span class="font-bold text-sm uppercase tracking-wide">COVER SHEET</span>
+                                        </div>
+                                        <span class="text-xs bg-white/20 px-2 py-0.5 rounded-full">@task.Count late</span>
+                                    </div>
+                                    <h4 class="text-lg font-bold mt-1 truncate" title="@task.TaskName">@task.TaskName</h4>
+                                </div>
+                                
+                                <!-- Cover Sheet Content -->
+                                <div class="p-4">
+                                    <!-- Date Range Summary -->
+                                    <div class="mb-3 pb-2 border-b border-gray-200">
+                                        <div class="text-xs text-gray-500 mb-1">📅 LATE DATES</div>
+                                        <div class="flex flex-wrap gap-1">
+                                            @foreach (var date in task.DateObjects)
+                                            {
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                    @date.ToString("MMM dd")
+                                                </span>
+                                            }
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">
+                                            @(task.DateObjects.Count) day@(task.DateObjects.Count != 1 ? "s" : "")
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status Badge -->
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-gray-500">Status:</span>
+                                        <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                                            ⚠️ Late
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Expandable Details -->
+                                <div class="border-t border-gray-200 bg-gray-50">
+                                    <button onclick="toggleTaskDetails('late-details-@task.TaskName.Replace(" ", "_")')" 
+                                            class="w-full px-4 py-2 text-left text-xs font-medium text-gray-600 hover:bg-gray-100 flex justify-between items-center">
+                                        <span><i class="fas fa-list-ul mr-1"></i> View Details (@task.Count occurrences)</span>
+                                        <i class="fas fa-chevron-down text-gray-400" id="late-icon-@task.TaskName.Replace(" ", "_")"></i>
+                                    </button>
+                                    <div id="late-details-@task.TaskName.Replace(" ", "_")" class="hidden p-3 bg-white border-t border-gray-100">
+                                        <div class="space-y-2">
+                                            @foreach (var detail in task.Details)
+                                            {
+                                                var delayText = GetDelayText(detail.DeadlineDateTime, detail.CompletionDateTime);
+                                                <div class="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                                                    <div>
+                                                        <span class="font-medium">@detail.Date.ToString("dddd, MMM dd")</span>
+                                                        <span class="text-xs text-gray-500 ml-2">@detail.BranchName</span>
+                                                        @if (!string.IsNullOrEmpty(detail.CompletionTime))
+                                                        {
+                                                            <span class="text-xs text-gray-400 ml-2">@detail.CompletionTime</span>
+                                                        }
+                                                    </div>
+                                                    <span class="text-xs text-red-600">@delayText</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-12 text-green-600">
+                        <i class="fas fa-check-circle text-5xl mb-3"></i>
+                        <p class="text-lg font-medium">No Late Tasks!</p>
+                        <p class="text-sm text-gray-500">All tasks completed on time</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Completed On Time Summary -->
+        @if (completedOnTime.Any())
+        {
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b bg-gradient-to-r from-green-50 to-emerald-50">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-semibold flex items-center text-green-700">
+                                <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                                ✅ COMPLETED ON TIME
+                            </h3>
+                            <p class="text-xs text-gray-500 mt-1">Tasks completed before or on deadline</p>
+                        </div>
+                        <div class="text-2xl font-bold text-green-600">@completedOnTime.Count</div>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                        @{
+                            var completedByTaskSimple = completedOnTime.GroupBy(t => t.TaskName).Select(g => new { TaskName = g.Key, Count = g.Count() }).OrderByDescending(t => t.Count).ToList();
+                        }
+                        @foreach (var task in completedByTaskSimple.Take(12))
+                        {
+                            <div class="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-center">
+                                <div class="text-sm font-medium text-green-700 truncate" title="@task.TaskName">@task.TaskName</div>
+                                <div class="text-xs text-gray-500">@task.Count time@(task.Count != 1 ? "s" : "")</div>
+                            </div>
+                        }
+                        @if (completedByTaskSimple.Count > 12)
+                        {
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-center">
+                                <div class="text-sm text-gray-500">+@(completedByTaskSimple.Count - 12) more</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Recommendations & Insights -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4">
+                <div class="flex items-start">
+                    <i class="fas fa-lightbulb text-yellow-500 mt-0.5 mr-3 text-lg"></i>
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-gray-800 mb-2">📈 Performance Insights</h4>
+                        <div class="space-y-2 text-sm text-gray-700">
+                            @if (Model.Insights != null && Model.Insights.Any())
+                            {
+                                foreach (var insight in Model.Insights)
+                                {
+                                    <p class="text-xs">• @insight</p>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-xs">• Completion Rate: @Model.CompletionRate%</p>
+                                <p class="text-xs">• On Time Rate: @Model.OnTimeRate%</p>
+                                @if (Model.PendingTasks > 0)
+                                {
+                                    <p class="text-xs text-yellow-600">• @Model.PendingTasks pending tasks need attention</p>
+                                }
+                                @if (Model.LateTasks > 0)
+                                {
+                                    <p class="text-xs text-red-600">• @Model.LateTasks tasks completed late</p>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200 p-4">
+                <div class="flex items-start">
+                    <i class="fas fa-clipboard-list text-purple-500 mt-0.5 mr-3 text-lg"></i>
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-gray-800 mb-2">🎯 Recommendations</h4>
+                        <div class="space-y-2 text-sm text-gray-700">
+                            @if (Model.Recommendations != null && Model.Recommendations.Any())
+                            {
+                                foreach (var rec in Model.Recommendations)
+                                {
+                                    <p class="text-xs">• @rec</p>
+                                }
+                            }
+                            else
+                            {
+                                @if (Model.PendingTasks > 0)
+                                {
+                                    <p class="text-xs">• Prioritize pending tasks: @string.Join(", ", pendingTasks.Select(t => t.TaskName).Distinct().Take(3))</p>
+                                }
+                                @if (Model.LateTasks > 0)
+                                {
+                                    <p class="text-xs">• Review deadlines and time management for tasks with late submissions</p>
+                                }
+                                @if (Model.OnTimeRate < 70)
+                                {
+                                    <p class="text-xs">• Start tasks earlier in the day to meet deadlines</p>
+                                }
+                                <p class="text-xs">• Schedule regular check-ins to address any challenges</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Summary Footer -->
+        <div class="bg-gray-50 rounded-lg p-4 text-center text-sm text-gray-600">
+            <i class="fas fa-chart-simple mr-2"></i>
+            Report generated on @DateTime.Now.ToString("MMM dd, yyyy HH:mm") | Data reflects performance for @Model.EmployeeName from @Model.StartDate.ToString("MMM dd, yyyy") to @Model.EndDate.ToString("MMM dd, yyyy")
+        </div>
+    }
+    else if (Model != null && Model.EmployeeId > 0 && (Model.DailyBreakdown == null || !Model.DailyBreakdown.Any()))
+    {
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+            <i class="fas fa-chart-line text-6xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-700 mb-2">No Data Found</h3>
+            <p class="text-gray-500">No task data available for the selected employee and date range.</p>
+        </div>
+    }
+    else
+    {
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+            <i class="fas fa-user-circle text-6xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-700 mb-2">No Employee Selected</h3>
+            <p class="text-gray-500">Please select an employee and date range to view performance report</p>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Performance Trend Chart
+        var ctx = document.getElementById('performanceTrendChart').getContext('2d');
+        var trendDates = @Html.Raw(Json.Serialize(Model?.DailyTrendDates ?? new List<string>()));
+        var completionRates = @Html.Raw(Json.Serialize(Model?.DailyCompletionRates ?? new List<double>()));
+        var onTimeRates = @Html.Raw(Json.Serialize(Model?.DailyOnTimeRates ?? new List<double>()));
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: trendDates,
+                datasets: [
+                    {
+                        label: 'Completion Rate (%)',
+                        data: completionRates,
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'On Time Rate (%)',
+                        data: onTimeRates,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    y: { 
+                        beginAtZero: true, 
+                        max: 100,
+                        title: { display: true, text: 'Percentage (%)' }
+                    },
+                    x: { title: { display: true, text: 'Date' } }
+                }
+            }
+        });
+        
+        // Toggle task details
+        function toggleTaskDetails(id) {
+            var element = document.getElementById(id);
+            var icon = document.getElementById(id.replace('details-', 'icon-'));
+            if (element.classList.contains('hidden')) {
+                element.classList.remove('hidden');
+                if (icon) {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                }
+            } else {
+                element.classList.add('hidden');
+                if (icon) {
+                    icon.classList.remove('fa-chevron-up');
+                    icon.classList.add('fa-chevron-down');
+                }
+            }
+        }
+        
+        function showNotification(message, type) {
+            var colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500'
+            };
+            
+            $('.custom-notification').remove();
+            var notification = $('<div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ' + colors[type] + ' animate-slide-in flex items-center">' +
+                '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle') + ' mr-2"></i>' +
+                '<span>' + message + '</span>' +
+                '</div>');
+            
+            $('body').append(notification);
+            setTimeout(function() { 
+                notification.fadeOut(300, function() { $(this).remove(); }); 
+            }, 3000);
+        }
+    </script>
+}
+
+<style>
+    .animate-slide-in {
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    @@keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    .transition {
+        transition: all 0.2s ease;
+    }
+    
+    @@media print {
+        .bg-gradient-to-r, .shadow-sm, .border, button {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+    }
+    
+    .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+</style>
