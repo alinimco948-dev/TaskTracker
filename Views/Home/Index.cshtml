@@ -18,6 +18,9 @@
             token = tokens.RequestToken ?? "";
         }
     }
+    
+    // Build notes dictionary for JavaScript
+    var notesDict = Model.NotesData;
 }
 
 <!DOCTYPE html>
@@ -38,9 +41,14 @@
         <!-- Hidden current date for JavaScript -->
         <input type="hidden" id="currentDate" value="@dateKey" />
 
-        <!-- Compact Header -->
+        <!-- Hidden notes data for JavaScript -->
+        <script>
+            var branchNotes = @Html.Raw(Json.Serialize(notesDict));
+        </script>
+
+        <!-- Compact Header with Date Navigation -->
         <div class="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg shadow-md px-4 py-2 mb-4 text-white">
-            <div class="flex flex-wrap justify-between items-center">
+            <div class="flex flex-wrap justify-between items-center gap-2">
                 <div class="flex items-center space-x-3">
                     <div class="bg-white/10 p-1.5 rounded">
                         <i class="fas fa-tachometer-alt text-white text-sm"></i>
@@ -54,24 +62,29 @@
                 </div>
 
                 <div class="flex items-center space-x-2">
+                    <!-- Date Navigation with Arrows -->
                     <div class="flex items-center bg-white/10 rounded-md">
-                        <button onclick="changeDate(-1)" class="px-2 py-1 text-xs hover:bg-white/20 rounded-l transition flex items-center">
+                        <button type="button" onclick="changeDate(-1)" class="px-2 py-1 text-xs hover:bg-white/20 rounded-l transition flex items-center">
                             <i class="fas fa-chevron-left mr-1 text-[9px]"></i>Prev
                         </button>
-                        <span class="px-2 py-1 text-xs font-medium border-x border-white/20">@Model.CurrentDate.ToString("MMM dd, yyyy")</span>
-                        <button onclick="changeDate(1)" class="px-2 py-1 text-xs hover:bg-white/20 rounded-r transition flex items-center">
+                        <input type="date" 
+                               id="datePicker" 
+                               value="@Model.CurrentDate.ToString("yyyy-MM-dd")"
+                               class="bg-transparent text-white text-xs px-2 py-1 text-center border-x border-white/20 focus:outline-none cursor-pointer"
+                               style="color-scheme: dark;" />
+                        <button type="button" onclick="changeDate(1)" class="px-2 py-1 text-xs hover:bg-white/20 rounded-r transition flex items-center">
                             Next <i class="fas fa-chevron-right ml-1 text-[9px]"></i>
                         </button>
                     </div>
 
-                    <button onclick="openBulkUpdateModal()" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center shadow-sm">
+                    <button type="button" onclick="UI.openBulkUpdateModal()" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center shadow-sm">
                         <i class="fas fa-layer-group mr-1.5 text-[10px]"></i>Bulk
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- Compact Stats Cards - Will update dynamically -->
+        <!-- Compact Stats Cards -->
         <div class="grid grid-cols-4 gap-2 mb-4">
             <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-blue-500">
                 <div class="flex items-center justify-between">
@@ -154,14 +167,20 @@
                                     <div class="flex flex-col items-center">
                                         <span class="text-xs">@task.Name</span>
                                         <span class="text-[9px] text-gray-500 mt-0.5">@task.Deadline.ToString(@"hh\:mm")</span>
-                                        <button onclick="completeAllForTask(@task.Id, '@task.Name')"
-                                                class="mt-1 text-[8px] bg-green-500 text-white px-2 py-0.5 rounded-full hover:bg-green-600 transition w-full">
-                                            All
-                                        </button>
+                                        <div class="flex gap-1 mt-1 w-full">
+                                            <button type="button" onclick="TaskActions.completeAllForTask(@task.Id, '@task.Name')"
+                                                    class="text-[8px] bg-green-500 text-white px-2 py-0.5 rounded-full hover:bg-green-600 transition flex-1">
+                                                All
+                                            </button>
+                                            <button type="button" onclick="TaskActions.resetAllForTask(@task.Id, '@task.Name')"
+                                                    class="text-[8px] bg-red-500 text-white px-2 py-0.5 rounded-full hover:bg-red-600 transition flex-1">
+                                                Reset
+                                            </button>
+                                        </div>
                                     </div>
                                 </th>
                             }
-                            <th class="px-3 py-3 text-center font-semibold text-gray-700 w-20">%</th>
+                            <th class="px-3 py-3 text-center font-semibold text-gray-700 w-28">% / Notes</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200" id="dashboardTableBody">
@@ -170,6 +189,7 @@
                             var hiddenTaskNames = hiddenTasksDict.ContainsKey(branch.Id)
                             ? hiddenTasksDict[branch.Id]
                             : new List<string>();
+                            var branchNotes = Model.NotesData.ContainsKey(branch.Id.ToString()) ? Model.NotesData[branch.Id.ToString()] : "";
 
                             <tr class="hover:bg-gray-50 transition group" data-branch-id="@branch.Id" id="row-@branch.Id">
                                 <td class="px-3 py-2 font-medium sticky left-0 bg-white border-r group-hover:bg-gray-50">
@@ -193,22 +213,18 @@
                                     {
                                         var taskKey = $"{branch.Id}_{task.Id}";
                                         var dailyTask = Model.TaskData.ContainsKey(taskKey) ? Model.TaskData[taskKey] : null;
-                                        var isHoliday = Model.Holidays.Any(h =>
-                                        h.HolidayDate.Date == Model.CurrentDate.Date ||
-                                        (h.IsWeekly && h.WeekDay == (int)Model.CurrentDate.DayOfWeek));
+                                        var isHoliday = Model.Holidays.Any(h => (h.HolidayDate.Date == Model.CurrentDate.Date) ||
+                                            (h.IsWeekly && h.WeekDay == (int)Model.CurrentDate.DayOfWeek));
 
-                                        // Calculate deadline with adjustment
                                         var deadline = CalculateDeadline(task, Model.CurrentDate);
                                         var adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0;
                                         var adjustedDeadline = deadline.AddMinutes(adjustmentMinutes);
 
-                                        // Status variables
                                         var bgColor = "";
                                         var textColor = "";
                                         var timeDisplay = "--:--";
                                         var statusDisplay = "Pending";
                                         var title = "Pending";
-                                        var completionTimeStr = "";
                                         var adjustmentIndicator = adjustmentMinutes > 0;
 
                                         if (isHoliday)
@@ -222,9 +238,8 @@
                                         else if (dailyTask?.IsCompleted == true && dailyTask.CompletedAt.HasValue)
                                         {
                                             var completedTime = dailyTask.CompletedAt.Value.ToLocalTime();
-                                            timeDisplay = completedTime.ToString("HH:mm");
-                                            completionTimeStr = completedTime.ToString("yyyy-MM-dd HH:mm:ss");
-
+                                            timeDisplay = completedTime.ToString("h:mm tt");
+                                            
                                             if (completedTime < adjustedDeadline)
                                             {
                                                 bgColor = "bg-blue-100";
@@ -267,7 +282,6 @@
                                             }
                                         }
 
-                                        // Get assigned employee initial
                                         var employeeInitial = "";
                                         if (dailyTask?.TaskAssignment?.Employee != null)
                                         {
@@ -279,9 +293,8 @@
                                         <td class="px-1 py-1 text-center relative group/task" id="cell-@branch.Id-@task.Id" 
                                             data-branch="@branch.Id" data-task="@task.Id" data-date="@dateKey">
                                             <div class="relative inline-block w-full">
-                                                <!-- Main task button - Click completes with current time -->
                                                 <button type="button"
-                                                        onclick="quickCompleteTask(@branch.Id, @task.Id, '@dateKey', this)"
+                                                        onclick="TaskActions.quickComplete(@branch.Id, @task.Id, '@dateKey', this)"
                                                         class="w-full px-1 py-2 rounded text-[9px] font-medium @bgColor @textColor hover:opacity-90 transition-all flex items-center justify-between gap-0.5 border border-transparent hover:border-gray-300 task-button"
                                                         title="@title - Click to complete with current time"
                                                         data-task-id="@task.Id"
@@ -308,27 +321,23 @@
                                                     }
                                                 </button>
 
-                                                <!-- Action Icons - Appear on hover -->
                                                 <div class="absolute -top-2 -right-2 hidden group-hover/task:flex space-x-0.5 z-20">
                                                     <button type="button"
-                                                            onclick="event.stopPropagation(); openTimePicker(@branch.Id, @task.Id, '@dateKey', this)"
+                                                            onclick="event.stopPropagation(); UI.openTimePicker(@branch.Id, @task.Id, '@dateKey', this)"
                                                             class="w-4 h-4 bg-amber-500 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-amber-600 shadow-sm"
                                                             title="Edit completion time">
                                                         <i class="fas fa-clock"></i>
                                                     </button>
 
-                                                    @if (dailyTask?.IsCompleted == true)
-                                                    {
-                                                        <button type="button"
-                                                                onclick="event.stopPropagation(); resetTask(@branch.Id, @task.Id, '@dateKey', event, this)"
-                                                                class="w-4 h-4 bg-red-500 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-red-600 shadow-sm"
-                                                                title="Reset task">
-                                                            <i class="fas fa-undo-alt"></i>
-                                                        </button>
-                                                    }
+                                                    <button type="button"
+                                                            onclick="event.stopPropagation(); TaskActions.resetSingle(@branch.Id, @task.Id, '@dateKey', event, this)"
+                                                            class="w-4 h-4 bg-red-500 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-red-600 shadow-sm"
+                                                            title="Reset this specific task">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
 
                                                     <button type="button"
-                                                            onclick="event.stopPropagation(); openTaskAdjustment(@branch.Id, @task.Id, '@task.Name', '@dateKey', this)"
+                                                            onclick="event.stopPropagation(); UI.openAdjustmentModal(@branch.Id, @task.Id, '@task.Name', '@dateKey', this)"
                                                             class="w-4 h-4 bg-amber-400 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-amber-500 shadow-sm"
                                                             title="Add adjustment">
                                                         <i class="fas fa-plus"></i>
@@ -347,26 +356,38 @@
                                     }
                                 }
 
-                                <!-- Progress Bar -->
                                 <td class="px-2 py-2 text-center">
                                     @{
                                         var visibleTasksCount = Model.Tasks.Count(t => !hiddenTaskNames.Contains(t.Name));
-                                        var completedCount = 0;
+                                        var completedCountLocal = 0;
                                         foreach (var task in Model.Tasks.Where(t => !hiddenTaskNames.Contains(t.Name)))
                                         {
                                             if (Model.TaskData.ContainsKey($"{branch.Id}_{task.Id}") &&
-                                            Model.TaskData[$"{branch.Id}_{task.Id}"].IsCompleted)
+                                                Model.TaskData[$"{branch.Id}_{task.Id}"].IsCompleted)
                                             {
-                                                completedCount++;
+                                                completedCountLocal++;
                                             }
                                         }
-                                        var progress = visibleTasksCount > 0 ? (completedCount * 100 / visibleTasksCount) : 0;
+                                        var progress = visibleTasksCount > 0 ? (completedCountLocal * 100 / visibleTasksCount) : 0;
                                     }
-                                    <div class="flex items-center justify-center gap-1">
-                                        <div class="w-10 bg-gray-200 rounded-full h-1.5">
-                                            <div class="bg-blue-500 h-1.5 rounded-full" style="width: @progress%"></div>
+                                    <div class="flex items-center justify-center gap-2" id="progress-cell-@branch.Id">
+                                        <div class="w-12 bg-gray-200 rounded-full h-2">
+                                            <div class="bg-blue-500 h-2 rounded-full" style="width: @progress%"></div>
                                         </div>
-                                        <span class="text-[9px] font-medium text-gray-600">@progress%</span>
+                                        <span class="text-[10px] font-medium text-gray-600 progress-percent">@progress%</span>
+                                        <button type="button" 
+                                                onclick="UI.openNotesModal(@branch.Id, '@branch.Name', '@Html.Raw(Json.Serialize(branchNotes).ToString().Replace("\"", "&quot;"))')"
+                                                class="w-6 h-6 flex items-center justify-center rounded-full transition notes-btn-@branch.Id hover:scale-110"
+                                                title="View/Edit notes">
+                                            @if (!string.IsNullOrEmpty(branchNotes))
+                                            {
+                                                <i class="fas fa-sticky-note text-sm text-blue-500"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-plus-circle text-sm text-gray-400 hover:text-blue-500"></i>
+                                            }
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -387,15 +408,17 @@
                 <span class="flex items-center"><span class="w-2 h-2 bg-purple-500 rounded-full mr-1"></span> Holiday</span>
                 <span class="flex items-center"><span class="w-2 h-2 bg-gray-300 rounded-full mr-1"></span> Hidden</span>
                 <span class="flex items-center"><i class="fas fa-clock text-amber-500 text-[8px] mr-1"></i> Edit</span>
+                <span class="flex items-center"><i class="fas fa-times text-red-500 text-[8px] mr-1"></i> Reset Single</span>
                 <span class="flex items-center"><i class="fas fa-plus text-amber-600 text-[8px] mr-1"></i> Adjust</span>
-                <span class="flex items-center"><i class="fas fa-undo-alt text-red-500 text-[8px] mr-1"></i> Reset</span>
+                <span class="flex items-center"><i class="fas fa-undo-alt text-red-500 text-[8px] mr-1"></i> Reset All</span>
+                <span class="flex items-center"><i class="fas fa-sticky-note text-blue-500 text-sm mr-1"></i> Notes</span>
             </div>
             <div class="text-[8px] text-gray-400 mt-2 text-center">
                 <i class="fas fa-sync-alt text-green-500 mr-1"></i> All updates happen instantly - No refresh needed
             </div>
         </div>
 
-        <!-- Time Picker Modal -->
+        <!-- Modals (same structure, just with updated onclick handlers) -->
         <div id="timePickerModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
             <div class="bg-white rounded-xl shadow-2xl w-80 transform transition-all">
                 <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-4 py-3 rounded-t-xl">
@@ -404,42 +427,36 @@
                     </h3>
                     <p class="text-blue-100 text-[10px] mt-0.5" id="timePickerTaskInfo"></p>
                 </div>
-                
                 <div class="p-4">
                     <input type="hidden" id="timePickerBranchId">
                     <input type="hidden" id="timePickerTaskId">
                     <input type="hidden" id="timePickerDate">
-                    
                     <div class="mb-3">
                         <label class="block text-xs font-medium text-gray-700 mb-1">Select Date & Time</label>
                         <input type="datetime-local" id="timePickerDateTime" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     </div>
-                    
                     <div class="mb-2">
                         <label class="block text-xs font-medium text-gray-700 mb-1">Quick Presets</label>
                         <div class="grid grid-cols-3 gap-1">
-                            <button type="button" onclick="setTimePreset('now')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">Now</button>
-                            <button type="button" onclick="setTimePreset('morning')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">8 AM</button>
-                            <button type="button" onclick="setTimePreset('noon')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">12 PM</button>
-                            <button type="button" onclick="setTimePreset('afternoon')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">4 PM</button>
-                            <button type="button" onclick="setTimePreset('evening')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">8 PM</button>
-                            <button type="button" onclick="setTimePreset('night')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">11 PM</button>
+                            <button type="button" onclick="UI.setTimePreset('now')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">Now</button>
+                            <button type="button" onclick="UI.setTimePreset('morning')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">8 AM</button>
+                            <button type="button" onclick="UI.setTimePreset('noon')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">12 PM</button>
+                            <button type="button" onclick="UI.setTimePreset('afternoon')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">4 PM</button>
+                            <button type="button" onclick="UI.setTimePreset('evening')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">8 PM</button>
+                            <button type="button" onclick="UI.setTimePreset('night')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">11 PM</button>
                         </div>
                     </div>
-                    
                     <div class="bg-blue-50 p-2 rounded text-[10px] text-blue-700 mt-3" id="timePickerPreview">
                         <i class="fas fa-info-circle mr-1"></i> Select a time to see preview
                     </div>
                 </div>
-                
                 <div class="px-4 py-3 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
-                    <button onclick="closeTimePicker()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
-                    <button onclick="saveTaskTime()" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Time</button>
+                    <button type="button" onclick="UI.closeTimePicker()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
+                    <button type="button" onclick="TaskActions.saveTaskTime()" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Time</button>
                 </div>
             </div>
         </div>
 
-        <!-- Adjustment Modal with Remove Capability -->
         <div id="adjustmentModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
             <div class="bg-white rounded-xl shadow-2xl w-80 transform transition-all">
                 <div class="bg-gradient-to-r from-amber-600 to-amber-800 px-4 py-3 rounded-t-xl">
@@ -449,39 +466,53 @@
                     <input type="hidden" id="adjustmentBranchId">
                     <input type="hidden" id="adjustmentTaskId">
                     <input type="hidden" id="adjustmentDate">
-                    
                     <div class="bg-amber-50 p-2 rounded text-center mb-3">
                         <span class="text-xl font-bold text-amber-600" id="currentAdjustmentDisplay">0</span>
                         <span class="text-xs text-gray-500 ml-1">minutes</span>
                     </div>
-                    
                     <div class="grid grid-cols-4 gap-1 mb-3">
-                        <button type="button" onclick="addAdjustment(5)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">5</button>
-                        <button type="button" onclick="addAdjustment(10)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">10</button>
-                        <button type="button" onclick="addAdjustment(15)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">15</button>
-                        <button type="button" onclick="addAdjustment(30)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">30</button>
-                        <button type="button" onclick="addAdjustment(60)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">60</button>
-                        <button type="button" onclick="addAdjustment(120)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">120</button>
-                        <button type="button" onclick="addAdjustment(240)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">240</button>
-                        <button type="button" onclick="addAdjustment(480)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">480</button>
+                        <button type="button" onclick="UI.addAdjustment(5)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">5</button>
+                        <button type="button" onclick="UI.addAdjustment(10)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">10</button>
+                        <button type="button" onclick="UI.addAdjustment(15)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">15</button>
+                        <button type="button" onclick="UI.addAdjustment(30)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">30</button>
+                        <button type="button" onclick="UI.addAdjustment(60)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">60</button>
+                        <button type="button" onclick="UI.addAdjustment(120)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">120</button>
+                        <button type="button" onclick="UI.addAdjustment(240)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">240</button>
+                        <button type="button" onclick="UI.addAdjustment(480)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">480</button>
                     </div>
-                    
                     <input type="number" id="adjustmentMinutes" min="0" value="0" class="w-full px-3 py-2 text-xs border rounded-lg mb-3" placeholder="Custom minutes">
                     <textarea id="adjustmentReason" rows="2" class="w-full px-3 py-2 text-xs border rounded-lg mb-2" placeholder="Reason for adjustment (optional)"></textarea>
-                    
                     <div class="text-[10px] text-amber-600 bg-amber-50 p-2 rounded">
                         <i class="fas fa-info-circle mr-1"></i> Set to 0 minutes and save to remove adjustment
                     </div>
                 </div>
                 <div class="px-4 py-3 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
-                    <button type="button" onclick="closeAdjustmentModal()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
-                    <button type="button" onclick="clearAdjustment()" class="px-3 py-1.5 text-xs bg-gray-500 text-white rounded-lg hover:bg-gray-600">Clear</button>
-                    <button type="button" onclick="saveAdjustment()" class="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg hover:bg-amber-600">Save</button>
+                    <button type="button" onclick="UI.closeAdjustmentModal()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
+                    <button type="button" onclick="UI.clearAdjustment()" class="px-3 py-1.5 text-xs bg-gray-500 text-white rounded-lg hover:bg-gray-600">Clear</button>
+                    <button type="button" onclick="TaskActions.saveAdjustment()" class="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg hover:bg-amber-600">Save</button>
                 </div>
             </div>
         </div>
 
-        <!-- Bulk Update Modal -->
+        <div id="notesModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
+            <div class="bg-white rounded-xl shadow-2xl w-96 transform transition-all">
+                <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-4 py-3 rounded-t-xl">
+                    <h3 class="text-base font-semibold text-white flex items-center">
+                        <i class="fas fa-sticky-note mr-2"></i>Branch Notes
+                    </h3>
+                    <p class="text-blue-100 text-[10px] mt-0.5" id="notesBranchName"></p>
+                </div>
+                <div class="p-4">
+                    <input type="hidden" id="notesBranchId">
+                    <textarea id="notesContent" rows="4" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter notes for this branch..."></textarea>
+                </div>
+                <div class="px-4 py-3 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
+                    <button type="button" onclick="UI.closeNotesModal()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
+                    <button type="button" onclick="TaskActions.saveNotes()" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Notes</button>
+                </div>
+            </div>
+        </div>
+
         <div id="bulkUpdateModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
             <div class="bg-white rounded-xl shadow-2xl w-80 transform transition-all">
                 <div class="bg-gradient-to-r from-purple-600 to-purple-800 px-4 py-3 rounded-t-xl">
@@ -506,17 +537,17 @@
                                value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")">
                     </div>
                     <div class="grid grid-cols-3 gap-1 mb-2">
-                        <button type="button" onclick="setBulkTime('now')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">Now</button>
-                        <button type="button" onclick="setBulkTime('morning')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">8a</button>
-                        <button type="button" onclick="setBulkTime('noon')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">12p</button>
-                        <button type="button" onclick="setBulkTime('afternoon')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">4p</button>
-                        <button type="button" onclick="setBulkTime('evening')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">8p</button>
-                        <button type="button" onclick="setBulkTime('night')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">11p</button>
+                        <button type="button" onclick="UI.setBulkTime('now')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">Now</button>
+                        <button type="button" onclick="UI.setBulkTime('morning')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">8a</button>
+                        <button type="button" onclick="UI.setBulkTime('noon')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">12p</button>
+                        <button type="button" onclick="UI.setBulkTime('afternoon')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">4p</button>
+                        <button type="button" onclick="UI.setBulkTime('evening')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">8p</button>
+                        <button type="button" onclick="UI.setBulkTime('night')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">11p</button>
                     </div>
                 </div>
                 <div class="px-4 py-3 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
-                    <button onclick="closeBulkUpdateModal()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
-                    <button onclick="executeBulkUpdate()" class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700">Update All</button>
+                    <button type="button" onclick="UI.closeBulkUpdateModal()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
+                    <button type="button" onclick="TaskActions.executeBulkUpdate()" class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700">Update All</button>
                 </div>
             </div>
         </div>
@@ -541,892 +572,537 @@
     }
 
     <style>
-        .animate-slide-in {
-            animation: slideIn 0.2s ease-out;
-        }
-        @@keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0%); opacity: 1; }
-        }
-        
-        .sticky.left-0 {
-            position: sticky;
-            left: 0;
-            z-index: 10;
-        }
-        
-        .table-fixed {
-            table-layout: fixed;
-        }
-        
-        .group:hover .group-hover\\:flex {
-            display: flex !important;
-        }
-        
-        .hidden {
-            display: none;
-        }
-        
-        .flex {
-            display: flex;
-        }
-        
-        td, th {
-            vertical-align: middle;
-        }
-        
-        .flex-1 {
-            flex: 1 1 0%;
-        }
-        
-        .truncate {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        
-        .overflow-x-auto::-webkit-scrollbar {
-            height: 6px;
-        }
-        .overflow-x-auto::-webkit-scrollbar-thumb {
-            background: #cbd5e0;
-            border-radius: 3px;
-        }
-        
-        /* Modal z-index */
-        #timePickerModal, #adjustmentModal, #bulkUpdateModal {
-            z-index: 9999;
-        }
-        
-        /* Loading state */
-        .task-button:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-        
-        /* Hover effects */
-        .task-button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+        .animate-slide-in { animation: slideIn 0.2s ease-out; }
+        @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0%); opacity: 1; } }
+        .sticky.left-0 { position: sticky; left: 0; z-index: 10; }
+        .table-fixed { table-layout: fixed; }
+        .group:hover .group-hover\\:flex { display: flex !important; }
+        .hidden { display: none; }
+        .flex { display: flex; }
+        td, th { vertical-align: middle; }
+        .flex-1 { flex: 1 1 0%; }
+        .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .overflow-x-auto::-webkit-scrollbar { height: 6px; }
+        .overflow-x-auto::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 3px; }
+        #timePickerModal, #adjustmentModal, #bulkUpdateModal, #notesModal { z-index: 9999; }
+        .task-button:disabled { opacity: 0.7; cursor: not-allowed; }
+        .task-button:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .opacity-50 { opacity: 0.5; }
+        .cursor-not-allowed { cursor: not-allowed; }
+        .notes-btn { transition: all 0.2s ease; }
+        .notes-btn:hover { transform: scale(1.1); }
     </style>
 
     <script>
-        $(document).ready(function() {
-            console.log('Dashboard loaded - Real-time updates enabled');
+        // ========== REUSABLE API SERVICE ==========
+        const API = {
+            token: $('#requestVerificationToken').val(),
             
-            // Initialize time picker preview
-            $('#timePickerDateTime').on('change', function() {
-                updateTimePreview();
-            });
+            async request(url, method, data) {
+                return new Promise((resolve, reject) => {
+                    const options = {
+                        url: url,
+                        type: method,
+                        headers: { 'RequestVerificationToken': this.token },
+                        success: resolve,
+                        error: (xhr, status, error) => reject({ error, response: xhr.responseText })
+                    };
+                    if (data) options.data = data;
+                    $.ajax(options);
+                });
+            },
             
-            // Add global error handler for AJAX
-            $(document).ajaxError(function(event, jqxhr, settings, error) {
-                console.error('AJAX Error:', error);
-                console.error('Response:', jqxhr.responseText);
-                showNotification('Connection error', 'error');
-            });
-        });
-
-        // ========== Date Navigation ==========
-        function changeDate(days) {
-            var date = new Date('@Model.CurrentDate.ToString("yyyy-MM-dd")');
-            date.setDate(date.getDate() + days);
-            window.location.href = '@Url.Action("Index")?date=' + date.toISOString().split('T')[0];
-        }
-
-        // ========== Quick Complete Task - Updates instantly ==========
-        function quickCompleteTask(branchId, taskId, date, button) {
-            const token = $('#requestVerificationToken').val();
-            const cell = $(button).closest('td');
-            const row = cell.closest('tr');
+            updateTaskTime(branchId, taskId, date, completionTime) {
+                return this.request('@Url.Action("UpdateTaskTime", "Home")', 'POST', {
+                    branchId, taskItemId: taskId, date, completionTime
+                });
+            },
             
-            // Save original content for restore on error
-            const originalContent = button.innerHTML;
+            getTaskStatus(branchId, taskId, date) {
+                return this.request('@Url.Action("GetTaskStatus", "Home")', 'GET', {
+                    branchId, taskItemId: taskId, date
+                });
+            },
             
-            // Show loading state
-            button.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
-            button.disabled = true;
+            resetTask(branchId, taskId, date) {
+                return this.request('@Url.Action("ResetTask", "Home")', 'POST', {
+                    branchId, taskItemId: taskId, date
+                });
+            },
             
-            // Get current time and format it properly
-            const now = new Date();
-            const isoString = now.toISOString();
+            resetAllForTask(taskId, date) {
+                return this.request('@Url.Action("ResetAllForTask", "Home")', 'POST', {
+                    taskItemId: taskId, date
+                });
+            },
             
-            console.log('Completing task:', { branchId, taskId, date, time: isoString });
+            completeAllForTask(taskId, date) {
+                return this.request('@Url.Action("CompleteAllForTask", "Home")', 'POST', {
+                    taskItemId: taskId, date
+                });
+            },
             
-            $.ajax({
-                url: '@Url.Action("UpdateTaskTime", "Home")',
-                type: 'POST',
-                data: {
-                    branchId: branchId,
-                    taskItemId: taskId,
-                    date: date,
-                    completionTime: isoString
-                },
-                headers: { 'RequestVerificationToken': token },
-                success: function(response) {
-                    console.log('Task completed response:', response);
-                    if (response.success) {
-                        // Update the cell immediately with response data
-                        if (response.taskData) {
-                            updateTaskCell(cell, response.taskData);
-                        } else {
-                            // If no taskData in response, fetch it
-                            fetchTaskData(branchId, taskId, date, cell);
-                        }
-                        // Update branch progress
-                        updateBranchProgress(row);
-                        // Update global stats
-                        updateStats();
-                        showNotification('Task completed', 'success');
-                    } else {
-                        button.innerHTML = originalContent;
-                        button.disabled = false;
-                        showNotification('Error completing task', 'error');
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('AJAX Error:', error);
-                    console.error('Response:', xhr.responseText);
-                    button.innerHTML = originalContent;
-                    button.disabled = false;
-                    showNotification('Error: ' + error, 'error');
-                }
-            });
-        }
-
-        // ========== Update Branch Progress ==========
-        function updateBranchProgress(row) {
-            const branchId = row.data('branch-id');
-            const progressCell = row.find('td:last-child');
+            saveAdjustment(branchId, taskId, date, adjustmentMinutes, adjustmentReason) {
+                return this.request('@Url.Action("SaveAdjustment", "Home")', 'POST', {
+                    branchId, taskItemId: taskId, date, adjustmentMinutes, adjustmentReason
+                });
+            },
             
-            // Calculate visible tasks for this branch
-            const visibleTasks = row.find('.task-button').length;
-            const completedTasks = row.find('.task-button.bg-green-100, .task-button.bg-blue-100, .task-button.bg-yellow-100, .task-button.bg-orange-100, .task-button.bg-red-100').length;
+            saveNotes(branchId, notes) {
+                return this.request('@Url.Action("SaveNotes", "Home")', 'POST', {
+                    branchId, notes
+                });
+            },
             
-            const progress = visibleTasks > 0 ? Math.round((completedTasks * 100) / visibleTasks) : 0;
-            
-            // Update progress bar
-            progressCell.find('.bg-blue-500').css('width', progress + '%');
-            progressCell.find('span:last-child').text(progress + '%');
-        }
-
-        // ========== Fetch Task Data and Update Cell ==========
-        function fetchTaskData(branchId, taskId, date, cell) {
-            const token = $('#requestVerificationToken').val();
-            
-            console.log('Fetching task data:', { branchId, taskId, date });
-            
-            $.ajax({
-                url: '@Url.Action("GetTaskStatus", "Home")',
-                type: 'GET',
-                data: {
-                    branchId: branchId,
-                    taskItemId: taskId,
-                    date: date
-                },
-                headers: { 'RequestVerificationToken': token },
-                success: function(response) {
-                    console.log('Fetch response:', response);
-                    if (response.exists) {
-                        updateTaskCell(cell, response);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Failed to fetch task data:', error);
-                }
-            });
-        }
-
-        // ========== Update Task Cell with New Data ==========
-        function updateTaskCell(cell, data) {
-            console.log('Updating cell with data:', data);
-            
-            const button = cell.find('.task-button');
-            if (!button.length) {
-                console.error('Task button not found in cell');
-                return;
+            bulkUpdate(taskId, completionDateTime, branchIds) {
+                return this.request('@Url.Action("BulkUpdate", "Home")', 'POST', {
+                    taskItemId: taskId, completionDateTime, branchIds
+                });
             }
+        };
+        
+        // ========== UI UTILITIES ==========
+        const UI = {
+            showNotification(msg, type) {
+                const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+                $('.custom-notification').remove();
+                const notification = $(`<div class="fixed top-4 right-4 z-50 px-3 py-1.5 rounded shadow-lg text-xs text-white ${colors[type]} animate-slide-in">${msg}</div>`);
+                $('body').append(notification);
+                setTimeout(() => notification.fadeOut(300, function() { $(this).remove(); }), 2000);
+            },
             
-            // Determine status based on data
-            var bgColor = "bg-gray-50";
-            var textColor = "text-gray-600";
-            var timeDisplay = "--:--";
-            var statusDisplay = "Pending";
-            var titleText = "Click to complete";
+            formatTime12(date) {
+                let hours = date.getHours();
+                const minutes = date.getMinutes();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12 || 12;
+                return `${hours}:${String(minutes).padStart(2, '0')} ${ampm}`;
+            },
             
-            if (data.isCompleted && data.completedAt) {
-                try {
-                    var completedTime = new Date(data.completedAt);
+            updateTaskCell(cell, data) {
+                const button = cell.find('.task-button');
+                if (!button.length) return;
+                
+                let bgColor = "bg-gray-50", textColor = "text-gray-600", timeDisplay = "--:--", statusDisplay = "Pending", titleText = "Click to complete";
+                
+                if (data.isCompleted && data.completedAt) {
+                    const completedTime = new Date(data.completedAt);
                     if (!isNaN(completedTime.getTime())) {
-                        timeDisplay = completedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        
-                        if (data.delayType === 'early') {
-                            bgColor = "bg-blue-100";
-                            textColor = "text-blue-700";
-                            statusDisplay = "Early";
-                            titleText = "Completed early";
-                        } else if (data.delayType === 'on-time') {
-                            bgColor = "bg-green-100";
-                            textColor = "text-green-700";
-                            statusDisplay = "On time";
-                            titleText = "Completed on time";
-                        } else if (data.delayType === 'minutes') {
-                            bgColor = "bg-yellow-100";
-                            textColor = "text-yellow-700";
-                            statusDisplay = data.delayText || "Late";
-                            titleText = data.delayText || "Late";
-                        } else if (data.delayType === 'hours') {
-                            bgColor = "bg-orange-100";
-                            textColor = "text-orange-700";
-                            statusDisplay = data.delayText || "Late";
-                            titleText = data.delayText || "Late";
-                        } else if (data.delayType === 'days') {
-                            bgColor = "bg-red-100";
-                            textColor = "text-red-700";
-                            statusDisplay = data.delayText || "Late";
-                            titleText = data.delayText || "Late";
-                        }
+                        timeDisplay = this.formatTime12(completedTime);
+                        if (data.delayType === 'early') { bgColor = "bg-blue-100"; textColor = "text-blue-700"; statusDisplay = "Early"; titleText = "Completed early"; }
+                        else if (data.delayType === 'on-time') { bgColor = "bg-green-100"; textColor = "text-green-700"; statusDisplay = "On time"; titleText = "Completed on time"; }
+                        else if (data.delayType === 'minutes') { bgColor = "bg-yellow-100"; textColor = "text-yellow-700"; statusDisplay = data.delayText || "Late"; titleText = data.delayText || "Late"; }
+                        else if (data.delayType === 'hours') { bgColor = "bg-orange-100"; textColor = "text-orange-700"; statusDisplay = data.delayText || "Late"; titleText = data.delayText || "Late"; }
+                        else if (data.delayType === 'days') { bgColor = "bg-red-100"; textColor = "text-red-700"; statusDisplay = data.delayText || "Late"; titleText = data.delayText || "Late"; }
                     }
-                } catch (e) {
-                    console.error('Error parsing date:', e);
                 }
-            }
+                
+                const buttonClasses = `w-full px-1 py-2 rounded text-[9px] font-medium ${bgColor} ${textColor} hover:opacity-90 transition-all flex items-center justify-between gap-0.5 border border-transparent hover:border-gray-300 task-button`;
+                button.removeClass().addClass(buttonClasses).attr('title', titleText);
+                
+                let newHtml = `<span class="font-mono font-bold flex-1 time-display">${timeDisplay}</span><span class="flex-1 text-[8px] truncate px-0.5 status-display">${statusDisplay}</span>`;
+                if (data.assignedTo) newHtml += `<span class="inline-flex items-center justify-center w-3.5 h-3.5 bg-gray-200 text-gray-700 rounded-full text-[6px] font-bold flex-shrink-0 employee-initial" title="${data.assignedTo}">${data.assignedTo.charAt(0).toUpperCase()}</span>`;
+                
+                button.html(newHtml).prop('disabled', false);
+                this.updateAdjustmentIndicator(cell, data.adjustmentMinutes);
+            },
             
-            // Update button classes
-            var buttonClasses = 'w-full px-1 py-2 rounded text-[9px] font-medium ' + 
-                                bgColor + ' ' + textColor + 
-                                ' hover:opacity-90 transition-all flex items-center justify-between gap-0.5 border border-transparent hover:border-gray-300 task-button';
+            updateAdjustmentIndicator(cell, minutes) {
+                const existing = cell.find('.adjustment-indicator');
+                if (minutes > 0) {
+                    if (existing.length) existing.attr('title', `+${minutes} min adjustment`);
+                    else cell.find('.relative').append(`<span class="absolute -top-1 -left-2 w-3.5 h-3.5 bg-amber-400 text-white rounded-full text-[5px] flex items-center justify-center shadow-sm z-10 adjustment-indicator" title="+${minutes} min adjustment"><i class="fas fa-clock"></i></span>`);
+                } else existing.remove();
+            },
             
-            button.removeClass().addClass(buttonClasses);
-            button.attr('title', titleText);
+            updateBranchProgress(row) {
+                const progressCell = row.find('td:last-child');
+                const visibleTasks = row.find('.task-button').length;
+                const completedTasks = row.find('.task-button.bg-green-100, .task-button.bg-blue-100, .task-button.bg-yellow-100, .task-button.bg-orange-100, .task-button.bg-red-100').length;
+                const progress = visibleTasks > 0 ? Math.round((completedTasks * 100) / visibleTasks) : 0;
+                progressCell.find('.bg-blue-500').css('width', progress + '%');
+                progressCell.find('.progress-percent').text(progress + '%');
+            },
             
-            // Get employee initial
-            var employeeInitial = '';
-            if (data.assignedTo) {
-                employeeInitial = data.assignedTo.charAt(0).toUpperCase();
-            }
+            updateStats() {
+                let completed = 0, total = 0;
+                $('.task-button').each(function() {
+                    total++;
+                    if ($(this).hasClass('bg-green-100') || $(this).hasClass('bg-blue-100') || $(this).hasClass('bg-yellow-100') || $(this).hasClass('bg-orange-100') || $(this).hasClass('bg-red-100')) completed++;
+                });
+                $('#completedCount').text(completed);
+                $('#pendingCount').text(total - completed);
+            },
             
-            // Build HTML using string concatenation
-            var newHtml = '<span class="font-mono font-bold flex-1 time-display">' + timeDisplay + '</span>' +
-                         '<span class="flex-1 text-[8px] truncate px-0.5 status-display">' + statusDisplay + '</span>';
+            updateAllProgress() { $('tr[data-branch-id]').each((_, row) => this.updateBranchProgress($(row))); },
             
-            if (employeeInitial) {
-                newHtml += '<span class="inline-flex items-center justify-center w-3.5 h-3.5 bg-gray-200 text-gray-700 rounded-full text-[6px] font-bold flex-shrink-0 employee-initial" title="' + 
-                          (data.assignedTo || '') + '">' + employeeInitial + '</span>';
-            }
-            
-            button.html(newHtml);
-            button.prop('disabled', false);
-            
-            // Update action buttons
-            updateActionButtons(cell, data);
-        }
-
-        // ========== Update Action Buttons Based on Status ==========
-        function updateActionButtons(cell, data) {
-            const actionContainer = cell.find('.group-hover\\/task:flex');
-            if (!actionContainer.length) return;
-            
-            actionContainer.empty();
-            
-            // Get current date
-            const currentDate = $('#currentDate').val();
-            
-            // Always have edit time button
-            actionContainer.append(
-                '<button type="button" ' +
-                'onclick="event.stopPropagation(); openTimePicker(' + data.branchId + ', ' + data.taskId + ', \'' + currentDate + '\', this)" ' +
-                'class="w-4 h-4 bg-amber-500 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-amber-600 shadow-sm" ' +
-                'title="Edit completion time">' +
-                '<i class="fas fa-clock"></i>' +
-                '</button>'
-            );
-            
-            // Add adjustment button
-            actionContainer.append(
-                '<button type="button" ' +
-                'onclick="event.stopPropagation(); openTaskAdjustment(' + data.branchId + ', ' + data.taskId + ', \'Task\', \'' + currentDate + '\', this)" ' +
-                'class="w-4 h-4 bg-amber-400 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-amber-500 shadow-sm" ' +
-                'title="Add adjustment">' +
-                '<i class="fas fa-plus"></i>' +
-                '</button>'
-            );
-            
-            // Add reset button if completed
-            if (data.isCompleted) {
-                actionContainer.append(
-                    '<button type="button" ' +
-                    'onclick="event.stopPropagation(); resetTask(' + data.branchId + ', ' + data.taskId + ', \'' + currentDate + '\', event, this)" ' +
-                    'class="w-4 h-4 bg-red-500 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-red-600 shadow-sm" ' +
-                    'title="Reset task">' +
-                    '<i class="fas fa-undo-alt"></i>' +
-                    '</button>'
-                );
-            }
-            
-            // Update adjustment indicator
-            updateAdjustmentIndicator(cell, data.adjustmentMinutes);
-        }
-
-        // ========== Update Adjustment Indicator ==========
-        function updateAdjustmentIndicator(cell, minutes) {
-            const existingIndicator = cell.find('.adjustment-indicator');
-            
-            if (minutes > 0) {
-                if (existingIndicator.length) {
-                    existingIndicator.attr('title', '+' + minutes + ' min adjustment');
+            updateNotesIcon(branchId, notes) {
+                const icon = $(`.notes-btn-${branchId}`);
+                const hasNotes = notes && notes.trim() !== '';
+                if (hasNotes) {
+                    icon.html('<i class="fas fa-sticky-note text-sm text-blue-500"></i>').removeClass('text-gray-400 hover:text-blue-500').addClass('text-blue-500').attr('title', 'View/Edit notes');
                 } else {
-                    cell.find('.relative').append(
-                        '<span class="absolute -top-1 -left-2 w-3.5 h-3.5 bg-amber-400 text-white rounded-full text-[5px] flex items-center justify-center shadow-sm z-10 adjustment-indicator" ' +
-                        'title="+' + minutes + ' min adjustment">' +
-                        '<i class="fas fa-clock"></i>' +
-                        '</span>'
-                    );
+                    icon.html('<i class="fas fa-plus-circle text-sm text-gray-400"></i>').removeClass('text-blue-500').addClass('text-gray-400 hover:text-blue-500').attr('title', 'Add notes');
                 }
-            } else {
-                existingIndicator.remove();
-            }
-        }
-
-        // ========== Update Stats Without Refresh ==========
-        function updateStats() {
-            var completedCount = 0;
-            var totalVisible = 0;
+            },
             
-            $('.task-button').each(function() {
-                totalVisible++;
-                if ($(this).hasClass('bg-green-100') || $(this).hasClass('bg-blue-100') || 
-                    $(this).hasClass('bg-yellow-100') || $(this).hasClass('bg-orange-100') || 
-                    $(this).hasClass('bg-red-100')) {
-                    completedCount++;
+            // Modal controls
+            openTimePicker(branchId, taskId, date, button) {
+                const cell = $(button).closest('td');
+                const currentTime = this.convertTimeToDate(cell.find('.time-display').text());
+                $('#timePickerBranchId').val(branchId);
+                $('#timePickerTaskId').val(taskId);
+                $('#timePickerDate').val(date);
+                $('#timePickerTaskInfo').text('Editing time for task #' + taskId);
+                const year = currentTime.getFullYear(), month = String(currentTime.getMonth() + 1).padStart(2, '0'), day = String(currentTime.getDate()).padStart(2, '0');
+                const hours = String(currentTime.getHours()).padStart(2, '0'), minutes = String(currentTime.getMinutes()).padStart(2, '0');
+                $('#timePickerDateTime').val(`${year}-${month}-${day}T${hours}:${minutes}`);
+                this.updateTimePreview();
+                $('#timePickerModal').removeClass('hidden').addClass('flex');
+            },
+            
+            closeTimePicker() { $('#timePickerModal').removeClass('flex').addClass('hidden'); $('#timePickerModal .bg-blue-600').text('Save Time').prop('disabled', false).removeClass('opacity-50'); },
+            
+            setTimePreset(preset) {
+                const date = new Date();
+                switch(preset) {
+                    case 'now': break;
+                    case 'morning': date.setHours(8, 0, 0, 0); break;
+                    case 'noon': date.setHours(12, 0, 0, 0); break;
+                    case 'afternoon': date.setHours(16, 0, 0, 0); break;
+                    case 'evening': date.setHours(20, 0, 0, 0); break;
+                    case 'night': date.setHours(23, 0, 0, 0); break;
                 }
-            });
+                const year = date.getFullYear(), month = String(date.getMonth() + 1).padStart(2, '0'), day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0'), minutes = String(date.getMinutes()).padStart(2, '0');
+                $('#timePickerDateTime').val(`${year}-${month}-${day}T${hours}:${minutes}`);
+                this.updateTimePreview();
+            },
             
-            $('#completedCount').text(completedCount);
-            $('#pendingCount').text(totalVisible - completedCount);
+            updateTimePreview() {
+                const dateTimeStr = $('#timePickerDateTime').val();
+                if (!dateTimeStr) return;
+                try {
+                    const date = new Date(dateTimeStr);
+                    if (isNaN(date.getTime())) { $('#timePickerPreview').html('<i class="fas fa-exclamation-circle mr-1 text-red-500"></i> Invalid date format'); return; }
+                    const hours = date.getHours(), minutes = date.getMinutes();
+                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                    const displayHours = hours % 12 || 12;
+                    const timeStr = `${displayHours}:${String(minutes).padStart(2, '0')} ${ampm}`;
+                    $('#timePickerPreview').html(`<i class="fas fa-info-circle mr-1"></i> Selected: ${timeStr} on ${date.toLocaleDateString()}`);
+                } catch (e) { $('#timePickerPreview').html('<i class="fas fa-exclamation-circle mr-1 text-red-500"></i> Error parsing date'); }
+            },
             
-            console.log('Stats updated:', { completed: completedCount, total: totalVisible });
-        }
-
-        // ========== Helper function to format date for server ==========
-        function formatDateForServer(date) {
-            if (!date) return null;
-            
-            try {
-                const d = new Date(date);
-                if (isNaN(d.getTime())) {
-                    console.error('Invalid date:', date);
-                    return null;
-                }
-                return d.toISOString();
-            } catch (e) {
-                console.error('Date formatting error:', e);
-                return null;
-            }
-        }
-
-        // ========== Convert time string to date ==========
-        function convertTimeToDate(timeStr) {
-            // Handle different time formats
-            if (!timeStr || timeStr === '--:--') {
-                return new Date();
-            }
-            
-            try {
-                const now = new Date();
-                
-                // Check if it's a full datetime string
-                if (timeStr.includes('-') || timeStr.includes('/')) {
-                    const parsedDate = new Date(timeStr);
-                    if (!isNaN(parsedDate.getTime())) {
-                        return parsedDate;
-                    }
-                }
-                
-                // Handle HH:mm format
-                const parts = timeStr.split(':');
-                if (parts.length >= 2) {
-                    const hours = parseInt(parts[0], 10);
-                    const minutes = parseInt(parts[1], 10);
-                    
-                    if (!isNaN(hours) && !isNaN(minutes)) {
+            convertTimeToDate(timeStr) {
+                if (!timeStr || timeStr === '--:--') return new Date();
+                try {
+                    const now = new Date();
+                    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                    if (match) {
+                        let hours = parseInt(match[1]);
+                        const minutes = parseInt(match[2]);
+                        const ampm = match[3].toUpperCase();
+                        if (ampm === 'PM' && hours !== 12) hours += 12;
+                        if (ampm === 'AM' && hours === 12) hours = 0;
                         now.setHours(hours, minutes, 0, 0);
                         return now;
                     }
-                }
-                
-                return new Date();
-            } catch (e) {
-                console.error('Date parsing error:', e);
-                return new Date();
-            }
-        }
-
-        // ========== Time Picker Functions ==========
-        function openTimePicker(branchId, taskId, date, button) {
-            const cell = $(button).closest('td');
-            const currentTimeDisplay = cell.find('.time-display').text();
-            const currentTime = convertTimeToDate(currentTimeDisplay);
-            
-            $('#timePickerBranchId').val(branchId);
-            $('#timePickerTaskId').val(taskId);
-            $('#timePickerDate').val(date);
-            
-            $('#timePickerTaskInfo').text('Editing time for task #' + taskId);
-            
-            var year = currentTime.getFullYear();
-            var month = String(currentTime.getMonth() + 1).padStart(2, '0');
-            var day = String(currentTime.getDate()).padStart(2, '0');
-            var hours = String(currentTime.getHours()).padStart(2, '0');
-            var minutes = String(currentTime.getMinutes()).padStart(2, '0');
-            
-            $('#timePickerDateTime').val(year + '-' + month + '-' + day + 'T' + hours + ':' + minutes);
-            updateTimePreview();
-            
-            $('#timePickerModal').removeClass('hidden').addClass('flex');
-        }
-
-        function closeTimePicker() {
-            $('#timePickerModal').removeClass('flex').addClass('hidden');
-        }
-
-        function setTimePreset(preset) {
-            var date = new Date();
-            
-            switch(preset) {
-                case 'now':
-                    break;
-                case 'morning':
-                    date.setHours(8, 0, 0, 0);
-                    break;
-                case 'noon':
-                    date.setHours(12, 0, 0, 0);
-                    break;
-                case 'afternoon':
-                    date.setHours(16, 0, 0, 0);
-                    break;
-                case 'evening':
-                    date.setHours(20, 0, 0, 0);
-                    break;
-                case 'night':
-                    date.setHours(23, 0, 0, 0);
-                    break;
-            }
-            
-            var year = date.getFullYear();
-            var month = String(date.getMonth() + 1).padStart(2, '0');
-            var day = String(date.getDate()).padStart(2, '0');
-            var hours = String(date.getHours()).padStart(2, '0');
-            var minutes = String(date.getMinutes()).padStart(2, '0');
-            
-            $('#timePickerDateTime').val(year + '-' + month + '-' + day + 'T' + hours + ':' + minutes);
-            updateTimePreview();
-        }
-
-        function updateTimePreview() {
-            var dateTimeStr = $('#timePickerDateTime').val();
-            if (!dateTimeStr) return;
-            
-            try {
-                var date = new Date(dateTimeStr);
-                
-                // Check if date is valid
-                if (isNaN(date.getTime())) {
-                    $('#timePickerPreview').html('<i class="fas fa-exclamation-circle mr-1 text-red-500"></i> Invalid date format');
-                    return;
-                }
-                
-                var hours = date.getHours();
-                var minutes = date.getMinutes();
-                var ampm = hours >= 12 ? 'PM' : 'AM';
-                hours = hours % 12;
-                hours = hours ? hours : 12;
-                var timeStr = hours + ':' + String(minutes).padStart(2, '0') + ' ' + ampm;
-                
-                $('#timePickerPreview').html('<i class="fas fa-info-circle mr-1"></i> Selected: ' + timeStr + ' on ' + date.toLocaleDateString());
-            } catch (e) {
-                $('#timePickerPreview').html('<i class="fas fa-exclamation-circle mr-1 text-red-500"></i> Error parsing date');
-            }
-        }
-
-        function saveTaskTime() {
-            var branchId = $('#timePickerBranchId').val();
-            var taskId = $('#timePickerTaskId').val();
-            var date = $('#timePickerDate').val();
-            var dateTimeStr = $('#timePickerDateTime').val();
-            var cell = $('#cell-' + branchId + '-' + taskId);
-            var row = cell.closest('tr');
-            
-            if (!dateTimeStr) {
-                showNotification('Please select a time', 'error');
-                return;
-            }
-            
-            try {
-                var selectedDate = new Date(dateTimeStr);
-                
-                // Validate date
-                if (isNaN(selectedDate.getTime())) {
-                    showNotification('Invalid date format', 'error');
-                    return;
-                }
-                
-                var token = $('#requestVerificationToken').val();
-                var btn = $('#timePickerModal .bg-blue-600');
-                var original = btn.text();
-                
-                btn.text('Saving...').prop('disabled', true);
-                
-                $.ajax({
-                    url: '@Url.Action("UpdateTaskTime", "Home")',
-                    type: 'POST',
-                    data: {
-                        branchId: branchId,
-                        taskItemId: taskId,
-                        date: date,
-                        completionTime: selectedDate.toISOString()
-                    },
-                    headers: { 'RequestVerificationToken': token },
-                    success: function(response) {
-                        if (response.success) {
-                            if (response.taskData) {
-                                updateTaskCell(cell, response.taskData);
-                            } else {
-                                fetchTaskData(branchId, taskId, date, cell);
-                            }
-                            updateBranchProgress(row);
-                            updateStats();
-                            showNotification('Time updated', 'success');
-                            closeTimePicker();
-                        } else {
-                            showNotification('Error updating time', 'error');
-                            btn.text(original).prop('disabled', false);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Save error:', error);
-                        showNotification('Error: ' + error, 'error');
-                        btn.text(original).prop('disabled', false);
+                    if (timeStr.includes('-') || timeStr.includes('/')) {
+                        const parsed = new Date(timeStr);
+                        if (!isNaN(parsed.getTime())) return parsed;
                     }
-                });
-            } catch (e) {
-                showNotification('Error processing date', 'error');
-            }
-        }
-
-        // ========== Reset Task - Updates instantly ==========
-        function resetTask(branchId, taskId, date, event, button) {
-            event.stopPropagation();
-            if (!confirm('Reset this task?')) return;
-
-            const token = $('#requestVerificationToken').val();
-            const cell = $(button).closest('td');
-            const row = cell.closest('tr');
-            
-            $(button).html('<i class="fas fa-spinner fa-spin"></i>');
-            
-            $.ajax({
-                url: '@Url.Action("ResetTask", "Home")',
-                type: 'POST',
-                data: { 
-                    branchId: branchId, 
-                    taskItemId: taskId, 
-                    date: date 
-                },
-                headers: { 'RequestVerificationToken': token },
-                success: function(res) {
-                    if (res.success) {
-                        if (res.taskData) {
-                            updateTaskCell(cell, res.taskData);
-                        } else {
-                            fetchTaskData(branchId, taskId, date, cell);
-                        }
-                        updateBranchProgress(row);
-                        updateStats();
-                        showNotification('Task reset', 'success');
+                    const parts = timeStr.split(':');
+                    if (parts.length >= 2) {
+                        const hours = parseInt(parts[0]), minutes = parseInt(parts[1]);
+                        if (!isNaN(hours) && !isNaN(minutes)) { now.setHours(hours, minutes, 0, 0); return now; }
                     }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Reset error:', error);
-                    showNotification('Error resetting task', 'error');
-                }
-            });
-        }
-
-        // ========== Complete All for Task ==========
-        function completeAllForTask(taskId, taskName) {
-            if (!confirm('Complete all "' + taskName + '"?')) return;
-
-            const token = $('#requestVerificationToken').val();
-            const btn = event.currentTarget;
-            const original = btn.innerHTML;
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            btn.disabled = true;
-
-            $.ajax({
-                url: '@Url.Action("CompleteAllForTask", "Home")',
-                type: 'POST',
-                data: { 
-                    taskItemId: taskId, 
-                    date: '@dateKey' 
-                },
-                headers: { 'RequestVerificationToken': token },
-                success: function(res) {
-                    if (res.success) {
-                        showNotification(res.count + ' completed', 'success');
-                        // Update all cells for this task
-                        @foreach (var branch in Model.Branches)
-                        {
-                            <text>
-                            var cell = $('#cell-@branch.Id-' + taskId);
-                            if (cell.length) {
-                                if (res.taskData && res.taskData[@branch.Id]) {
-                                    updateTaskCell(cell, res.taskData[@branch.Id]);
-                                } else {
-                                    fetchTaskData(@branch.Id, taskId, '@dateKey', cell);
-                                }
-                            }
-                            </text>
-                        }
-                        // Update all progress bars and stats
-                        updateAllProgress();
-                        updateStats();
-                    }
-                    btn.innerHTML = original;
-                    btn.disabled = false;
-                },
-                error: function() {
-                    btn.innerHTML = original;
-                    btn.disabled = false;
-                }
-            });
-        }
-
-        // ========== Update All Progress Bars ==========
-        function updateAllProgress() {
-            $('tr[data-branch-id]').each(function() {
-                updateBranchProgress($(this));
-            });
-        }
-
-        // ========== Adjustment Functions with Remove Capability ==========
-        function openTaskAdjustment(branchId, taskId, taskName, date, button) {
-            const cell = $(button).closest('td');
+                    return new Date();
+                } catch (e) { return new Date(); }
+            },
             
-            $('#adjustmentBranchId').val(branchId);
-            $('#adjustmentTaskId').val(taskId);
-            $('#adjustmentDate').val(date);
-            $('#adjustmentModalTitle').text('Adjust: ' + taskName);
-            $('#adjustmentMinutes').val(0);
-            $('#adjustmentReason').val('');
-            $('#currentAdjustmentDisplay').text('0');
-
-            const token = $('#requestVerificationToken').val();
-
-            $.ajax({
-                url: '@Url.Action("GetTaskStatus", "Home")',
-                type: 'GET',
-                data: { 
-                    branchId: branchId, 
-                    taskItemId: taskId, 
-                    date: date 
-                },
-                headers: { 'RequestVerificationToken': token },
-                success: function(res) {
+            openAdjustmentModal(branchId, taskId, taskName, date, button) {
+                $('#adjustmentBranchId').val(branchId);
+                $('#adjustmentTaskId').val(taskId);
+                $('#adjustmentDate').val(date);
+                $('#adjustmentModalTitle').text('Adjust: ' + taskName);
+                $('#adjustmentMinutes').val(0);
+                $('#adjustmentReason').val('');
+                $('#currentAdjustmentDisplay').text('0');
+                $('#adjustmentModal .bg-amber-500').text('Save').prop('disabled', false).removeClass('opacity-50 cursor-not-allowed');
+                API.getTaskStatus(branchId, taskId, date).then(res => {
                     if (res.exists && res.adjustmentMinutes > 0) {
                         $('#adjustmentMinutes').val(res.adjustmentMinutes);
                         $('#adjustmentReason').val(res.adjustmentReason || '');
                         $('#currentAdjustmentDisplay').text(res.adjustmentMinutes);
                     }
+                }).catch(e => console.error('Failed to fetch adjustment data'));
+                $('#adjustmentModal').removeClass('hidden').addClass('flex');
+            },
+            
+            closeAdjustmentModal() { $('#adjustmentModal').removeClass('flex').addClass('hidden'); $('#adjustmentModal .bg-amber-500').text('Save').prop('disabled', false).removeClass('opacity-50 cursor-not-allowed'); },
+            
+            addAdjustment(min) {
+                const current = parseInt($('#adjustmentMinutes').val()) || 0;
+                $('#adjustmentMinutes').val(current + min);
+                $('#currentAdjustmentDisplay').text(current + min);
+            },
+            
+            clearAdjustment() { $('#adjustmentMinutes').val(0); $('#adjustmentReason').val(''); $('#currentAdjustmentDisplay').text('0'); },
+            
+            openNotesModal(branchId, branchName, currentNotes) {
+                $('#notesBranchId').val(branchId);
+                $('#notesBranchName').text(branchName);
+                $('#notesContent').val(currentNotes || '');
+                $('#notesModal').removeClass('hidden').addClass('flex');
+            },
+            
+            closeNotesModal() { $('#notesModal').removeClass('flex').addClass('hidden'); },
+            
+            openBulkUpdateModal() {
+                $('#bulkUpdateModal').removeClass('hidden').addClass('flex');
+                this.setBulkTime('now');
+                $('#bulkUpdateModal .bg-purple-600').text('Update All').prop('disabled', false).removeClass('opacity-50');
+            },
+            
+            closeBulkUpdateModal() { $('#bulkUpdateModal').removeClass('flex').addClass('hidden'); $('#bulkUpdateModal .bg-purple-600').text('Update All').prop('disabled', false).removeClass('opacity-50'); },
+            
+            setBulkTime(preset) {
+                const d = new Date();
+                if (preset === 'morning') d.setHours(8,0);
+                else if (preset === 'noon') d.setHours(12,0);
+                else if (preset === 'afternoon') d.setHours(16,0);
+                else if (preset === 'evening') d.setHours(20,0);
+                else if (preset === 'night') d.setHours(23,0);
+                const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+                const h = String(d.getHours()).padStart(2,'0'), min = String(d.getMinutes()).padStart(2,'0');
+                $('#bulkCompletionTime').val(`${y}-${m}-${day}T${h}:${min}`);
+            }
+        };
+        
+        // ========== TASK ACTIONS ==========
+        const TaskActions = {
+            async quickComplete(branchId, taskId, date, button) {
+                const cell = $(button).closest('td');
+                const row = cell.closest('tr');
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
+                button.disabled = true;
+                try {
+                    const res = await API.updateTaskTime(branchId, taskId, date, new Date().toISOString());
+                    if (res.success && res.taskData) {
+                        UI.updateTaskCell(cell, res.taskData);
+                        UI.updateBranchProgress(row);
+                        UI.updateStats();
+                        UI.showNotification('Task completed', 'success');
+                    } else throw new Error(res.message);
+                } catch (e) {
+                    button.innerHTML = original;
+                    button.disabled = false;
+                    UI.showNotification('Error completing task', 'error');
                 }
-            });
-
-            $('#adjustmentModal').removeClass('hidden').addClass('flex');
-        }
-
-        function closeAdjustmentModal() {
-            $('#adjustmentModal').removeClass('flex').addClass('hidden');
-        }
-
-        function addAdjustment(min) {
-            var current = parseInt($('#adjustmentMinutes').val()) || 0;
-            $('#adjustmentMinutes').val(current + min);
-            $('#currentAdjustmentDisplay').text(current + min);
-        }
-
-        function clearAdjustment() {
-            $('#adjustmentMinutes').val(0);
-            $('#adjustmentReason').val('');
-            $('#currentAdjustmentDisplay').text('0');
-        }
-
-        function saveAdjustment() {
-            const branchId = $('#adjustmentBranchId').val();
-            const taskId = $('#adjustmentTaskId').val();
-            const date = $('#adjustmentDate').val();
-            const minutes = parseInt($('#adjustmentMinutes').val()) || 0;
-            const reason = $('#adjustmentReason').val();
-            const cell = $('#cell-' + branchId + '-' + taskId);
-            const row = cell.closest('tr');
-
-            const token = $('#requestVerificationToken').val();
-            const btn = $('#adjustmentModal .bg-amber-500');
-            const original = btn.text();
-
-            btn.text('Saving...').prop('disabled', true);
-
-            $.ajax({
-                url: '@Url.Action("SaveAdjustment", "Home")',
-                type: 'POST',
-                data: { 
-                    branchId: branchId, 
-                    taskItemId: taskId, 
-                    date: date, 
-                    adjustmentMinutes: minutes, 
-                    adjustmentReason: reason 
-                },
-                headers: { 'RequestVerificationToken': token },
-                success: function(res) {
+            },
+            
+            async resetSingle(branchId, taskId, date, event, button) {
+                event.stopPropagation();
+                if (!confirm('Reset this specific task for this branch?')) return;
+                const cell = $(button).closest('td');
+                const row = cell.closest('tr');
+                const original = $(button).html();
+                $(button).html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+                try {
+                    const res = await API.resetTask(branchId, taskId, date);
+                    if (res.success && res.taskData) {
+                        UI.updateTaskCell(cell, res.taskData);
+                        UI.updateBranchProgress(row);
+                        UI.updateStats();
+                        UI.showNotification('Task reset for this branch', 'success');
+                    } else throw new Error(res.message);
+                } catch (e) {
+                    $(button).html(original).prop('disabled', false);
+                    UI.showNotification('Error resetting task', 'error');
+                }
+            },
+            
+            async resetAllForTask(taskId, taskName) {
+                if (!confirm(`Reset ALL "${taskName}" tasks? This will clear completion status for all branches.`)) return;
+                const btn = event.currentTarget;
+                const original = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                btn.disabled = true;
+                try {
+                    const res = await API.resetAllForTask(taskId, '@dateKey');
                     if (res.success) {
-                        if (res.taskData) {
-                            updateTaskCell(cell, res.taskData);
-                        } else {
-                            fetchTaskData(branchId, taskId, date, cell);
-                        }
-                        updateBranchProgress(row);
-                        updateStats();
-                        
-                        if (minutes === 0) {
-                            showNotification('Adjustment removed', 'success');
-                        } else {
-                            showNotification('Adjustment saved', 'success');
-                        }
-                        
-                        closeAdjustmentModal();
-                    } else {
-                        showNotification('Error saving adjustment', 'error');
-                        btn.text(original).prop('disabled', false);
-                    }
-                },
-                error: function() {
-                    showNotification('Error', 'error');
-                    btn.text(original).prop('disabled', false);
-                }
-            });
-        }
-
-        // ========== Bulk Update Functions ==========
-        function openBulkUpdateModal() {
-            $('#bulkUpdateModal').removeClass('hidden').addClass('flex');
-            setBulkTime('now');
-        }
-
-        function closeBulkUpdateModal() {
-            $('#bulkUpdateModal').removeClass('flex').addClass('hidden');
-        }
-
-        function setBulkTime(preset) {
-            var d = new Date();
-            if (preset === 'morning') d.setHours(8,0);
-            else if (preset === 'noon') d.setHours(12,0);
-            else if (preset === 'afternoon') d.setHours(16,0);
-            else if (preset === 'evening') d.setHours(20,0);
-            else if (preset === 'night') d.setHours(23,0);
-
-            var y = d.getFullYear();
-            var m = String(d.getMonth()+1).padStart(2,'0');
-            var day = String(d.getDate()).padStart(2,'0');
-            var h = String(d.getHours()).padStart(2,'0');
-            var min = String(d.getMinutes()).padStart(2,'0');
-
-            $('#bulkCompletionTime').val(y + '-' + m + '-' + day + 'T' + h + ':' + min);
-        }
-
-        function executeBulkUpdate() {
-            const taskId = $('#bulkTaskId').val();
-            const time = $('#bulkCompletionTime').val();
-
-            if (!taskId || !time) {
-                showNotification('Select task and time', 'error');
-                return;
-            }
-
-            try {
-                const selectedDate = new Date(time);
-                if (isNaN(selectedDate.getTime())) {
-                    showNotification('Invalid date format', 'error');
-                    return;
-                }
-
-                const token = $('#requestVerificationToken').val();
-                const btn = $('#bulkUpdateModal .bg-purple-600');
-                const original = btn.text();
-
-                btn.text('...').prop('disabled', true);
-
-                $.ajax({
-                    url: '@Url.Action("BulkUpdate", "Home")',
-                    type: 'POST',
-                    data: {
-                        taskItemId: taskId,
-                        completionDateTime: selectedDate.toISOString(),
-                        branchIds: @Html.Raw(Json.Serialize(Model.Branches.Select(b => b.Id).ToList()))
-                    },
-                    headers: { 'RequestVerificationToken': token },
-                    success: function(res) {
-                        if (res.success) {
-                            showNotification(res.count + ' updated', 'success');
-                            closeBulkUpdateModal();
-                            // Update all cells for this task
-                            @foreach (var branch in Model.Branches)
-                            {
-                                <text>
-                                var cell = $('#cell-@branch.Id-' + taskId);
-                                if (cell.length) {
-                                    if (res.taskData && res.taskData[@branch.Id]) {
-                                        updateTaskCell(cell, res.taskData[@branch.Id]);
-                                    } else {
-                                        fetchTaskData(@branch.Id, taskId, '@dateKey', cell);
-                                    }
-                                }
-                                </text>
+                        UI.showNotification(`${res.count} tasks reset`, 'success');
+                        @foreach (var branch in Model.Branches)
+                        {
+                            <text>
+                            const cell_@(branch.Id) = $('#cell-@branch.Id-' + taskId);
+                            if (cell_@(branch.Id).length && res.taskData && res.taskData[@(branch.Id)]) {
+                                UI.updateTaskCell(cell_@(branch.Id), res.taskData[@(branch.Id)]);
                             }
-                            // Update all progress bars and stats
-                            updateAllProgress();
-                            updateStats();
-                        } else {
-                            showNotification('Error', 'error');
-                            btn.text(original).prop('disabled', false);
+                            </text>
                         }
-                    },
-                    error: function() {
-                        showNotification('Error', 'error');
-                        btn.text(original).prop('disabled', false);
-                    }
-                });
-            } catch (e) {
-                showNotification('Error processing date', 'error');
+                        UI.updateAllProgress();
+                        UI.updateStats();
+                    } else throw new Error(res.message);
+                } catch (e) {
+                    UI.showNotification('Error resetting tasks', 'error');
+                } finally {
+                    btn.innerHTML = original;
+                    btn.disabled = false;
+                }
+            },
+            
+            async completeAllForTask(taskId, taskName) {
+                if (!confirm(`Complete all "${taskName}" tasks?`)) return;
+                const btn = event.currentTarget;
+                const original = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                btn.disabled = true;
+                try {
+                    const res = await API.completeAllForTask(taskId, '@dateKey');
+                    if (res.success) {
+                        UI.showNotification(`${res.count} completed`, 'success');
+                        @foreach (var branch in Model.Branches)
+                        {
+                            <text>
+                            const cell_@(branch.Id) = $('#cell-@branch.Id-' + taskId);
+                            if (cell_@(branch.Id).length && res.taskData && res.taskData[@(branch.Id)]) {
+                                UI.updateTaskCell(cell_@(branch.Id), res.taskData[@(branch.Id)]);
+                            }
+                            </text>
+                        }
+                        UI.updateAllProgress();
+                        UI.updateStats();
+                    } else throw new Error(res.message);
+                } catch (e) {
+                    UI.showNotification('Error completing tasks', 'error');
+                } finally {
+                    btn.innerHTML = original;
+                    btn.disabled = false;
+                }
+            },
+            
+            async saveTaskTime() {
+                const branchId = $('#timePickerBranchId').val();
+                const taskId = $('#timePickerTaskId').val();
+                const date = $('#timePickerDate').val();
+                const dateTimeStr = $('#timePickerDateTime').val();
+                const cell = $('#cell-' + branchId + '-' + taskId);
+                const row = cell.closest('tr');
+                if (!dateTimeStr) { UI.showNotification('Please select a time', 'error'); return; }
+                try {
+                    const selectedDate = new Date(dateTimeStr);
+                    if (isNaN(selectedDate.getTime())) throw new Error('Invalid date');
+                    const btn = $('#timePickerModal .bg-blue-600');
+                    const original = btn.text();
+                    btn.text('Saving...').prop('disabled', true).addClass('opacity-50');
+                    const res = await API.updateTaskTime(branchId, taskId, date, selectedDate.toISOString());
+                    if (res.success && res.taskData) {
+                        UI.updateTaskCell(cell, res.taskData);
+                        UI.updateBranchProgress(row);
+                        UI.updateStats();
+                        UI.showNotification('Time updated', 'success');
+                        UI.closeTimePicker();
+                    } else throw new Error(res.message);
+                } catch (e) {
+                    UI.showNotification('Error updating time', 'error');
+                }
+            },
+            
+            async saveAdjustment() {
+                const branchId = $('#adjustmentBranchId').val();
+                const taskId = $('#adjustmentTaskId').val();
+                const date = $('#adjustmentDate').val();
+                const minutes = parseInt($('#adjustmentMinutes').val()) || 0;
+                const reason = $('#adjustmentReason').val();
+                const cell = $('#cell-' + branchId + '-' + taskId);
+                const row = cell.closest('tr');
+                const btn = $('#adjustmentModal .bg-amber-500');
+                const original = btn.text();
+                btn.text('Saving...').prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
+                try {
+                    const res = await API.saveAdjustment(branchId, taskId, date, minutes, reason);
+                    if (res.success) {
+                        const fresh = await API.getTaskStatus(branchId, taskId, date);
+                        if (fresh.exists) UI.updateTaskCell(cell, fresh);
+                        UI.updateBranchProgress(row);
+                        UI.updateStats();
+                        UI.showNotification(minutes === 0 ? 'Adjustment removed' : 'Adjustment saved', 'success');
+                        UI.closeAdjustmentModal();
+                    } else throw new Error(res.message);
+                } catch (e) {
+                    UI.showNotification('Error saving adjustment', 'error');
+                    btn.text(original).prop('disabled', false).removeClass('opacity-50 cursor-not-allowed');
+                }
+            },
+            
+            async saveNotes() {
+                const branchId = $('#notesBranchId').val();
+                const notes = $('#notesContent').val();
+                const btn = $('#notesModal .bg-blue-600');
+                const original = btn.text();
+                btn.text('Saving...').prop('disabled', true).addClass('opacity-50');
+                try {
+                    const res = await API.saveNotes(branchId, notes);
+                    if (res.success) {
+                        UI.showNotification(notes ? 'Notes saved successfully' : 'Notes removed', 'success');
+                        UI.closeNotesModal();
+                        UI.updateNotesIcon(branchId, notes);
+                    } else throw new Error(res.message);
+                } catch (e) {
+                    UI.showNotification('Error saving notes', 'error');
+                    btn.text(original).prop('disabled', false).removeClass('opacity-50');
+                }
+            },
+            
+            async executeBulkUpdate() {
+                const taskId = $('#bulkTaskId').val();
+                const time = $('#bulkCompletionTime').val();
+                if (!taskId || !time) { UI.showNotification('Select task and time', 'error'); return; }
+                try {
+                    const selectedDate = new Date(time);
+                    if (isNaN(selectedDate.getTime())) throw new Error('Invalid date');
+                    const btn = $('#bulkUpdateModal .bg-purple-600');
+                    const original = btn.text();
+                    btn.text('...').prop('disabled', true).addClass('opacity-50');
+                    const res = await API.bulkUpdate(taskId, selectedDate.toISOString(), @Html.Raw(Json.Serialize(Model.Branches.Select(b => b.Id).ToList())));
+                    if (res.success) {
+                        UI.showNotification(`${res.count} updated`, 'success');
+                        UI.closeBulkUpdateModal();
+                        @foreach (var branch in Model.Branches)
+                        {
+                            <text>
+                            const cell_@(branch.Id) = $('#cell-@branch.Id-' + taskId);
+                            if (cell_@(branch.Id).length && res.taskData && res.taskData[@(branch.Id)]) {
+                                UI.updateTaskCell(cell_@(branch.Id), res.taskData[@(branch.Id)]);
+                            }
+                            </text>
+                        }
+                        UI.updateAllProgress();
+                        UI.updateStats();
+                    } else throw new Error(res.message);
+                } catch (e) {
+                    UI.showNotification('Error', 'error');
+                }
             }
-        }
-
-        // ========== Notification ==========
-        function showNotification(msg, type) {
-            var colors = {
-                success: 'bg-green-500',
-                error: 'bg-red-500',
-                info: 'bg-blue-500'
-            };
-
-            $('.custom-notification').remove();
-
-            var notification = $('<div class="fixed top-4 right-4 z-50 px-3 py-1.5 rounded shadow-lg text-xs text-white ' + colors[type] + ' animate-slide-in">' + msg + '</div>');
-
-            $('body').append(notification);
-            setTimeout(function() { 
-                notification.fadeOut(300, function() { $(this).remove(); }); 
-            }, 2000);
+        };
+        
+        // ========== INITIALIZATION ==========
+        $(document).ready(function() {
+            console.log('Dashboard loaded - Real-time updates enabled');
+            $('#timePickerDateTime').on('change', () => UI.updateTimePreview());
+            $('#datePicker').on('change', function() {
+                const selectedDate = $(this).val();
+                if (selectedDate) window.location.href = '@Url.Action("Index", "Home")?date=' + selectedDate;
+            });
+            $(document).ajaxError(() => UI.showNotification('Connection error', 'error'));
+        });
+        
+        function changeDate(days) {
+            const date = new Date('@Model.CurrentDate.ToString("yyyy-MM-dd")');
+            date.setDate(date.getDate() + days);
+            window.location.href = '@Url.Action("Index", "Home")?date=' + date.toISOString().split('T')[0];
         }
     </script>
 </body>
