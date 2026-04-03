@@ -126,7 +126,7 @@
                 <a href="@Url.Action("Edit", new { id = Model.Id })" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition text-center">
                     <i class="fas fa-edit mr-2"></i>Edit
                 </a>
-                <a href="@Url.Action("EmployeePerformance", "Report", new { employeeId = Model.Id })" class="flex-1 px-4 py-2 border border-gray-300 bg-white rounded-lg text-sm font-medium hover:bg-gray-50 transition text-center">
+                <a href="@Url.Action("EmployeePerformance", "Report", new { employeeId = Model.Id, startDate = Model.StartDate.ToString("yyyy-MM-dd"), endDate = Model.EndDate.ToString("yyyy-MM-dd") })" class="flex-1 px-4 py-2 border border-gray-300 bg-white rounded-lg text-sm font-medium hover:bg-gray-50 transition text-center">
                     <i class="fas fa-chart-bar mr-2"></i>Full Report
                 </a>
             </div>
@@ -135,11 +135,71 @@
 
     <!-- Right Column - Performance Dashboard -->
     <div class="lg:col-span-2 space-y-6">
+        <!-- Date Range Filter -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <form method="post" asp-action="Details" class="flex flex-wrap items-end gap-4">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <input type="date" name="startDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" value="@Model.StartDate.ToString("yyyy-MM-dd")" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                    <input type="date" name="endDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" value="@Model.EndDate.ToString("yyyy-MM-dd")" />
+                </div>
+                <div>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                        <i class="fas fa-calendar-alt mr-2"></i>Apply Date Range
+                    </button>
+                </div>
+                <div class="text-sm text-gray-500">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Showing data from @Model.StartDate.ToString("MMM dd, yyyy") to @Model.EndDate.ToString("MMM dd, yyyy")
+                </div>
+            </form>
+        </div>
+
+        <!-- Warning Message for Inactive Period -->
+        @if (!string.IsNullOrEmpty(Model.WarningMessage))
+        {
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-exclamation-triangle text-yellow-500"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-yellow-700">@Model.WarningMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Empty State for No Tasks -->
+        @if (Model.TotalTasks == 0 && string.IsNullOrEmpty(Model.WarningMessage))
+        {
+            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-info-circle text-blue-500"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-700">No tasks were found for the selected date range. This could mean:</p>
+                        <ul class="text-sm text-blue-700 mt-1 list-disc list-inside">
+                            <li>The employee had no branch assignments during this period</li>
+                            <li>No tasks were scheduled for this period</li>
+                            <li>The selected date range is outside the employee's active period</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
         <!-- Performance Summary Cards -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div class="text-sm text-gray-500 mb-1">Total Tasks</div>
                 <div class="text-2xl font-bold text-blue-600">@Model.TotalTasks</div>
+                <div class="text-xs text-gray-400">In selected date range</div>
             </div>
             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div class="text-sm text-gray-500 mb-1">Completed</div>
@@ -154,7 +214,7 @@
             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div class="text-sm text-gray-500 mb-1">Performance Score</div>
                 <div class="text-2xl font-bold text-purple-600">@Model.PerformanceScore%</div>
-                <div class="text-xs text-gray-400">Last 30 days</div>
+                <div class="text-xs text-gray-400">Completion rate</div>
             </div>
         </div>
 
@@ -162,21 +222,21 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b">
                 <h3 class="text-lg font-semibold">Performance Trend</h3>
-                <p class="text-xs text-gray-500 mt-1">Tasks completed per day (last 30 days)</p>
+                <p class="text-xs text-gray-500 mt-1">Tasks completed per day (@Model.StartDate.ToString("MMM dd") - @Model.EndDate.ToString("MMM dd"))</p>
             </div>
             <div class="p-6">
                 <canvas id="performanceChart" height="200"></canvas>
             </div>
         </div>
 
-        <!-- 📊 Task Performance Matrix with Pie Charts -->
+        <!-- Task Performance Matrix -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b bg-gradient-to-r from-indigo-50 to-purple-50">
                 <div class="flex items-center justify-between">
                     <div>
                         <h3 class="text-lg font-semibold text-gray-800 flex items-center">
                             <i class="fas fa-chart-pie text-indigo-600 mr-2"></i>
-                            📊 Task Performance Matrix
+                            Task Performance Matrix
                         </h3>
                         <p class="text-xs text-gray-500 mt-1">Performance breakdown by task type</p>
                     </div>
@@ -248,7 +308,7 @@
                 {
                     <div class="text-center py-4 text-gray-500">
                         <i class="fas fa-chart-bar text-2xl mb-1 text-gray-300"></i>
-                        <p class="text-sm">No task data available</p>
+                        <p class="text-sm">No task data available for the selected date range</p>
                     </div>
                 }
             </div>
@@ -274,7 +334,7 @@
                                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">End Date</th>
                                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Duration</th>
                                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Status</th>
-                                 </tr>
+                                </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200">
                                 @foreach (var assignment in Model.BranchHistory)
@@ -312,7 +372,7 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b">
                 <h3 class="text-lg font-semibold">Recent Tasks</h3>
-                <p class="text-xs text-gray-500 mt-1">Last 10 tasks assigned to @Model.Name</p>
+                <p class="text-xs text-gray-500 mt-1">Last 10 tasks assigned to @Model.Name in selected date range</p>
             </div>
             <div class="p-6">
                 @if (Model.RecentTasks != null && Model.RecentTasks.Any())
@@ -374,7 +434,7 @@
                 }
                 else
                 {
-                    <p class="text-center text-gray-500 py-4">No recent tasks</p>
+                    <p class="text-center text-gray-500 py-4">No recent tasks in selected date range</p>
                 }
             </div>
         </div>
@@ -389,6 +449,7 @@
                         <div>
                             <p><i class="fas fa-chart-line text-blue-500 mr-1"></i> <strong>Completion Rate:</strong> @completionRate%</p>
                             <p><i class="fas fa-clock text-green-500 mr-1"></i> <strong>On Time Rate:</strong> @onTimeRate%</p>
+                            <p><i class="fas fa-calendar-alt text-purple-500 mr-1"></i> <strong>Date Range:</strong> @Model.StartDate.ToString("MMM dd, yyyy") - @Model.EndDate.ToString("MMM dd, yyyy")</p>
                         </div>
                         <div>
                             @if (Model.PerformanceScore >= 90)
@@ -537,15 +598,22 @@
     function closeBranchModal() {
         $('#branchModal').removeClass('flex').addClass('hidden');
         $('#branchSelect').val('');
+        $('#assignmentStartDate').val(new Date().toISOString().split('T')[0]);
     }
 
     function saveBranchAssignment() {
         var employeeId = $('#branchEmployeeId').val();
         var branchId = $('#branchSelect').val();
         var startDate = $('#assignmentStartDate').val();
+        var token = $('#requestVerificationToken').val();
 
         if (!branchId) {
             showNotification('Please select a branch', 'error');
+            return;
+        }
+
+        if (!startDate) {
+            showNotification('Please select a start date', 'error');
             return;
         }
 
@@ -557,17 +625,23 @@
                 branchId: branchId,
                 startDate: startDate
             },
+            headers: { 'RequestVerificationToken': token },
             success: function(response) {
                 if (response.success) {
-                    showNotification('Branch assigned successfully', 'success');
+                    showNotification(response.message || 'Branch assigned successfully', 'success');
                     closeBranchModal();
-                    setTimeout(function() { location.reload(); }, 1000);
+                    setTimeout(function() { location.reload(); }, 1500);
                 } else {
-                    showNotification('Error assigning branch', 'error');
+                    showNotification(response.message || 'Error assigning branch', 'error');
                 }
             },
-            error: function() {
-                showNotification('Error assigning branch', 'error');
+            error: function(xhr) {
+                var errorMsg = 'Error assigning branch';
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    errorMsg = response.message || errorMsg;
+                } catch(e) {}
+                showNotification(errorMsg, 'error');
             }
         });
     }
@@ -576,7 +650,8 @@
         var colors = {
             success: 'bg-green-500',
             error: 'bg-red-500',
-            info: 'bg-blue-500'
+            info: 'bg-blue-500',
+            warning: 'bg-yellow-500'
         };
         
         $('.custom-notification').remove();
@@ -590,6 +665,30 @@
             notification.fadeOut(300, function() { $(this).remove(); }); 
         }, 3000);
     }
+
+    // Add anti-forgery token to all AJAX requests
+    $(document).ready(function() {
+        var token = $('input[name="__RequestVerificationToken"]').val();
+        if (token) {
+            $.ajaxSetup({
+                headers: { 'RequestVerificationToken': token }
+            });
+        }
+        
+        // Close modal on escape key
+        $(document).keydown(function(e) {
+            if (e.key === 'Escape') {
+                closeBranchModal();
+            }
+        });
+        
+        // Close modal when clicking outside
+        $(window).click(function(e) {
+            if ($(e.target).hasClass('fixed')) {
+                closeBranchModal();
+            }
+        });
+    });
 </script>
 
 <style>
@@ -614,5 +713,10 @@
     
     .transition {
         transition: all 0.2s ease;
+    }
+    
+    /* Hover effects for table rows */
+    .hover\:bg-gray-50:hover {
+        background-color: #f9fafb;
     }
 </style>

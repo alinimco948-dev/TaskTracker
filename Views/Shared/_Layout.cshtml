@@ -10,59 +10,229 @@
     <style>
         * { font-family: 'Inter', sans-serif; }
         body { background-color: #f3f4f6; }
-        .sidebar { transition: all 0.3s ease; }
-        .sidebar.collapsed { width: 80px; }
-        .sidebar.collapsed .sidebar-text { display: none; }
-        .animate-slide-in { animation: slideIn 0.3s ease-out; }
-        @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        /* Sidebar transitions */
+        .sidebar {
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .sidebar-text {
+            transition: opacity 0.2s ease-in-out, display 0.2s;
+        }
+        
+        /* Main content transition */
+        #main-content {
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Animation for notifications */
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+       @@keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* Hover effects for sidebar links */
+        .sidebar nav ul li a:hover,
+        .sidebar nav ul li button:hover {
+            transform: translateX(4px);
+        }
+        
+        /* Custom scrollbar for main content */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @@keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-gray-100">
-    <div class="flex h-screen bg-gray-100">
+    <div class="flex h-screen bg-gray-100 overflow-hidden">
         @await Html.PartialAsync("_Sidebar")
-        <div class="flex-1 flex flex-col overflow-hidden" id="main-content">
+        
+        <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300" id="main-content">
             @await Html.PartialAsync("_TopNav")
+            
             <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4">
                 <div class="container mx-auto">
                     @if (TempData["SuccessMessage"] != null)
                     {
                         <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center"><i class="fas fa-check-circle mr-2"></i><p>@TempData["SuccessMessage"]</p></div>
+                            <div class="flex items-center">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                <p>@TempData["SuccessMessage"]</p>
+                            </div>
                         </div>
                     }
                     @if (TempData["ErrorMessage"] != null)
                     {
                         <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center"><i class="fas fa-exclamation-circle mr-2"></i><p>@TempData["ErrorMessage"]</p></div>
+                            <div class="flex items-center">
+                                <i class="fas fa-exclamation-circle mr-2"></i>
+                                <p>@TempData["ErrorMessage"]</p>
+                            </div>
+                        </div>
+                    }
+                    @if (TempData["InfoMessage"] != null)
+                    {
+                        <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4 rounded shadow animate-slide-in">
+                            <div class="flex items-center">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <p>@TempData["InfoMessage"]</p>
+                            </div>
                         </div>
                     }
                     @RenderBody()
                 </div>
             </main>
+            
             <footer class="bg-white border-t border-gray-200 p-3 text-xs text-gray-600">
                 <div class="container mx-auto flex justify-between items-center">
                     <div>&copy; @DateTime.Now.Year - TaskTracker v1.0.0</div>
-                    <div><span class="text-gray-400">Last updated: @DateTime.Now.ToString("MMM dd, yyyy HH:mm")</span></div>
+                    <div>
+                        <span class="text-gray-400">Last updated: @DateTime.Now.ToString("MMM dd, yyyy HH:mm")</span>
+                    </div>
                 </div>
             </footer>
         </div>
     </div>
+    
     <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <script>
+        // Global notification function
         function showNotification(message, type = 'info') {
-            const colors = { success: 'bg-green-500', error: 'bg-red-500', warning: 'bg-yellow-500', info: 'bg-blue-500' };
-            const notification = $(`<div class="px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ${colors[type]} animate-slide-in flex items-center"><i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i><span>${message}</span></div>`);
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+            const notification = $(`
+                <div class="px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ${colors[type]} animate-slide-in flex items-center">
+                    <i class="fas ${icons[type]} mr-2"></i>
+                    <span>${escapeHtml(message)}</span>
+                </div>
+            `);
             $('#notification-container').append(notification);
-            setTimeout(() => { notification.fadeOut(300, function() { $(this).remove(); }); }, 3000);
+            setTimeout(() => {
+                notification.fadeOut(300, function() { $(this).remove(); });
+            }, 3000);
         }
-        function formatDate(date) { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-        function getInitials(name) { return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2); }
-        function toggleSidebar() { $('#sidebar').toggleClass('collapsed'); $('.sidebar-text').toggleClass('hidden'); localStorage.setItem('sidebarCollapsed', $('#sidebar').hasClass('collapsed')); }
-        $(document).ready(function() { if (localStorage.getItem('sidebarCollapsed') === 'true') { $('#sidebar').addClass('collapsed'); $('.sidebar-text').addClass('hidden'); } });
+        
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            if (!text) return text;
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        
+        // Format date function
+        function formatDate(date) {
+            return new Date(date).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric' 
+            });
+        }
+        
+        // Get initials from name
+        function getInitials(name) {
+            if (!name) return '?';
+            return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+        }
+        
+        // Toggle sidebar function
+        function toggleSidebar() {
+            const sidebar = $('#sidebar');
+            const toggleIcon = $('#sidebar-toggle-icon');
+            
+            sidebar.toggleClass('collapsed');
+            
+            // Change icon direction
+            if (sidebar.hasClass('collapsed')) {
+                toggleIcon.removeClass('fa-chevron-left').addClass('fa-chevron-right');
+            } else {
+                toggleIcon.removeClass('fa-chevron-right').addClass('fa-chevron-left');
+            }
+            
+            // Save state to localStorage
+            localStorage.setItem('sidebarCollapsed', sidebar.hasClass('collapsed'));
+        }
+        
+        // Show loading spinner
+        function showLoading() {
+            $('#loading-overlay').remove();
+            $('body').append('<div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div class="bg-white rounded-lg p-4 flex items-center space-x-3"><div class="loading-spinner"></div><span>Loading...</span></div></div>');
+        }
+        
+        function hideLoading() {
+            $('#loading-overlay').remove();
+        }
+        
+        // Document ready
+        $(document).ready(function() {
+            // Restore sidebar state
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                $('#sidebar').addClass('collapsed');
+                $('#sidebar-toggle-icon').removeClass('fa-chevron-left').addClass('fa-chevron-right');
+            }
+            
+            // Close dropdowns when clicking outside
+            $(document).click(function(event) {
+                if (!$(event.target).closest('.relative').length) {
+                    $('.dropdown-menu').slideUp(200);
+                }
+            });
+        });
     </script>
+    
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

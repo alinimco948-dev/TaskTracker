@@ -50,14 +50,27 @@ public class Employee
     [ForeignKey(nameof(ManagerId))]
     public virtual Employee? Manager { get; set; }
 
-    // Collection of subordinates (employees who report to this employee)
-    // Use InverseProperty to explicitly define the relationship
     [InverseProperty(nameof(Manager))]
     public virtual ICollection<Employee> Subordinates { get; set; } = new HashSet<Employee>();
 
-    // Branch assignments for this employee
+    // Multiple branch assignments (many-to-many)
     public virtual ICollection<BranchAssignment> BranchAssignments { get; set; } = new HashSet<BranchAssignment>();
 
-    // Task assignments for this employee
+    // Task assignments
     public virtual ICollection<TaskAssignment> TaskAssignments { get; set; } = new HashSet<TaskAssignment>();
+
+    // Helper method to get current active branches
+    [NotMapped]
+    public List<Branch> CurrentBranches => BranchAssignments
+        .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+        .Select(ba => ba.Branch)
+        .Where(b => b != null)
+        .ToList()!;
+
+    // Helper method to check if employee is assigned to a branch
+    public bool IsAssignedToBranch(int branchId)
+    {
+        return BranchAssignments.Any(ba => ba.BranchId == branchId && 
+            (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date));
+    }
 }

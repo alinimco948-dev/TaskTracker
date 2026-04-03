@@ -117,6 +117,106 @@ public class ReportService : IReportService
             throw;
         }
     }
+public async Task<List<EmployeeRankingViewModel>> GetEmployeeRankingAsync(DateTime? startDate = null, DateTime? endDate = null)
+{
+    try
+    {
+        var actualStartDate = startDate ?? DateTime.UtcNow.AddMonths(-1);
+        var actualEndDate = endDate ?? DateTime.UtcNow;
+
+        var employees = await _context.Employees
+            .Include(e => e.Department)
+            .Include(e => e.BranchAssignments)
+            .Where(e => e.IsActive)
+            .ToListAsync();
+
+        var rankingList = new List<EmployeeRankingViewModel>();
+
+        foreach (var emp in employees)
+        {
+            // Get assigned branch IDs
+            var assignedBranchIds = emp.BranchAssignments
+                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                .Select(ba => ba.BranchId)
+                .ToList();
+
+            if (!assignedBranchIds.Any())
+            {
+                rankingList.Add(new EmployeeRankingViewModel
+                {
+                    Id = emp.Id,
+                    Name = emp.Name,
+                    EmployeeId = emp.EmployeeId,
+                    Position = emp.Position ?? "N/A",
+                    Department = emp.Department?.Name ?? "Unassigned",
+                    PerformanceScore = 0,
+                    TotalTasks = 0,
+                    CompletedTasks = 0,
+                    IsActive = emp.IsActive,
+                    Initials = GetInitials(emp.Name)
+                });
+                continue;
+            }
+
+            // Get all DailyTasks for the employee's branches
+            var allDailyTasks = await _context.DailyTasks
+                .Include(dt => dt.TaskItem)
+                .Where(dt => assignedBranchIds.Contains(dt.BranchId) &&
+                             dt.TaskDate.Date >= actualStartDate.Date &&
+                             dt.TaskDate.Date <= actualEndDate.Date)
+                .ToListAsync();
+
+            // Filter tasks within employee's assignment periods
+            var relevantTasks = new List<DailyTask>();
+            foreach (var dt in allDailyTasks)
+            {
+                var assignment = emp.BranchAssignments
+                    .FirstOrDefault(ba => ba.BranchId == dt.BranchId &&
+                                         (ba.EndDate == null || dt.TaskDate.Date <= ba.EndDate.Value.Date) &&
+                                         dt.TaskDate.Date >= ba.StartDate.Date);
+                
+                if (assignment != null)
+                {
+                    relevantTasks.Add(dt);
+                }
+            }
+
+            var totalTasks = relevantTasks.Count;
+            var completedTasks = relevantTasks.Count(dt => dt.IsCompleted);
+            var completionRate = totalTasks > 0 ? (int)Math.Round((double)completedTasks / totalTasks * 100) : 0;
+
+            rankingList.Add(new EmployeeRankingViewModel
+            {
+                Id = emp.Id,
+                Name = emp.Name,
+                EmployeeId = emp.EmployeeId,
+                Position = emp.Position ?? "N/A",
+                Department = emp.Department?.Name ?? "Unassigned",
+                PerformanceScore = completionRate,
+                TotalTasks = totalTasks,
+                CompletedTasks = completedTasks,
+                IsActive = emp.IsActive,
+                Initials = GetInitials(emp.Name)
+            });
+        }
+
+        // Sort by score descending and assign ranks
+        rankingList = rankingList.OrderByDescending(e => e.PerformanceScore).ToList();
+        for (int i = 0; i < rankingList.Count; i++)
+        {
+            rankingList[i].Rank = i + 1;
+        }
+
+        return rankingList;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error getting employee ranking");
+        return new List<EmployeeRankingViewModel>();
+    }
+}
+
+// Add this helper method if not already present
 
     public async Task<Report?> UpdateReportAsync(Report report)
     {

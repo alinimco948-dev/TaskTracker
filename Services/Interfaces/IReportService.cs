@@ -42,4 +42,6 @@ public interface IReportService
 
     // ========== Report Templates ==========
     Task<Report> CreateFromTemplateAsync(string templateName, string newName);
+    // Add this to IReportService.cs
+Task<List<EmployeeRankingViewModel>> GetEmployeeRankingAsync(DateTime? startDate = null, DateTime? endDate = null);
 }

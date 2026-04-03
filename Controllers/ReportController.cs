@@ -117,7 +117,6 @@ public class ReportController : Controller
                 .Include(dt => dt.TaskItem)
                 .Include(dt => dt.Branch)
                 .Include(dt => dt.TaskAssignment)
-                    .ThenInclude(ta => ta.Employee)
                 .Where(dt => dt.TaskAssignment != null &&
                              dt.TaskAssignment.EmployeeId == employeeId &&
                              assignedBranchIds.Contains(dt.BranchId) &&
@@ -645,6 +644,89 @@ public class ReportController : Controller
             return Json(new { success = false, message = "Error deleting report" });
         }
     }
+
+    // GET: Report/EmployeeRanking
+public async Task<IActionResult> EmployeeRanking(DateTime? startDate = null, DateTime? endDate = null)
+{
+    try
+    {
+        startDate ??= DateTime.UtcNow.AddMonths(-1);
+        endDate ??= DateTime.UtcNow;
+        
+        var rankings = await _reportService.GetEmployeeRankingAsync(startDate, endDate);
+        
+        ViewBag.StartDate = startDate.Value.ToString("yyyy-MM-dd");
+        ViewBag.EndDate = endDate.Value.ToString("yyyy-MM-dd");
+        ViewBag.TotalEmployees = rankings.Count;
+        ViewBag.AverageScore = rankings.Any() ? Math.Round(rankings.Average(r => r.PerformanceScore), 0) : 0;
+        ViewBag.TopScore = rankings.Any() ? rankings.Max(r => r.PerformanceScore) : 0;
+        
+        return View(rankings);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error generating employee ranking");
+        TempData["ErrorMessage"] = "Error generating ranking report. Please try again.";
+        return View(new List<EmployeeRankingViewModel>());
+    }
+}
+
+// GET: Report/ExportRanking
+public async Task<IActionResult> ExportRanking(DateTime? startDate = null, DateTime? endDate = null, string format = "excel")
+{
+    try
+    {
+        startDate ??= DateTime.UtcNow.AddMonths(-1);
+        endDate ??= DateTime.UtcNow;
+        
+        var rankings = await _reportService.GetEmployeeRankingAsync(startDate, endDate);
+        
+        byte[] fileData;
+        string fileName;
+        string contentType;
+        
+        // Convert to list of dictionaries for export
+        var exportData = rankings.Select(r => new Dictionary<string, object>
+        {
+            ["Rank"] = r.Rank,
+            ["Employee Name"] = r.Name,
+            ["Employee ID"] = r.EmployeeId,
+            ["Position"] = r.Position,
+            ["Department"] = r.Department,
+            ["Performance Score (%)"] = r.PerformanceScore,
+            ["Total Tasks"] = r.TotalTasks,
+            ["Completed Tasks"] = r.CompletedTasks,
+            ["Status"] = r.IsActive ? "Active" : "Inactive"
+        }).ToList();
+        
+        switch (format.ToLower())
+        {
+            case "csv":
+                fileData = await _reportService.ExportToCsvAsync(exportData, "EmployeeRanking");
+                fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                contentType = "text/csv";
+                break;
+            case "pdf":
+                fileData = await _reportService.ExportToPdfAsync(exportData, "EmployeeRanking");
+                fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+                contentType = "application/pdf";
+                break;
+            default:
+                fileData = await _reportService.ExportToExcelAsync(exportData, "EmployeeRanking");
+                fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                break;
+        }
+        
+        return File(fileData, contentType, fileName);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error exporting employee ranking");
+        TempData["ErrorMessage"] = "Error exporting report. Please try again.";
+        return RedirectToAction(nameof(EmployeeRanking));
+    }
+}
 
     // POST: Report/Schedule
     [HttpPost]

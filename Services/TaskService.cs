@@ -453,6 +453,7 @@ public class TaskService : ITaskService
 
     #region Task Scheduling
 
+    // ADDED: This method was missing
     public async Task<List<TaskItem>> GetTasksVisibleOnDateAsync(DateTime date)
     {
         try
@@ -462,11 +463,10 @@ public class TaskService : ITaskService
                 .OrderBy(t => t.DisplayOrder)
                 .ToListAsync();
 
-            // Ensure date is UTC for comparison
             var compareDate = date.Date;
 
             var visibleTasks = allTasks
-                .Where(t => _taskScheduler.IsTaskVisibleOnDate(t, compareDate))
+                .Where(t => IsTaskVisibleOnDate(t, compareDate))
                 .ToList();
 
             _logger.LogDebug("Found {Count} visible tasks for date {Date}", visibleTasks.Count, date);
@@ -477,6 +477,110 @@ public class TaskService : ITaskService
             _logger.LogError(ex, "Error getting visible tasks for date {Date}", date);
             return new List<TaskItem>();
         }
+    }
+
+    // Helper method to check if a task is visible on a specific date
+    private bool IsTaskVisibleOnDate(TaskItem task, DateTime date)
+    {
+        // Check if task is active
+        if (!task.IsActive) return false;
+
+        var compareDate = date.Date;
+
+        // Check availability range
+        if (task.AvailableFrom.HasValue && compareDate < task.AvailableFrom.Value.Date)
+            return false;
+        if (task.AvailableTo.HasValue && compareDate > task.AvailableTo.Value.Date)
+            return false;
+
+        // Check task schedule range
+        if (task.StartDate.HasValue && compareDate < task.StartDate.Value.Date)
+            return false;
+        if (task.EndDate.HasValue && compareDate > task.EndDate.Value.Date)
+            return false;
+
+        // Check recurrence pattern
+        switch (task.ExecutionType)
+        {
+            case TaskExecutionType.RecurringDaily:
+                return true;
+
+            case TaskExecutionType.RecurringWeekly:
+                if (string.IsNullOrEmpty(task.WeeklyDays)) return false;
+                var weeklyDays = task.WeeklyDays.Split(',').Select(int.Parse).ToList();
+                return weeklyDays.Contains((int)date.DayOfWeek);
+
+            case TaskExecutionType.RecurringMonthly:
+                if (string.IsNullOrEmpty(task.MonthlyPattern)) return false;
+                var pattern = task.MonthlyPattern.ToLower();
+                if (pattern == "last")
+                    return date.Day == DateTime.DaysInMonth(date.Year, date.Month);
+                if (int.TryParse(pattern, out int dayOfMonth))
+                    return date.Day == dayOfMonth;
+                // Check for pattern like "first-monday", "third-friday"
+                var parts = pattern.Split('-');
+                if (parts.Length == 2)
+                {
+                    return IsNthWeekdayOfMonth(date, parts[0], parts[1]);
+                }
+                return false;
+
+            case TaskExecutionType.MultiDay:
+                if (!task.StartDate.HasValue) return false;
+                var multiDayEndDate = task.EndDate.HasValue ? task.EndDate.Value :
+                                     (task.DurationDays.HasValue ? task.StartDate.Value.AddDays(task.DurationDays.Value - 1) : task.StartDate.Value);
+                return date >= task.StartDate.Value && date <= multiDayEndDate;
+
+            case TaskExecutionType.OneTime:
+                return task.StartDate.HasValue && date.Date == task.StartDate.Value.Date;
+
+            default:
+                return true;
+        }
+    }
+
+    private bool IsNthWeekdayOfMonth(DateTime date, string ordinal, string weekday)
+    {
+        var weekNumber = GetWeekNumber(ordinal);
+        if (weekNumber == -1) return false;
+
+        var targetWeekday = GetWeekdayNumber(weekday);
+        if (targetWeekday == -1) return false;
+
+        var firstDayOfMonth = new DateTime(date.Year, date.Month, 1);
+        var firstOccurrence = firstDayOfMonth.AddDays((targetWeekday - (int)firstDayOfMonth.DayOfWeek + 7) % 7);
+        var targetDate = firstOccurrence.AddDays(7 * (weekNumber - 1));
+
+        return date.Date == targetDate.Date && date.Month == targetDate.Month;
+    }
+
+    private int GetWeekNumber(string ordinal)
+    {
+        return ordinal.ToLower() switch
+        {
+            "first" => 1,
+            "second" => 2,
+            "third" => 3,
+            "fourth" => 4,
+            "fifth" => 5,
+            "last" => 5,
+            _ => -1
+        };
+    }
+
+    private int GetWeekdayNumber(string weekday)
+    {
+        return weekday.ToLower() switch
+        {
+            "sunday" => 0,
+            "monday" => 1,
+            "tuesday" => 2,
+            "wednesday" => 3,
+            "thursday" => 4,
+            "friday" => 5,
+            "saturday" => 6,
+            _ => -1
+        };
     }
 
     public async Task<bool> IsTaskCompletedForDateAsync(int branchId, int taskId, DateTime date)

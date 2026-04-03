@@ -63,20 +63,24 @@ public class HolidayService : IHolidayService
     {
         try
         {
+            var dayName = GetDayOfWeekName(weekDay);
+            
+            // Check if weekly holiday already exists for this day
             var existing = await _context.Holidays
                 .FirstOrDefaultAsync(h => h.IsWeekly && h.WeekDay == weekDay);
 
             if (existing != null)
             {
+                _logger.LogInformation($"Weekly holiday for {dayName} already exists");
                 return existing;
             }
 
             var holiday = new Holiday
             {
-                HolidayDate = DateTime.Today,
+                HolidayDate = new DateTime(2000, 1, 1), // Placeholder date (not used for weekly)
                 IsWeekly = true,
                 WeekDay = weekDay,
-                Description = description ?? GetDayOfWeekName(weekDay)
+                Description = description ?? dayName
             };
 
             _context.Holidays.Add(holiday);
@@ -86,14 +90,15 @@ public class HolidayService : IHolidayService
                 "Create",
                 "Holiday",
                 holiday.Id,
-                $"Added weekly holiday for {GetDayOfWeekName(weekDay)}"
+                $"Added weekly holiday for {dayName}"
             );
 
+            _logger.LogInformation("Added weekly holiday for {DayName}", dayName);
             return holiday;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding weekly holiday");
+            _logger.LogError(ex, "Error adding weekly holiday for day {WeekDay}", weekDay);
             throw;
         }
     }
@@ -128,11 +133,12 @@ public class HolidayService : IHolidayService
                 $"Added specific holiday for {date:yyyy-MM-dd}"
             );
 
+            _logger.LogInformation("Added specific holiday for {Date}", date);
             return holiday;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding specific holiday");
+            _logger.LogError(ex, "Error adding specific holiday for date {Date}", date);
             throw;
         }
     }
@@ -144,6 +150,7 @@ public class HolidayService : IHolidayService
             var holiday = await _context.Holidays.FindAsync(id);
             if (holiday == null) return false;
 
+            var description = holiday.Description;
             _context.Holidays.Remove(holiday);
             await _context.SaveChangesAsync();
 
@@ -151,14 +158,15 @@ public class HolidayService : IHolidayService
                 "Delete",
                 "Holiday",
                 holiday.Id,
-                $"Removed holiday: {holiday.Description}"
+                $"Removed holiday: {description}"
             );
 
+            _logger.LogInformation("Removed holiday: {Description}", description);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error removing holiday");
+            _logger.LogError(ex, "Error removing holiday {Id}", id);
             return false;
         }
     }
@@ -167,6 +175,7 @@ public class HolidayService : IHolidayService
     {
         try
         {
+            var dayName = GetDayOfWeekName(weekDay);
             var holiday = await _context.Holidays
                 .FirstOrDefaultAsync(h => h.IsWeekly && h.WeekDay == weekDay);
 
@@ -179,14 +188,15 @@ public class HolidayService : IHolidayService
                 "Delete",
                 "Holiday",
                 holiday.Id,
-                $"Removed weekly holiday for {GetDayOfWeekName(weekDay)}"
+                $"Removed weekly holiday for {dayName}"
             );
 
+            _logger.LogInformation("Removed weekly holiday for {DayName}", dayName);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error removing weekly holiday");
+            _logger.LogError(ex, "Error removing weekly holiday for day {WeekDay}", weekDay);
             return false;
         }
     }
@@ -210,60 +220,81 @@ public class HolidayService : IHolidayService
                 $"Removed specific holiday for {date:yyyy-MM-dd}"
             );
 
+            _logger.LogInformation("Removed specific holiday for {Date}", date);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error removing specific holiday");
+            _logger.LogError(ex, "Error removing specific holiday for date {Date}", date);
             return false;
         }
     }
 
     public async Task<bool> IsHolidayAsync(DateTime date)
     {
-        var dateOnly = date.Date;
+        try
+        {
+            var dateOnly = date.Date;
 
-        var isSpecific = await _context.Holidays
-            .AnyAsync(h => !h.IsWeekly && h.HolidayDate.Date == dateOnly);
+            // Check specific holidays
+            var isSpecific = await _context.Holidays
+                .AnyAsync(h => !h.IsWeekly && h.HolidayDate.Date == dateOnly);
 
-        if (isSpecific) return true;
+            if (isSpecific) return true;
 
-        var dayOfWeek = (int)date.DayOfWeek;
-        var isWeekly = await _context.Holidays
-            .AnyAsync(h => h.IsWeekly && h.WeekDay == dayOfWeek);
+            // Check weekly holidays (based on day of week)
+            var dayOfWeek = (int)date.DayOfWeek;
+            var isWeekly = await _context.Holidays
+                .AnyAsync(h => h.IsWeekly && h.WeekDay == dayOfWeek);
 
-        return isWeekly;
+            return isWeekly;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking if date is holiday");
+            return false;
+        }
     }
 
     public async Task<List<DateTime>> GetHolidaysInRangeAsync(DateTime startDate, DateTime endDate)
     {
-        var holidays = new List<DateTime>();
-
-        var specific = await _context.Holidays
-            .Where(h => !h.IsWeekly &&
-                       h.HolidayDate.Date >= startDate.Date &&
-                       h.HolidayDate.Date <= endDate.Date)
-            .Select(h => h.HolidayDate.Date)
-            .ToListAsync();
-
-        holidays.AddRange(specific);
-
-        var weekly = await _context.Holidays
-            .Where(h => h.IsWeekly && h.WeekDay.HasValue)
-            .ToListAsync();
-
-        var current = startDate.Date;
-        while (current <= endDate.Date)
+        try
         {
-            var dayOfWeek = (int)current.DayOfWeek;
-            if (weekly.Any(h => h.WeekDay == dayOfWeek))
-            {
-                holidays.Add(current);
-            }
-            current = current.AddDays(1);
-        }
+            var holidays = new List<DateTime>();
 
-        return holidays.Distinct().OrderBy(d => d).ToList();
+            // Get specific holidays in range
+            var specific = await _context.Holidays
+                .Where(h => !h.IsWeekly &&
+                           h.HolidayDate.Date >= startDate.Date &&
+                           h.HolidayDate.Date <= endDate.Date)
+                .Select(h => h.HolidayDate.Date)
+                .ToListAsync();
+
+            holidays.AddRange(specific);
+
+            // Get weekly holidays
+            var weekly = await _context.Holidays
+                .Where(h => h.IsWeekly && h.WeekDay.HasValue)
+                .ToListAsync();
+
+            var current = startDate.Date;
+            while (current <= endDate.Date)
+            {
+                var dayOfWeek = (int)current.DayOfWeek;
+                if (weekly.Any(h => h.WeekDay == dayOfWeek))
+                {
+                    holidays.Add(current);
+                }
+                current = current.AddDays(1);
+            }
+
+            return holidays.Distinct().OrderBy(d => d).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting holidays in range");
+            return new List<DateTime>();
+        }
     }
 
     private string GetDayOfWeekName(int weekDay)

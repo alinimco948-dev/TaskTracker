@@ -34,6 +34,9 @@ public class EmployeeViewModel
     public int? ManagerId { get; set; }
 
     public bool IsActive { get; set; } = true;
+    
+    // Multiple branch assignments
+    public List<int> BranchIds { get; set; } = new();
 }
 
 public class EmployeeListViewModel
@@ -45,10 +48,18 @@ public class EmployeeListViewModel
     public string Position { get; set; } = string.Empty;
     public string Department { get; set; } = string.Empty;
     public string CurrentBranch { get; set; } = string.Empty;
+    public List<string> Branches { get; set; } = new();
     public int PerformanceScore { get; set; }
     public bool IsActive { get; set; }
     public string Initials { get; set; } = string.Empty;
+    public int TotalTasks { get; set; }
+public int CompletedTasks { get; set; }
 }
+
+
+
+
+
 
 public class EmployeeDetailsViewModel
 {
@@ -65,24 +76,39 @@ public class EmployeeDetailsViewModel
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
 
+    // Date Range for filtering
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    
+    // Warning message for inactive periods
+    public string? WarningMessage { get; set; }
+
+    // Performance Statistics
     public int TotalTasks { get; set; }
     public int CompletedTasks { get; set; }
     public int PendingTasks { get; set; }
     public int OnTimeTasks { get; set; }
     public double PerformanceScore { get; set; }
 
+    // Multiple branches
+    public List<string> CurrentBranches { get; set; } = new();
     public List<BranchHistoryItem> BranchHistory { get; set; } = new();
     public List<TaskHistoryItem> RecentTasks { get; set; } = new();
+    
+    // Chart Data
     public List<string> ChartLabels { get; set; } = new();
     public List<int> ChartData { get; set; } = new();
 }
 
 public class BranchHistoryItem
 {
+    public int Id { get; set; }
+    public int BranchId { get; set; }
     public string BranchName { get; set; } = string.Empty;
     public DateTime StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public int Duration { get; set; }
+    public bool IsActive { get; set; }
 }
 
 public class TaskHistoryItem

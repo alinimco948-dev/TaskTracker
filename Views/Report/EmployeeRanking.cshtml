@@ -1,0 +1,316 @@
+@model IEnumerable<TaskTracker.Models.ViewModels.EmployeeRankingViewModel>
+@{
+    ViewData["Title"] = "Employee Performance Ranking";
+}
+
+<div class="container mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="mb-5">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Employee Performance Ranking</h1>
+                <p class="text-gray-500 text-sm mt-1">Ranking based on task completion rates</p>
+            </div>
+            <div class="flex space-x-2">
+                <a href="@Url.Action("ExportRanking", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate, format = "excel" })" 
+                   class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition flex items-center gap-1">
+                    <i class="fas fa-file-excel text-sm"></i> Excel
+                </a>
+                <a href="@Url.Action("ExportRanking", new { startDate = ViewBag.StartDate, endDate = ViewBag.EndDate, format = "csv" })" 
+                   class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition flex items-center gap-1">
+                    <i class="fas fa-file-csv text-sm"></i> CSV
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-500">Total Employees</p>
+                    <p class="text-xl font-bold text-blue-600">@ViewBag.TotalEmployees</p>
+                </div>
+                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-users text-blue-600 text-sm"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-500">Average Score</p>
+                    <p class="text-xl font-bold text-purple-600">@ViewBag.AverageScore%</p>
+                </div>
+                <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-chart-line text-purple-600 text-sm"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-500">Top Score</p>
+                    <p class="text-xl font-bold text-green-600">@ViewBag.TopScore%</p>
+                </div>
+                <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-trophy text-green-600 text-sm"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-500">Date Range</p>
+                    <p class="text-xs font-medium text-gray-700">@ViewBag.StartDate - @ViewBag.EndDate</p>
+                </div>
+                <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-calendar-alt text-yellow-600 text-sm"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Range Filter -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-5">
+        <form method="get" class="flex flex-wrap items-end gap-3">
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+                <input type="date" name="startDate" class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" value="@ViewBag.StartDate" />
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+                <input type="date" name="endDate" class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" value="@ViewBag.EndDate" />
+            </div>
+            <div>
+                <button type="submit" class="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+                    <i class="fas fa-sync-alt mr-1 text-xs"></i>Update
+                </button>
+            </div>
+            <div class="text-xs text-gray-500 ml-auto">
+                <i class="fas fa-info-circle mr-1"></i>
+                Ranking based on completion rate for selected period
+            </div>
+        </form>
+    </div>
+
+    <!-- Top 3 Performers Highlight - COMPACT VERSION -->
+    @if (Model.Any())
+    {
+        var top3 = Model.Take(3).ToList();
+        if (top3.Any())
+        {
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                @foreach (var emp in top3)
+                {
+                    var bgGradient = emp.Rank == 1 ? "from-green-700 to-slate-700" : 
+                                    emp.Rank == 2 ? "from-green-700 to-slate-700" : 
+                                    "from-orange-500 to-slate-700";
+                    var icon = emp.Rank == 1 ? "fa-trophy" : "fa-medal";
+                    var rankBadge = emp.Rank == 1 ? "bg-amber-400" : emp.Rank == 2 ? "bg-slate-400" : "bg-orange-400";
+                    
+                    <div class="bg-gradient-to-r @bgGradient rounded-lg shadow-md overflow-hidden transition-transform hover:scale-[1.02]">
+                        <div class="p-3 text-white">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 @rankBadge rounded-full flex items-center justify-center">
+                                        <i class="fas @icon text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-sm">@emp.Name</div>
+                                        <div class="text-xs opacity-80">@emp.Position</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-2xl font-bold">@emp.PerformanceScore%</div>
+                                    <div class="text-[10px] opacity-80">Completion</div>
+                                </div>
+                            </div>
+                            <div class="mt-2 pt-2 border-t border-white/20 flex justify-between items-center">
+                                <div class="text-xs opacity-80">
+                                    <i class="fas fa-building mr-1"></i>@emp.Department
+                                </div>
+                                <div class="text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">
+                                    #@emp.Rank
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+
+    <!-- Ranking Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="px-4 py-3 text-center w-16">Rank</th>
+                        <th class="px-4 py-3 text-left">Employee</th>
+                        <th class="px-4 py-3 text-left">ID</th>
+                        <th class="px-4 py-3 text-left">Position</th>
+                        <th class="px-4 py-3 text-left">Department</th>
+                        <th class="px-4 py-3 text-center">Score</th>
+                        <th class="px-4 py-3 text-center">Tasks</th>
+                        <th class="px-4 py-3 text-center">Status</th>
+                        <th class="px-4 py-3 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    @foreach (var emp in Model)
+                    {
+                        var rankClass = emp.Rank == 1 ? "bg-amber-50" : 
+                                       emp.Rank == 2 ? "bg-slate-50" : 
+                                       emp.Rank == 3 ? "bg-orange-50" : "";
+                        var medalClass = emp.Rank == 1 ? "bg-amber-100 text-amber-700" : 
+                                        emp.Rank == 2 ? "bg-slate-100 text-slate-700" : 
+                                        emp.Rank == 3 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600";
+                        var medalIcon = emp.Rank == 1 ? "fa-trophy" : "fa-medal";
+                        
+                        <tr class="hover:bg-gray-50 transition @rankClass">
+                            <td class="px-4 py-3 text-center">
+                                @if (emp.Rank <= 3)
+                                {
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold @medalClass">
+                                        <i class="fas @medalIcon mr-1 text-xs"></i>#@emp.Rank
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-gray-500 font-medium text-sm">#@emp.Rank</span>
+                                }
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
+                                        @emp.Initials
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-gray-900 text-sm">@emp.Name</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 font-mono text-xs">@emp.EmployeeId</td>
+                            <td class="px-4 py-3 text-sm">@emp.Position</td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs">@emp.Department</span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-base font-bold @(emp.PerformanceScore >= 80 ? "text-green-600" : emp.PerformanceScore >= 60 ? "text-yellow-600" : "text-red-600")">
+                                        @emp.PerformanceScore%
+                                    </span>
+                                    <div class="w-16 mt-1 bg-gray-200 rounded-full h-1">
+                                        <div class="bg-@(emp.PerformanceScore >= 80 ? "green" : emp.PerformanceScore >= 60 ? "yellow" : "red")-500 h-1 rounded-full" style="width: @emp.PerformanceScore%"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <div class="text-xs">
+                                    <span class="font-medium text-green-600">@emp.CompletedTasks</span>
+                                    <span class="text-gray-400">/</span>
+                                    <span class="text-gray-600">@emp.TotalTasks</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400">completed</div>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                @if (emp.IsActive)
+                                {
+                                    <span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                        <i class="fas fa-circle text-green-500 mr-1 text-[8px]"></i>Active
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                                        <i class="fas fa-circle text-red-500 mr-1 text-[8px]"></i>Inactive
+                                    </span>
+                                }
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <a href="@Url.Action("Details", "Employee", new { id = emp.Id })" 
+                                   class="text-blue-600 hover:text-blue-800 transition" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        
+        @if (!Model.Any())
+        {
+            <div class="text-center py-12">
+                <i class="fas fa-chart-line text-6xl text-gray-300 mb-4"></i>
+                <h3 class="text-lg font-medium text-gray-700 mb-2">No Data Available</h3>
+                <p class="text-gray-500 text-sm">No employee performance data found for the selected period.</p>
+            </div>
+        }
+    </div>
+
+    <!-- Performance Insights -->
+    @if (Model.Any())
+    {
+        var topPerformer = Model.First();
+        var bottomPerformer = Model.Last();
+        var aboveAverage = Model.Count(e => e.PerformanceScore >= 70);
+        var belowAverage = Model.Count(e => e.PerformanceScore < 70);
+        
+        <div class="mt-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-3">
+            <div class="flex items-start">
+                <i class="fas fa-lightbulb text-yellow-500 mt-0.5 mr-2 text-sm"></i>
+                <div class="flex-1">
+                    <h4 class="text-xs font-semibold text-gray-800 mb-1">Performance Insights</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-600">
+                        <div>
+                            <p><i class="fas fa-trophy text-green-500 mr-1 text-xs"></i> <strong>Top Performer:</strong> @topPerformer.Name (@topPerformer.PerformanceScore%)</p>
+                            <p><i class="fas fa-chart-line text-blue-500 mr-1 text-xs"></i> <strong>Above 70%:</strong> @aboveAverage employees</p>
+                        </div>
+                        <div>
+                            <p><i class="fas fa-exclamation-triangle text-red-500 mr-1 text-xs"></i> <strong>Needs Improvement:</strong> @belowAverage employees</p>
+                            <p><i class="fas fa-calendar-alt text-purple-500 mr-1 text-xs"></i> <strong>Period:</strong> @ViewBag.StartDate to @ViewBag.EndDate</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .transition {
+        transition: all 0.2s ease;
+    }
+    
+    table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    
+    th {
+        font-weight: 600;
+    }
+    
+    /* Custom scrollbar for table */
+    .overflow-x-auto::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    .overflow-x-auto::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    .overflow-x-auto::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 10px;
+    }
+    
+    .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+</style>

@@ -29,6 +29,7 @@ public class BranchService : IBranchService
             var branches = await _context.Branches
                 .Include(b => b.Department)
                 .Include(b => b.BranchAssignments)
+                    .ThenInclude(ba => ba.Employee)
                 .OrderBy(b => b.Name)
                 .ToListAsync();
 
@@ -36,9 +37,14 @@ public class BranchService : IBranchService
 
             foreach (var branch in branches)
             {
-                var employeeCount = branch.BranchAssignments
-                    .Count(ba => ba.EndDate == null);
+                var activeEmployees = branch.BranchAssignments
+                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.Today.Date)
+                    .Select(ba => ba.Employee)
+                    .Where(e => e != null)
+                    .ToList();
 
+                var employeeCount = activeEmployees.Count;
+                var employeeNames = activeEmployees.Select(e => e!.Name).ToList();
                 var completionRate = await GetBranchCompletionRateAsync(branch.Id, DateTime.Today);
 
                 result.Add(new BranchListViewModel
@@ -49,9 +55,10 @@ public class BranchService : IBranchService
                     Department = branch.Department?.Name ?? "Unassigned",
                     Address = branch.Address ?? string.Empty,
                     EmployeeCount = employeeCount,
+                    EmployeeNames = employeeNames,
                     CompletionRate = completionRate,
                     IsActive = branch.IsActive,
-                    HiddenTasks = branch.HiddenTasks // Make sure this line exists
+                    HiddenTasks = branch.HiddenTasks
                 });
             }
 
@@ -63,6 +70,7 @@ public class BranchService : IBranchService
             return new List<BranchListViewModel>();
         }
     }
+
     public async Task<Branch?> GetBranchByIdAsync(int id)
     {
         return await _context.Branches
@@ -157,7 +165,6 @@ public class BranchService : IBranchService
             var branch = await _context.Branches.FindAsync(id);
             if (branch == null) return false;
 
-            // Soft delete
             branch.IsActive = false;
             branch.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -213,7 +220,8 @@ public class BranchService : IBranchService
                     Id = ba.Employee!.Id,
                     Name = ba.Employee.Name,
                     Position = ba.Employee.Position ?? string.Empty,
-                    Initials = GetInitials(ba.Employee.Name)
+                    Initials = GetInitials(ba.Employee.Name),
+                    AssignedSince = ba.StartDate
                 })
                 .ToList();
 
@@ -242,12 +250,12 @@ public class BranchService : IBranchService
                 CreatedAt = branch.CreatedAt,
 
                 EmployeeCount = employeeCount,
+                CurrentEmployees = currentEmployees,
                 TotalTasks = totalTasks,
                 CompletedTasks = completedTasks,
                 CompletionRate = completionRate,
 
                 HiddenTasks = branch.HiddenTasks,
-                CurrentEmployees = currentEmployees,
                 RecentTasks = recentTasks
             };
         }
@@ -258,17 +266,48 @@ public class BranchService : IBranchService
         }
     }
 
+    // FIXED: Allows employee to be assigned to multiple branches
     public async Task<bool> AssignEmployeeAsync(int branchId, int employeeId, DateTime startDate)
     {
         try
         {
-            // End current assignment if exists
-            var currentAssignment = await _context.BranchAssignments
-                .FirstOrDefaultAsync(ba => ba.EmployeeId == employeeId && ba.EndDate == null);
-
-            if (currentAssignment != null)
+            _logger.LogInformation($"AssignEmployeeAsync called: BranchId={branchId}, EmployeeId={employeeId}, StartDate={startDate}");
+            
+            if (branchId <= 0)
             {
-                currentAssignment.EndDate = startDate.Date.AddDays(-1);
+                _logger.LogWarning($"Invalid branch ID: {branchId}");
+                return false;
+            }
+            if (employeeId <= 0)
+            {
+                _logger.LogWarning($"Invalid employee ID: {employeeId}");
+                return false;
+            }
+            
+            var employee = await _context.Employees.FindAsync(employeeId);
+            if (employee == null)
+            {
+                _logger.LogWarning($"Employee {employeeId} not found");
+                return false;
+            }
+
+            var branch = await _context.Branches.FindAsync(branchId);
+            if (branch == null)
+            {
+                _logger.LogWarning($"Branch {branchId} not found");
+                return false;
+            }
+
+            // Check if employee is already assigned to THIS SPECIFIC branch (not any branch)
+            var existingAssignment = await _context.BranchAssignments
+                .FirstOrDefaultAsync(ba => ba.EmployeeId == employeeId &&
+                                           ba.BranchId == branchId &&
+                                           (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.Today.Date));
+
+            if (existingAssignment != null)
+            {
+                _logger.LogWarning($"Employee {employeeId} already assigned to branch {branchId}");
+                return false;
             }
 
             var assignment = new BranchAssignment
@@ -281,18 +320,20 @@ public class BranchService : IBranchService
             _context.BranchAssignments.Add(assignment);
             await _context.SaveChangesAsync();
 
+            _logger.LogInformation($"Successfully assigned employee {employee.Name} to branch {branch.Name}");
+
             await _auditService.LogAsync(
                 "Assign",
                 "BranchAssignment",
                 assignment.Id,
-                $"Employee {employeeId} assigned to branch {branchId}"
+                $"Employee {employee.Name} assigned to branch {branch.Name}"
             );
 
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error assigning employee to branch");
+            _logger.LogError(ex, "Error assigning employee to branch {BranchId} for employee {EmployeeId}", branchId, employeeId);
             return false;
         }
     }
@@ -303,6 +344,7 @@ public class BranchService : IBranchService
         {
             var assignment = await _context.BranchAssignments
                 .Include(ba => ba.Employee)
+                .Include(ba => ba.Branch)
                 .FirstOrDefaultAsync(ba => ba.Id == assignmentId);
 
             if (assignment == null) return false;
@@ -314,9 +356,10 @@ public class BranchService : IBranchService
                 "End",
                 "BranchAssignment",
                 assignmentId,
-                $"Assignment ended for {assignment.Employee?.Name}"
+                $"Ended assignment for {assignment.Employee?.Name} at {assignment.Branch?.Name}"
             );
 
+            _logger.LogInformation($"Ended assignment {assignmentId}");
             return true;
         }
         catch (Exception ex)
@@ -334,6 +377,7 @@ public class BranchService : IBranchService
             .OrderByDescending(ba => ba.StartDate)
             .ToListAsync();
     }
+
     public async Task<bool> UpdateTaskVisibilityAsync(int branchId, List<string> visibleTasks)
     {
         try
@@ -367,42 +411,6 @@ public class BranchService : IBranchService
             return false;
         }
     }
-
-    // Add this overload if you need single task updates
-    public async Task<bool> UpdateSingleTaskVisibilityAsync(int branchId, string taskName, bool isVisible)
-    {
-        try
-        {
-            var branch = await _context.Branches.FindAsync(branchId);
-            if (branch == null) return false;
-
-            var hiddenTasks = branch.HiddenTasks;
-
-            if (isVisible)
-            {
-                hiddenTasks.Remove(taskName);
-            }
-            else if (!hiddenTasks.Contains(taskName))
-            {
-                hiddenTasks.Add(taskName);
-            }
-
-            branch.HiddenTasks = hiddenTasks;
-            branch.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error updating single task visibility");
-            return false;
-        }
-    }
-
-
-
 
     public async Task<Dictionary<int, int>> GetBranchEmployeeCountsAsync()
     {

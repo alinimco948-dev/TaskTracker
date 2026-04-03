@@ -43,11 +43,11 @@ public class BranchListViewModel
     public string Department { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
     public int EmployeeCount { get; set; }
+    public List<string> EmployeeNames { get; set; } = new();  // REQUIRED
     public double CompletionRate { get; set; }
     public bool IsActive { get; set; }
-    public List<string> HiddenTasks { get; set; } = new(); // This must be here
+    public List<string> HiddenTasks { get; set; } = new();
 }
-
 public class BranchDetailsViewModel
 {
     public int Id { get; set; }
@@ -77,6 +77,7 @@ public class BranchEmployeeItem
     public string Name { get; set; } = string.Empty;
     public string Position { get; set; } = string.Empty;
     public string Initials { get; set; } = string.Empty;
+    public DateTime? AssignedSince { get; set; }  // Add this property
 }
 
 public class BranchTaskItem
