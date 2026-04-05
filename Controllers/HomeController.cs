@@ -340,7 +340,41 @@ public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, str
     #endregion
 
     #region API Endpoints - Update Task Time
-
+[HttpGet]
+public async Task<IActionResult> VerifyDeadline(int branchId, int taskItemId, string date)
+{
+    var localDate = DateTime.Parse(date).Date;
+    var utcStart = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+    
+    var task = await _context.TaskItems.FindAsync(taskItemId);
+    var dailyTask = await _context.DailyTasks
+        .FirstOrDefaultAsync(dt => dt.BranchId == branchId && 
+                                   dt.TaskItemId == taskItemId && 
+                                   dt.TaskDate.Date == utcStart.Date);
+    
+    if (task == null || dailyTask == null)
+        return Json(new { error = "Task not found" });
+    
+    var localTaskDate = localDate;
+    var localDeadline = localTaskDate;
+    if (task.IsSameDay)
+        localDeadline = localDeadline.Add(task.Deadline);
+    else
+        localDeadline = localDeadline.AddDays(1).Add(task.Deadline);
+    
+    var utcDeadlineStored = _taskCalculationService.CalculateDeadline(task, utcStart);
+    
+    return Json(new
+    {
+        localDate = localDate.ToString("yyyy-MM-dd HH:mm:ss"),
+        localDeadline = localDeadline.ToString("yyyy-MM-dd HH:mm:ss"),
+        utcDeadlineStored = utcDeadlineStored.ToString("yyyy-MM-dd HH:mm:ss"),
+        completedAtLocal = dailyTask.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+        completedAtUtc = dailyTask.CompletedAt?.ToString("yyyy-MM-dd HH:mm:ss"),
+        serverTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+        serverUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
+    });
+}
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, string date, DateTime completionTime)
