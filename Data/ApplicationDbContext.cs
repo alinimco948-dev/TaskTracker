@@ -26,16 +26,27 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // ========== UTC DATE CONVERTER ==========
+        // ========== UTC DATE CONVERTER - FIXES ALL DATE INCONSISTENCIES ==========
+        // This ensures all DateTime properties are stored and retrieved as UTC
+        var dateTimeConverter = new ValueConverter<DateTime, DateTime>(
+            v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc),
+            v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+        var nullableDateTimeConverter = new ValueConverter<DateTime?, DateTime?>(
+            v => v.HasValue ? (v.Value.Kind == DateTimeKind.Utc ? v.Value : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc)) : v,
+            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             foreach (var property in entityType.GetProperties())
             {
-                if (property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?))
+                if (property.ClrType == typeof(DateTime))
                 {
-                    property.SetValueConverter(new ValueConverter<DateTime, DateTime>(
-                        v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc),
-                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc)));
+                    property.SetValueConverter(dateTimeConverter);
+                }
+                else if (property.ClrType == typeof(DateTime?))
+                {
+                    property.SetValueConverter(nullableDateTimeConverter);
                 }
             }
         }
@@ -428,7 +439,7 @@ public class ApplicationDbContext : DbContext
                 Id = branch.Id,
                 Name = branch.Name,
                 Code = branch.Code,
-                DepartmentId = 1, // Assign all branches to Finance department
+                DepartmentId = 1,
                 Address = $"{branch.Name} Branch, Hargeisa, Somaliland",
                 Phone = $"+252 63 000{branch.Id.ToString().PadLeft(3, '0')}",
                 Email = $"{branch.Name.ToLower().Replace("-", "").Replace(" ", "")}@company.com",

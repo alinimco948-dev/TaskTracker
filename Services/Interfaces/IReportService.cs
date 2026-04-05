@@ -25,6 +25,9 @@ public interface IReportService
     Task<TaskCompletionViewModel> ExecuteTaskReportAsync(int taskId, DateTime startDate, DateTime endDate);
     Task<AuditLogReportViewModel> ExecuteAuditReportAsync(DateTime startDate, DateTime endDate, string? action = null, string? entityType = null);
     Task<List<Dictionary<string, object>>> ExecuteCustomReportAsync(CustomReportRequest request);
+    
+    // ========== Employee Ranking ==========
+    Task<List<EmployeeRankingViewModel>> GetEmployeeRankingAsync(DateTime? startDate = null, DateTime? endDate = null);  // ✅ ADD THIS LINE
 
     // ========== Report Export ==========
     Task<byte[]> ExportToExcelAsync(object data, string reportName);
@@ -42,6 +45,4 @@ public interface IReportService
 
     // ========== Report Templates ==========
     Task<Report> CreateFromTemplateAsync(string templateName, string newName);
-    // Add this to IReportService.cs
-Task<List<EmployeeRankingViewModel>> GetEmployeeRankingAsync(DateTime? startDate = null, DateTime? endDate = null);
 }

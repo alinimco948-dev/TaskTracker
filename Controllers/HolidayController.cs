@@ -46,7 +46,8 @@ public class HolidayController : Controller
             if (existing != null)
             {
                 _context.Holidays.Remove(existing);
-                TempData["SuccessMessage"] = $"Weekly holiday removed";
+                await _context.SaveChangesAsync();
+                return Json(new { success = true, message = $"Weekly holiday removed for {GetDayOfWeekName(weekDay)}" });
             }
             else
             {
@@ -58,21 +59,54 @@ public class HolidayController : Controller
                     Description = GetDayOfWeekName(weekDay)
                 };
                 _context.Holidays.Add(holiday);
-                TempData["SuccessMessage"] = $"Weekly holiday added for {GetDayOfWeekName(weekDay)}";
+                await _context.SaveChangesAsync();
+                return Json(new { success = true, message = $"Weekly holiday added for {GetDayOfWeekName(weekDay)}" });
             }
-
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error toggling weekly holiday");
-            TempData["ErrorMessage"] = "Error updating holiday";
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = false, message = "Error updating holiday" });
         }
     }
 
-    // POST: Holiday/AddSpecific
+    // POST: Holiday/AddWeeklyWithDescription
+    [HttpPost]
+    public async Task<IActionResult> AddWeeklyWithDescription(int weekDay, string description)
+    {
+        try
+        {
+            var existing = await _context.Holidays
+                .FirstOrDefaultAsync(h => h.IsWeekly && h.WeekDay == weekDay);
+
+            if (existing != null)
+            {
+                existing.Description = string.IsNullOrEmpty(description) ? GetDayOfWeekName(weekDay) : description;
+                await _context.SaveChangesAsync();
+                return Json(new { success = true, message = $"Updated description for {GetDayOfWeekName(weekDay)}" });
+            }
+            else
+            {
+                var holiday = new Holiday
+                {
+                    HolidayDate = DateTime.Today,
+                    IsWeekly = true,
+                    WeekDay = weekDay,
+                    Description = string.IsNullOrEmpty(description) ? GetDayOfWeekName(weekDay) : description
+                };
+                _context.Holidays.Add(holiday);
+                await _context.SaveChangesAsync();
+                return Json(new { success = true, message = $"Added {GetDayOfWeekName(weekDay)} as weekly holiday" });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding weekly holiday with description");
+            return Json(new { success = false, message = "Error updating holiday" });
+        }
+    }
+
+    // POST: Holiday/AddSpecific (AJAX compatible)
     [HttpPost]
     public async Task<IActionResult> AddSpecific(DateTime date, string description = "")
     {
@@ -83,13 +117,12 @@ public class HolidayController : Controller
 
             if (existing != null)
             {
-                TempData["ErrorMessage"] = "Holiday already exists for this date";
-                return RedirectToAction(nameof(Index));
+                return Json(new { success = false, message = $"Holiday already exists for {date:MMMM d, yyyy}" });
             }
 
             var holiday = new Holiday
             {
-                HolidayDate = date,
+                HolidayDate = date.Date,
                 IsWeekly = false,
                 Description = string.IsNullOrEmpty(description) ? $"Holiday on {date:MMMM d, yyyy}" : description
             };
@@ -97,14 +130,38 @@ public class HolidayController : Controller
             _context.Holidays.Add(holiday);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"Holiday added for {date:MMMM d, yyyy}";
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = true, message = $"Holiday added for {date:MMMM d, yyyy}" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error adding specific holiday");
-            TempData["ErrorMessage"] = "Error adding holiday";
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = false, message = "Error adding holiday" });
+        }
+    }
+
+    // POST: Holiday/UpdateSpecificDescription
+    [HttpPost]
+    public async Task<IActionResult> UpdateSpecificDescription(DateTime date, string description)
+    {
+        try
+        {
+            var holiday = await _context.Holidays
+                .FirstOrDefaultAsync(h => !h.IsWeekly && h.HolidayDate.Date == date.Date);
+
+            if (holiday == null)
+            {
+                return Json(new { success = false, message = "Holiday not found" });
+            }
+
+            holiday.Description = string.IsNullOrEmpty(description) ? $"Holiday on {date:MMMM d, yyyy}" : description;
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, message = $"Description updated for {date:MMMM d, yyyy}" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating specific holiday description");
+            return Json(new { success = false, message = "Error updating description" });
         }
     }
 
@@ -121,16 +178,15 @@ public class HolidayController : Controller
             {
                 _context.Holidays.Remove(holiday);
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = $"Holiday removed for {date:MMMM d, yyyy}";
+                return Json(new { success = true, message = $"Holiday removed for {date:MMMM d, yyyy}" });
             }
 
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = false, message = "Holiday not found" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error removing specific holiday");
-            TempData["ErrorMessage"] = "Error removing holiday";
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = false, message = "Error removing holiday" });
         }
     }
 
@@ -147,16 +203,15 @@ public class HolidayController : Controller
             {
                 _context.Holidays.Remove(holiday);
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = $"Weekly holiday removed for {GetDayOfWeekName(weekDay)}";
+                return Json(new { success = true, message = $"Weekly holiday removed for {GetDayOfWeekName(weekDay)}" });
             }
 
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = false, message = "Holiday not found" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error removing weekly holiday");
-            TempData["ErrorMessage"] = "Error removing holiday";
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = false, message = "Error removing holiday" });
         }
     }
 
@@ -171,15 +226,14 @@ public class HolidayController : Controller
             {
                 _context.Holidays.Remove(holiday);
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Holiday deleted successfully!";
+                return Json(new { success = true, message = "Holiday deleted successfully!" });
             }
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = false, message = "Holiday not found" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting holiday");
-            TempData["ErrorMessage"] = "Error deleting holiday";
-            return RedirectToAction(nameof(Index));
+            return Json(new { success = false, message = "Error deleting holiday" });
         }
     }
 

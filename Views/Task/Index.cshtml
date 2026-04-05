@@ -54,7 +54,7 @@
                                 <i class="fas fa-grip-vertical text-gray-400"></i>
                             </td>
                             <td class="px-4 py-3 font-medium">@task.Name</td>
-                            <td class="px-4 py-3 font-mono">@task.Deadline</td>
+                            <td class="px-4 py-3 font-mono">@DateTime.Today.Add(task.Deadline).ToString("h:mm tt")</td>
                             <td class="px-4 py-3">
                                 @if (task.Type == "Same Day")
                                 {
@@ -290,7 +290,6 @@
                     console.log('Visibility save response:', response);
                     if (response.success) {
                         showNotification('Visibility settings saved successfully!', 'success');
-                        // Refresh the page after a short delay to show changes
                         setTimeout(() => location.reload(), 1500);
                     } else {
                         showNotification(response.message || 'Error saving visibility', 'error');
@@ -305,9 +304,7 @@
                     try {
                         const response = JSON.parse(xhr.responseText);
                         errorMessage = response.message || errorMessage;
-                    } catch(e) {
-                        // Ignore parsing error
-                    }
+                    } catch(e) {}
                     
                     showNotification(errorMessage, 'error');
                     saveBtn.prop('disabled', false).html(originalText);
@@ -324,7 +321,6 @@
                 info: 'bg-blue-500'
             };
             
-            // Remove any existing notifications
             $('.custom-notification').remove();
             
             const notification = $(`
@@ -348,7 +344,6 @@
         animation: slideIn 0.3s ease-out;
     }
     
-    /* Escape the  symbol for Razor */
     @@keyframes slideIn {
         from {
             transform: translateX(100%);
@@ -360,7 +355,6 @@
         }
     }
     
-    /* Custom checkbox styling */
     .task-visibility {
         cursor: pointer;
         transition: all 0.2s ease;
@@ -370,7 +364,6 @@
         transform: scale(1.1);
     }
     
-    /* Drag handle styling */
     .fa-grip-vertical {
         cursor: grab;
     }
@@ -379,7 +372,6 @@
         cursor: grabbing;
     }
     
-    /* Table styling */
     #sortable tr {
         transition: background-color 0.2s ease;
     }

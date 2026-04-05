@@ -45,8 +45,6 @@ public class TaskPerformanceStats
 }
 
 // ========== Branch Stat ViewModel ==========
-// ========== Branch Stat ViewModel ==========
-// ========== Branch Stat ViewModel ==========
 public class BranchStatViewModel
 {
     public string BranchName { get; set; } = string.Empty;
@@ -58,6 +56,7 @@ public class BranchStatViewModel
     public bool IsActive { get; set; }
     public string AssignmentPeriod { get; set; } = string.Empty;
 }
+
 // ========== Daily Performance ==========
 public class DailyPerformance
 {
@@ -97,11 +96,10 @@ public class EmployeePerformanceViewModel : ReportBaseViewModel
     public double OnTimeRate { get; set; }
     public double OverallScore { get; set; }
 
-    // Chart Data - These properties are needed for the view
+    // Chart Data
     public List<string> DailyTrendDates { get; set; } = new();
     public List<double> DailyCompletionRates { get; set; } = new();
     public List<double> DailyOnTimeRates { get; set; } = new();
-
     public List<string> TaskTypeLabels { get; set; } = new();
     public List<int> TaskTypeValues { get; set; } = new();
     public List<double> AverageCompletionTimes { get; set; } = new();
@@ -251,6 +249,7 @@ public class TaskStatSummary
 }
 
 // ========== Task Completion ==========
+// REMOVED duplicate BranchTaskStat and EmployeeTaskStat - using from ReportSharedViewModels.cs
 public class TaskCompletionViewModel : ReportBaseViewModel
 {
     public int TaskId { get; set; }
@@ -267,7 +266,7 @@ public class TaskCompletionViewModel : ReportBaseViewModel
     public double CompletionRate { get; set; }
     public double OnTimeRate { get; set; }
 
-    // Breakdowns
+    // Breakdowns - USING shared classes from ReportSharedViewModels.cs
     public Dictionary<string, BranchTaskStat> BranchStats { get; set; } = new();
     public Dictionary<string, EmployeeTaskStat> EmployeeStats { get; set; } = new();
     public Dictionary<string, int> DailyCompletions { get; set; } = new();
@@ -276,22 +275,6 @@ public class TaskCompletionViewModel : ReportBaseViewModel
     public TimeSpan? AverageCompletionTime { get; set; }
     public TimeSpan? FastestCompletion { get; set; }
     public TimeSpan? SlowestCompletion { get; set; }
-}
-
-public class BranchTaskStat
-{
-    public string BranchName { get; set; } = string.Empty;
-    public int Total { get; set; }
-    public int Completed { get; set; }
-    public double CompletionRate { get; set; }
-}
-
-public class EmployeeTaskStat
-{
-    public string EmployeeName { get; set; } = string.Empty;
-    public int Total { get; set; }
-    public int Completed { get; set; }
-    public double CompletionRate { get; set; }
 }
 
 // ========== Audit Log ==========

@@ -4,9 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - TaskTracker</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Global Styles -->
     <style>
         * { font-family: 'Inter', sans-serif; }
         body { background-color: #f3f4f6; }
@@ -17,7 +25,7 @@
         }
         
         .sidebar-text {
-            transition: opacity 0.2s ease-in-out, display 0.2s;
+            transition: opacity 0.2s ease-in-out;
         }
         
         /* Main content transition */
@@ -30,18 +38,38 @@
             animation: slideIn 0.3s ease-out;
         }
         
-       @@keyframes slideIn {
+        @@keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
         
-        /* Hover effects for sidebar links */
-        .sidebar nav ul li a:hover,
-        .sidebar nav ul li button:hover {
-            transform: translateX(4px);
+        /* Animation for fade in */
+        .animate-fade-in {
+            animation: fadeIn 0.2s ease-out;
         }
         
-        /* Custom scrollbar for main content */
+        @@keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @@keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -61,175 +89,539 @@
             background: #a8a8a8;
         }
         
-        /* Loading spinner */
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        /* Modal backdrop blur */
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
+            background-color: rgba(0, 0, 0, 0.5);
         }
         
-        @@keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        /* Utility classes */
+        .truncate-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* Rotate animation for chevrons */
+        .rotate-180 {
+            transform: rotate(180deg);
+        }
+        
+        /* Sidebar collapsed state */
+        .sidebar.collapsed {
+            width: 72px;
+        }
+        
+        .sidebar.collapsed .sidebar-text {
+            display: none !important;
+        }
+        
+        .sidebar.collapsed nav ul li a,
+        .sidebar.collapsed nav ul li button {
+            justify-content: center;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        
+        .sidebar.collapsed nav ul li a i,
+        .sidebar.collapsed nav ul li button i {
+            margin-right: 0;
+        }
+        
+        .sidebar.collapsed .flex.items-center.space-x-3 {
+            justify-content: center;
+        }
+        
+        /* Mobile sidebar */
+        #mobileSidebar {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(-100%);
+        }
+        
+        #mobileSidebar.open {
+            transform: translateX(0);
+        }
+        
+        /* Dropdown animations */
+        .dropdown-menu {
+            animation: fadeInDown 0.2s ease-out;
+        }
+        
+        @@keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Backdrop blur support */
+        .backdrop-blur-md {
+            backdrop-filter: blur(12px);
         }
     </style>
+    
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="bg-gray-100">
     <div class="flex h-screen bg-gray-100 overflow-hidden">
+        <!-- Sidebar (Desktop + Mobile combined) -->
         @await Html.PartialAsync("_Sidebar")
         
+        <!-- Main Content Area -->
         <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300" id="main-content">
             @await Html.PartialAsync("_TopNav")
             
             <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4">
                 <div class="container mx-auto">
+                    <!-- Dynamic Alert Container -->
+                    <div id="alert-container"></div>
+                    
+                    <!-- TempData Success Message -->
                     @if (TempData["SuccessMessage"] != null)
                     {
                         <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center">
-                                <i class="fas fa-check-circle mr-2"></i>
-                                <p>@TempData["SuccessMessage"]</p>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-check-circle mr-2"></i>
+                                    <p>@TempData["SuccessMessage"]</p>
+                                </div>
+                                <button type="button" onclick="$(this).closest('.border-l-4').fadeOut()" class="text-green-700 hover:text-green-900">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                         </div>
                     }
+                    
+                    <!-- TempData Error Message -->
                     @if (TempData["ErrorMessage"] != null)
                     {
                         <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center">
-                                <i class="fas fa-exclamation-circle mr-2"></i>
-                                <p>@TempData["ErrorMessage"]</p>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-exclamation-circle mr-2"></i>
+                                    <p>@TempData["ErrorMessage"]</p>
+                                </div>
+                                <button type="button" onclick="$(this).closest('.border-l-4').fadeOut()" class="text-red-700 hover:text-red-900">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                         </div>
                     }
+                    
+                    <!-- TempData Info Message -->
                     @if (TempData["InfoMessage"] != null)
                     {
                         <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center">
-                                <i class="fas fa-info-circle mr-2"></i>
-                                <p>@TempData["InfoMessage"]</p>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    <p>@TempData["InfoMessage"]</p>
+                                </div>
+                                <button type="button" onclick="$(this).closest('.border-l-4').fadeOut()" class="text-blue-700 hover:text-blue-900">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                         </div>
                     }
+                    
+                    <!-- TempData Warning Message -->
+                    @if (TempData["WarningMessage"] != null)
+                    {
+                        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded shadow animate-slide-in">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                                    <p>@TempData["WarningMessage"]</p>
+                                </div>
+                                <button type="button" onclick="$(this).closest('.border-l-4').fadeOut()" class="text-yellow-700 hover:text-yellow-900">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    
                     @RenderBody()
                 </div>
             </main>
             
             <footer class="bg-white border-t border-gray-200 p-3 text-xs text-gray-600">
-                <div class="container mx-auto flex justify-between items-center">
+                <div class="container mx-auto flex flex-wrap justify-between items-center gap-2">
                     <div>&copy; @DateTime.Now.Year - TaskTracker v1.0.0</div>
-                    <div>
-                        <span class="text-gray-400">Last updated: @DateTime.Now.ToString("MMM dd, yyyy HH:mm")</span>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-gray-400">
+                            <i class="fas fa-database mr-1"></i>PostgreSQL
+                        </span>
+                        <span class="text-gray-400">
+                            <i class="fas fa-chart-line mr-1"></i>Real-time Updates
+                        </span>
+                        <span class="text-gray-400">
+                            Last updated: @DateTime.Now.ToString("MMM dd, yyyy HH:mm")
+                        </span>
                     </div>
                 </div>
             </footer>
         </div>
     </div>
     
+    <!-- Global Notification Container -->
     <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
     
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Global Confirmation Modal -->
+    <div id="globalConfirmationModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all animate-fade-in">
+            <div class="bg-gradient-to-r from-red-600 to-red-800 px-6 py-4 rounded-t-xl">
+                <h3 class="text-lg font-semibold text-white flex items-center">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <span id="confirmationTitle">Confirm Action</span>
+                </h3>
+            </div>
+            <div class="p-6">
+                <p id="confirmationMessage" class="text-gray-700">Are you sure you want to proceed?</p>
+                <input type="hidden" id="confirmationCallback" />
+                <input type="hidden" id="confirmationCancelCallback" />
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 rounded-b-xl">
+                <button type="button" onclick="window.globalConfirmClose()" 
+                        class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button type="button" onclick="window.globalConfirmExecute()" 
+                        class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition flex items-center">
+                    <i class="fas fa-check mr-2"></i>Confirm
+                </button>
+            </div>
+        </div>
+    </div>
     
+    <!-- Global Loading Overlay -->
+    <div id="globalLoadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 flex flex-col items-center space-y-3 shadow-2xl">
+            <div class="loading-spinner w-8 h-8 border-4"></div>
+            <span id="loadingMessage" class="text-gray-700 font-medium">Loading...</span>
+        </div>
+    </div>
+    
+    <!-- Third Party Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Main Application Script -->
     <script>
-        // Global notification function
-        function showNotification(message, type = 'info') {
-            const colors = {
-                success: 'bg-green-500',
-                error: 'bg-red-500',
-                warning: 'bg-yellow-500',
-                info: 'bg-blue-500'
+        // ============================================
+        // TASKTRACKER CORE APPLICATION
+        // ============================================
+        
+        (function() {
+            'use strict';
+            
+            window.TaskTracker = {
+                token: null,
+                
+                init: function(token) {
+                    this.token = token;
+                    this.setupAjaxDefaults();
+                    this.setupGlobalEventListeners();
+                },
+                
+                setupAjaxDefaults: function() {
+                    $.ajaxSetup({
+                        headers: { 'RequestVerificationToken': this.token }
+                    });
+                },
+                
+                setupGlobalEventListeners: function() {
+                    $(document).keydown(function(e) {
+                        if (e.key === 'Escape') {
+                            window.globalConfirmClose();
+                            $('.modal:visible').each(function() {
+                                $(this).addClass('hidden').removeClass('flex');
+                            });
+                        }
+                    });
+                    
+                    $(window).click(function(e) {
+                        if ($(e.target).hasClass('modal-backdrop')) {
+                            window.globalConfirmClose();
+                        }
+                    });
+                },
+                
+                showNotification: function(message, type) {
+                    var colors = {
+                        success: 'bg-green-500',
+                        error: 'bg-red-500',
+                        info: 'bg-blue-500',
+                        warning: 'bg-yellow-500'
+                    };
+                    var icons = {
+                        success: 'fa-check-circle',
+                        error: 'fa-exclamation-circle',
+                        info: 'fa-info-circle',
+                        warning: 'fa-exclamation-triangle'
+                    };
+                    
+                    $('.tasktracker-notification').remove();
+                    var notification = $('<div class="tasktracker-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ' + colors[type] + ' animate-slide-in flex items-center">' +
+                        '<i class="fas ' + icons[type] + ' mr-2"></i>' +
+                        '<span>' + this.escapeHtml(message) + '</span>' +
+                        '</div>');
+                    
+                    $('#notification-container').append(notification);
+                    setTimeout(function() { 
+                        notification.fadeOut(300, function() { $(this).remove(); }); 
+                    }, 3000);
+                },
+                
+                confirm: function(options) {
+                    $('#confirmationTitle').text(options.title || 'Confirm Action');
+                    $('#confirmationMessage').text(options.message || 'Are you sure you want to proceed?');
+                    
+                    window._confirmCallback = options.onConfirm;
+                    window._confirmCancelCallback = options.onCancel;
+                    
+                    $('#globalConfirmationModal').removeClass('hidden').addClass('flex');
+                },
+                
+                showLoading: function(message) {
+                    $('#loadingMessage').text(message || 'Loading...');
+                    $('#globalLoadingOverlay').removeClass('hidden').addClass('flex');
+                },
+                
+                hideLoading: function() {
+                    $('#globalLoadingOverlay').addClass('hidden').removeClass('flex');
+                },
+                
+                escapeHtml: function(text) {
+                    if (!text) return text;
+                    return text.replace(/&/g, '&amp;')
+                               .replace(/</g, '&lt;')
+                               .replace(/>/g, '&gt;')
+                               .replace(/"/g, '&quot;')
+                               .replace(/'/g, '&#39;');
+                },
+                
+                getInitials: function(name) {
+                    if (!name) return '?';
+                    var parts = name.split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.length === 0) return '?';
+                    if (parts.length === 1) return parts[0].substring(0, 1).toUpperCase();
+                    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                },
+                
+                formatDate: function(date, format) {
+                    var d = new Date(date);
+                    if (isNaN(d.getTime())) return '';
+                    if (format === 'short') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    if (format === 'medium') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    if (format === 'long') return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    return d.toLocaleDateString();
+                },
+                
+                formatTime: function(date) {
+                    var d = new Date(date);
+                    if (isNaN(d.getTime())) return '--:--';
+                    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                },
+                
+                getScoreColor: function(score) {
+                    if (score >= 90) return { text: 'text-green-600', bg: 'bg-green-100', border: 'border-green-500', bar: '#22c55e', icon: 'fa-trophy' };
+                    if (score >= 75) return { text: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-500', bar: '#3b82f6', icon: 'fa-chart-line' };
+                    if (score >= 60) return { text: 'text-yellow-600', bg: 'bg-yellow-100', border: 'border-yellow-500', bar: '#eab308', icon: 'fa-chart-simple' };
+                    return { text: 'text-red-600', bg: 'bg-red-100', border: 'border-red-500', bar: '#ef4444', icon: 'fa-exclamation-triangle' };
+                },
+                
+                setupTableFilter: function(tableId, searchInputId, filterSelectors) {
+                    var $table = $(tableId);
+                    var $searchInput = $('#' + searchInputId);
+                    
+                    function filter() {
+                        var searchTerm = $searchInput.val().toLowerCase();
+                        var filters = {};
+                        
+                        for (var selector in filterSelectors) {
+                            filters[selector] = $(filterSelectors[selector]).val();
+                        }
+                        
+                        var visibleCount = 0;
+                        
+                        $table.find('tbody tr').each(function() {
+                            var $row = $(this);
+                            var show = true;
+                            
+                            if (searchTerm) {
+                                var text = $row.text().toLowerCase();
+                                if (text.indexOf(searchTerm) === -1) show = false;
+                            }
+                            
+                            for (var key in filters) {
+                                var filterValue = filters[key];
+                                if (filterValue) {
+                                    var cellValue = $row.data(key) || '';
+                                    if (cellValue !== filterValue) show = false;
+                                }
+                            }
+                            
+                            $row.toggle(show);
+                            if (show) visibleCount++;
+                        });
+                        
+                        if (visibleCount === 0 && $table.find('tbody tr').length > 0) {
+                            if ($('#noResultsRow').length === 0) {
+                                var colCount = $table.find('thead tr th').length;
+                                $table.find('tbody').append('<tr id="noResultsRow"><td colspan="' + colCount + '" class="text-center py-12 text-gray-500">' +
+                                    '<i class="fas fa-search text-3xl mb-2 text-gray-300"></i>' +
+                                    '<p>No results match your filters</p>' +
+                                    '<button onclick="resetFilters()" class="mt-2 text-blue-600 hover:underline">Clear filters</button>' +
+                                    '</td></tr>');
+                            }
+                        } else {
+                            $('#noResultsRow').remove();
+                        }
+                        
+                        return visibleCount;
+                    }
+                    
+                    $searchInput.on('keyup', filter);
+                    for (var selector in filterSelectors) {
+                        $(filterSelectors[selector]).on('change', filter);
+                    }
+                    
+                    return { filter: filter };
+                },
+                
+                exportToExcel: function(data, filename) {
+                    var ws = XLSX.utils.json_to_sheet(data);
+                    var wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Report');
+                    XLSX.writeFile(wb, filename + '_' + this.formatDate(new Date(), 'short').replace(/\//g, '-') + '.xlsx');
+                },
+                
+                exportToCSV: function(data, filename) {
+                    var ws = XLSX.utils.json_to_sheet(data);
+                    var csv = XLSX.utils.sheet_to_csv(ws);
+                    var blob = new Blob([csv], { type: 'text/csv' });
+                    var link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = filename + '_' + this.formatDate(new Date(), 'short').replace(/\//g, '-') + '.csv';
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                },
+                
+                printReport: function(elementId) {
+                    var printContents = $('#' + elementId).html();
+                    var originalContents = document.body.innerHTML;
+                    document.body.innerHTML = printContents;
+                    window.print();
+                    document.body.innerHTML = originalContents;
+                    location.reload();
+                }
             };
-            const icons = {
-                success: 'fa-check-circle',
-                error: 'fa-exclamation-circle',
-                warning: 'fa-exclamation-triangle',
-                info: 'fa-info-circle'
-            };
-            const notification = $(`
-                <div class="px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ${colors[type]} animate-slide-in flex items-center">
-                    <i class="fas ${icons[type]} mr-2"></i>
-                    <span>${escapeHtml(message)}</span>
-                </div>
-            `);
-            $('#notification-container').append(notification);
-            setTimeout(() => {
-                notification.fadeOut(300, function() { $(this).remove(); });
-            }, 3000);
-        }
+        })();
         
-        // Helper function to escape HTML
-        function escapeHtml(text) {
-            if (!text) return text;
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
+        // ========== GLOBAL CONFIRMATION FUNCTIONS ==========
+        window.globalConfirmExecute = function() {
+            if (window._confirmCallback) {
+                window._confirmCallback();
+            }
+            window.globalConfirmClose();
+        };
         
-        // Format date function
-        function formatDate(date) {
-            return new Date(date).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric', 
-                year: 'numeric' 
-            });
-        }
+        window.globalConfirmClose = function() {
+            if (window._confirmCancelCallback) {
+                window._confirmCancelCallback();
+            }
+            $('#globalConfirmationModal').addClass('hidden').removeClass('flex');
+            window._confirmCallback = null;
+            window._confirmCancelCallback = null;
+        };
         
-        // Get initials from name
-        function getInitials(name) {
-            if (!name) return '?';
-            return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-        }
-        
-        // Toggle sidebar function
+        // ========== SIDEBAR FUNCTIONS ==========
         function toggleSidebar() {
-            const sidebar = $('#sidebar');
-            const toggleIcon = $('#sidebar-toggle-icon');
+            var sidebar = $('#sidebar');
+            var toggleIcon = $('#sidebar-toggle-icon');
             
             sidebar.toggleClass('collapsed');
             
-            // Change icon direction
             if (sidebar.hasClass('collapsed')) {
                 toggleIcon.removeClass('fa-chevron-left').addClass('fa-chevron-right');
+                localStorage.setItem('sidebarCollapsed', 'true');
             } else {
                 toggleIcon.removeClass('fa-chevron-right').addClass('fa-chevron-left');
+                localStorage.setItem('sidebarCollapsed', 'false');
+            }
+        }
+        
+        function openMobileSidebar() {
+            $('#mobileSidebar').addClass('open');
+            $('#mobileSidebarOverlay').removeClass('hidden');
+            $('body').addClass('overflow-hidden');
+        }
+        
+        function closeMobileSidebar() {
+            $('#mobileSidebar').removeClass('open');
+            $('#mobileSidebarOverlay').addClass('hidden');
+            $('body').removeClass('overflow-hidden');
+        }
+        
+        function toggleReportsDropdown() {
+            $('#reports-dropdown').slideToggle(200);
+            $('#reports-chevron').toggleClass('rotate-180');
+        }
+        
+        function toggleQuickActions() {
+            $('#quick-actions-dropdown').slideToggle(200);
+            $('#user-menu-dropdown').slideUp(200);
+            $('#notifications-dropdown').slideUp(200);
+        }
+        
+        function toggleUserMenu() {
+            $('#user-menu-dropdown').slideToggle(200);
+            $('#quick-actions-dropdown').slideUp(200);
+            $('#notifications-dropdown').slideUp(200);
+            $('#user-menu-chevron').toggleClass('rotate-180');
+        }
+        
+        function toggleNotifications() {
+            $('#notifications-dropdown').slideToggle(200);
+            $('#quick-actions-dropdown').slideUp(200);
+            $('#user-menu-dropdown').slideUp(200);
+        }
+        
+        function resetFilters() {
+            $('input[type="text"].filter-input, input[type="search"].filter-input').val('');
+            $('select.filter-select').val('');
+            $('input.filter-input, select.filter-select').trigger('change');
+            if (window.TaskTracker) TaskTracker.showNotification('Filters reset', 'info');
+        }
+        
+        // ========== DOCUMENT READY ==========
+        $(document).ready(function() {
+            var token = $('input[name="__RequestVerificationToken"]').val() || 
+                       $('#requestVerificationToken').val() || '';
+            
+            if (window.TaskTracker) {
+                TaskTracker.init(token);
             }
             
-            // Save state to localStorage
-            localStorage.setItem('sidebarCollapsed', sidebar.hasClass('collapsed'));
-        }
-        
-        // Show loading spinner
-        function showLoading() {
-            $('#loading-overlay').remove();
-            $('body').append('<div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div class="bg-white rounded-lg p-4 flex items-center space-x-3"><div class="loading-spinner"></div><span>Loading...</span></div></div>');
-        }
-        
-        function hideLoading() {
-            $('#loading-overlay').remove();
-        }
-        
-        // Document ready
-        $(document).ready(function() {
-            // Restore sidebar state
             if (localStorage.getItem('sidebarCollapsed') === 'true') {
                 $('#sidebar').addClass('collapsed');
                 $('#sidebar-toggle-icon').removeClass('fa-chevron-left').addClass('fa-chevron-right');
             }
             
-            // Close dropdowns when clicking outside
             $(document).click(function(event) {
-                if (!$(event.target).closest('.relative').length) {
+                if (!$(event.target).closest('.relative, .dropdown-trigger').length) {
                     $('.dropdown-menu').slideUp(200);
                 }
             });
+            
+            console.log('TaskTracker initialized');
         });
     </script>
     

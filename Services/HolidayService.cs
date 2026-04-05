@@ -10,6 +10,8 @@ public class HolidayService : IHolidayService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<HolidayService> _logger;
     private readonly IAuditService _auditService;
+    private List<Holiday>? _cachedHolidays;
+    private DateTime _cacheExpiry = DateTime.MinValue;
 
     public HolidayService(
         ApplicationDbContext context,
@@ -21,15 +23,22 @@ public class HolidayService : IHolidayService
         _auditService = auditService;
     }
 
+    public async Task<List<Holiday>> GetCachedHolidaysAsync()
+    {
+        if (_cachedHolidays == null || DateTime.UtcNow > _cacheExpiry)
+        {
+            _cachedHolidays = await _context.Holidays.AsNoTracking().ToListAsync();
+            _cacheExpiry = DateTime.UtcNow.AddHours(1);
+            _logger.LogInformation("Holidays cached: {Count} holidays", _cachedHolidays.Count);
+        }
+        return _cachedHolidays;
+    }
+
     public async Task<List<Holiday>> GetAllHolidaysAsync()
     {
         try
         {
-            return await _context.Holidays
-                .OrderBy(h => h.IsWeekly)
-                .ThenBy(h => h.WeekDay)
-                .ThenBy(h => h.HolidayDate)
-                .ToListAsync();
+            return await GetCachedHolidaysAsync();
         }
         catch (Exception ex)
         {
@@ -40,44 +49,39 @@ public class HolidayService : IHolidayService
 
     public async Task<Holiday?> GetHolidayByIdAsync(int id)
     {
-        return await _context.Holidays.FindAsync(id);
+        var holidays = await GetCachedHolidaysAsync();
+        return holidays.FirstOrDefault(h => h.Id == id);
     }
 
     public async Task<List<Holiday>> GetWeeklyHolidaysAsync()
     {
-        return await _context.Holidays
-            .Where(h => h.IsWeekly)
-            .OrderBy(h => h.WeekDay)
-            .ToListAsync();
+        var holidays = await GetCachedHolidaysAsync();
+        return holidays.Where(h => h.IsWeekly).OrderBy(h => h.WeekDay).ToList();
     }
 
     public async Task<List<Holiday>> GetSpecificHolidaysAsync()
     {
-        return await _context.Holidays
-            .Where(h => !h.IsWeekly)
-            .OrderBy(h => h.HolidayDate)
-            .ToListAsync();
+        var holidays = await GetCachedHolidaysAsync();
+        return holidays.Where(h => !h.IsWeekly).OrderBy(h => h.HolidayDate).ToList();
     }
 
     public async Task<Holiday> AddWeeklyHolidayAsync(int weekDay, string? description = null)
     {
         try
         {
-            var dayName = GetDayOfWeekName(weekDay);
-            
-            // Check if weekly holiday already exists for this day
-            var existing = await _context.Holidays
-                .FirstOrDefaultAsync(h => h.IsWeekly && h.WeekDay == weekDay);
+            var holidays = await GetCachedHolidaysAsync();
+            var existing = holidays.FirstOrDefault(h => h.IsWeekly && h.WeekDay == weekDay);
 
             if (existing != null)
             {
-                _logger.LogInformation($"Weekly holiday for {dayName} already exists");
+                _logger.LogInformation($"Weekly holiday for day {weekDay} already exists");
                 return existing;
             }
 
+            var dayName = GetDayOfWeekName(weekDay);
             var holiday = new Holiday
             {
-                HolidayDate = new DateTime(2000, 1, 1), // Placeholder date (not used for weekly)
+                HolidayDate = new DateTime(2000, 1, 1),
                 IsWeekly = true,
                 WeekDay = weekDay,
                 Description = description ?? dayName
@@ -85,6 +89,9 @@ public class HolidayService : IHolidayService
 
             _context.Holidays.Add(holiday);
             await _context.SaveChangesAsync();
+            
+            // Clear cache
+            _cachedHolidays = null;
 
             await _auditService.LogAsync(
                 "Create",
@@ -107,8 +114,8 @@ public class HolidayService : IHolidayService
     {
         try
         {
-            var existing = await _context.Holidays
-                .FirstOrDefaultAsync(h => !h.IsWeekly && h.HolidayDate.Date == date.Date);
+            var holidays = await GetCachedHolidaysAsync();
+            var existing = holidays.FirstOrDefault(h => !h.IsWeekly && h.HolidayDate.Date == date.Date);
 
             if (existing != null)
             {
@@ -125,6 +132,9 @@ public class HolidayService : IHolidayService
 
             _context.Holidays.Add(holiday);
             await _context.SaveChangesAsync();
+            
+            // Clear cache
+            _cachedHolidays = null;
 
             await _auditService.LogAsync(
                 "Create",
@@ -153,6 +163,9 @@ public class HolidayService : IHolidayService
             var description = holiday.Description;
             _context.Holidays.Remove(holiday);
             await _context.SaveChangesAsync();
+            
+            // Clear cache
+            _cachedHolidays = null;
 
             await _auditService.LogAsync(
                 "Delete",
@@ -175,14 +188,17 @@ public class HolidayService : IHolidayService
     {
         try
         {
-            var dayName = GetDayOfWeekName(weekDay);
-            var holiday = await _context.Holidays
-                .FirstOrDefaultAsync(h => h.IsWeekly && h.WeekDay == weekDay);
+            var holidays = await GetCachedHolidaysAsync();
+            var holiday = holidays.FirstOrDefault(h => h.IsWeekly && h.WeekDay == weekDay);
 
             if (holiday == null) return false;
 
+            var dayName = GetDayOfWeekName(weekDay);
             _context.Holidays.Remove(holiday);
             await _context.SaveChangesAsync();
+            
+            // Clear cache
+            _cachedHolidays = null;
 
             await _auditService.LogAsync(
                 "Delete",
@@ -205,13 +221,16 @@ public class HolidayService : IHolidayService
     {
         try
         {
-            var holiday = await _context.Holidays
-                .FirstOrDefaultAsync(h => !h.IsWeekly && h.HolidayDate.Date == date.Date);
+            var holidays = await GetCachedHolidaysAsync();
+            var holiday = holidays.FirstOrDefault(h => !h.IsWeekly && h.HolidayDate.Date == date.Date);
 
             if (holiday == null) return false;
 
             _context.Holidays.Remove(holiday);
             await _context.SaveChangesAsync();
+            
+            // Clear cache
+            _cachedHolidays = null;
 
             await _auditService.LogAsync(
                 "Delete",
@@ -234,18 +253,17 @@ public class HolidayService : IHolidayService
     {
         try
         {
+            var holidays = await GetCachedHolidaysAsync();
             var dateOnly = date.Date;
 
             // Check specific holidays
-            var isSpecific = await _context.Holidays
-                .AnyAsync(h => !h.IsWeekly && h.HolidayDate.Date == dateOnly);
+            var isSpecific = holidays.Any(h => !h.IsWeekly && h.HolidayDate.Date == dateOnly);
 
             if (isSpecific) return true;
 
-            // Check weekly holidays (based on day of week)
+            // Check weekly holidays
             var dayOfWeek = (int)date.DayOfWeek;
-            var isWeekly = await _context.Holidays
-                .AnyAsync(h => h.IsWeekly && h.WeekDay == dayOfWeek);
+            var isWeekly = holidays.Any(h => h.IsWeekly && h.WeekDay == dayOfWeek);
 
             return isWeekly;
         }
@@ -260,22 +278,19 @@ public class HolidayService : IHolidayService
     {
         try
         {
-            var holidays = new List<DateTime>();
+            var holidays = await GetCachedHolidaysAsync();
+            var holidayDates = new List<DateTime>();
 
             // Get specific holidays in range
-            var specific = await _context.Holidays
-                .Where(h => !h.IsWeekly &&
-                           h.HolidayDate.Date >= startDate.Date &&
-                           h.HolidayDate.Date <= endDate.Date)
+            var specific = holidays
+                .Where(h => !h.IsWeekly && h.HolidayDate.Date >= startDate.Date && h.HolidayDate.Date <= endDate.Date)
                 .Select(h => h.HolidayDate.Date)
-                .ToListAsync();
+                .ToList();
 
-            holidays.AddRange(specific);
+            holidayDates.AddRange(specific);
 
             // Get weekly holidays
-            var weekly = await _context.Holidays
-                .Where(h => h.IsWeekly && h.WeekDay.HasValue)
-                .ToListAsync();
+            var weekly = holidays.Where(h => h.IsWeekly && h.WeekDay.HasValue).ToList();
 
             var current = startDate.Date;
             while (current <= endDate.Date)
@@ -283,12 +298,12 @@ public class HolidayService : IHolidayService
                 var dayOfWeek = (int)current.DayOfWeek;
                 if (weekly.Any(h => h.WeekDay == dayOfWeek))
                 {
-                    holidays.Add(current);
+                    holidayDates.Add(current);
                 }
                 current = current.AddDays(1);
             }
 
-            return holidays.Distinct().OrderBy(d => d).ToList();
+            return holidayDates.Distinct().OrderBy(d => d).ToList();
         }
         catch (Exception ex)
         {

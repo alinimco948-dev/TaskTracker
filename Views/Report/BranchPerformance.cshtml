@@ -80,7 +80,10 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <h2 class="text-2xl font-bold">@Model.BranchName</h2>
+                  <a href="@Url.Action("Details", "Branch", new { id = Model.BranchId })" 
+   class="text-2xl font-bold text-gray-800 hover:text-blue-600 transition">
+    @Model.BranchName
+</a>
                     <p class="text-gray-500">@Model.BranchCode | @Model.Department | @Model.Location</p>
                 </div>
                 <div class="text-right">

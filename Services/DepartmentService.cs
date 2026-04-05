@@ -3,6 +3,8 @@ using TaskTracker.Data;
 using TaskTracker.Models.Entities;
 using TaskTracker.Models.ViewModels;
 using TaskTracker.Services.Interfaces;
+using TaskTracker.Helpers;
+using ViewHelpers = TaskTracker.Models.ViewModels.ViewHelpers; // Add this using statement
 
 namespace TaskTracker.Services;
 
@@ -176,27 +178,26 @@ public class DepartmentService : IDepartmentService
             if (department == null)
                 throw new Exception($"Department {id} not found");
 
-            var branches = department.Branches?
-                .Where(b => b.IsActive)
-                .Select(b => new DepartmentBranchItem
+            // Use ViewHelpers.GetInitials instead of local method
+            var branches = department.Branches != null && department.Branches.Any()
+                ? department.Branches.Where(b => b.IsActive).Select(b => new DepartmentBranchItem
                 {
                     Id = b.Id,
                     Name = b.Name,
                     Address = b.Address ?? string.Empty,
                     CompletionRate = GetBranchCompletionRate(b.Id)
-                })
-                .ToList() ?? new();
+                }).ToList()
+                : new List<DepartmentBranchItem>();
 
-            var employees = department.Employees?
-                .Where(e => e.IsActive)
-                .Select(e => new DepartmentEmployeeItem
+            var employees = department.Employees != null && department.Employees.Any()
+                ? department.Employees.Where(e => e.IsActive).Select(e => new DepartmentEmployeeItem
                 {
                     Id = e.Id,
                     Name = e.Name,
                     Position = e.Position ?? string.Empty,
-                    Initials = GetInitials(e.Name)
-                })
-                .ToList() ?? new();
+                    Initials = ViewHelpers.GetInitials(e.Name) // Using shared helper
+                }).ToList()
+                : new List<DepartmentEmployeeItem>();
 
             var totalTasks = await GetDepartmentTaskCountAsync(id);
             var completedTasks = await GetDepartmentCompletedTaskCountAsync(id);
@@ -212,11 +213,9 @@ public class DepartmentService : IDepartmentService
                 Description = department.Description ?? string.Empty,
                 IsActive = department.IsActive,
                 CreatedAt = department.CreatedAt,
-
                 BranchCount = branches.Count,
                 EmployeeCount = employees.Count,
                 OverallCompletionRate = completionRate,
-
                 Branches = branches,
                 Employees = employees
             };
@@ -246,6 +245,7 @@ public class DepartmentService : IDepartmentService
             .ToDictionaryAsync(g => g.DepartmentId, g => g.Count);
     }
 
+    // Private helper methods
     private double GetBranchCompletionRate(int branchId)
     {
         var today = DateTime.Today;
@@ -266,9 +266,12 @@ public class DepartmentService : IDepartmentService
             .Select(b => b.Id)
             .ToListAsync();
 
+        if (!branchIds.Any()) return 0;
+
+        var today = DateTime.Today;
         return await _context.DailyTasks
             .CountAsync(dt => branchIds.Contains(dt.BranchId) &&
-                             dt.TaskDate.Date == DateTime.Today.Date);
+                             dt.TaskDate.Date == today.Date);
     }
 
     private async Task<int> GetDepartmentCompletedTaskCountAsync(int departmentId)
@@ -278,18 +281,12 @@ public class DepartmentService : IDepartmentService
             .Select(b => b.Id)
             .ToListAsync();
 
+        if (!branchIds.Any()) return 0;
+
+        var today = DateTime.Today;
         return await _context.DailyTasks
             .CountAsync(dt => branchIds.Contains(dt.BranchId) &&
-                             dt.TaskDate.Date == DateTime.Today.Date &&
+                             dt.TaskDate.Date == today.Date &&
                              dt.IsCompleted);
-    }
-
-    private string GetInitials(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "?";
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0) return "?";
-        if (parts.Length == 1) return parts[0].Substring(0, 1).ToUpper();
-        return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
     }
 }

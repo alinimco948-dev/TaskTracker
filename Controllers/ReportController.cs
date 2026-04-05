@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using TaskTracker.Data;
 using TaskTracker.Models.Entities;
@@ -16,6 +17,7 @@ public class ReportController : Controller
     private readonly IDepartmentService _departmentService;
     private readonly ITaskService _taskService;
     private readonly IAuditService _auditService;
+    private readonly ITaskCalculationService _taskCalculationService;
     private readonly ILogger<ReportController> _logger;
     private readonly ApplicationDbContext _context;
 
@@ -26,6 +28,7 @@ public class ReportController : Controller
         IDepartmentService departmentService,
         ITaskService taskService,
         IAuditService auditService,
+        ITaskCalculationService taskCalculationService,
         ILogger<ReportController> logger,
         ApplicationDbContext context)
     {
@@ -35,9 +38,12 @@ public class ReportController : Controller
         _departmentService = departmentService;
         _taskService = taskService;
         _auditService = auditService;
+        _taskCalculationService = taskCalculationService;
         _logger = logger;
         _context = context;
     }
+
+    #region Original Report Actions
 
     // GET: Report/EmployeePerformance
     public async Task<IActionResult> EmployeePerformance(int? employeeId, DateTime? startDate, DateTime? endDate)
@@ -47,7 +53,6 @@ public class ReportController : Controller
             startDate ??= DateTime.Today.AddMonths(-1);
             endDate ??= DateTime.Today;
 
-            // Get all employees for dropdown
             var allEmployees = await _context.Employees
                 .Where(e => e.IsActive)
                 .Select(e => new { e.Id, e.Name, e.Position })
@@ -59,7 +64,7 @@ public class ReportController : Controller
 
             if (employeeId.HasValue && employeeId.Value > 0)
             {
-                var report = await GenerateEmployeePerformanceReport(employeeId.Value, startDate.Value, endDate.Value);
+                var report = await _reportService.ExecuteEmployeeReportAsync(employeeId.Value, startDate.Value, endDate.Value);
                 return View(report);
             }
 
@@ -83,278 +88,6 @@ public class ReportController : Controller
         }
     }
 
-    private async Task<EmployeePerformanceViewModel> GenerateEmployeePerformanceReport(int employeeId, DateTime startDate, DateTime endDate)
-    {
-        try
-        {
-            var employee = await _context.Employees
-                .Include(e => e.Department)
-                .FirstOrDefaultAsync(e => e.Id == employeeId);
-
-            if (employee == null)
-            {
-                return new EmployeePerformanceViewModel
-                {
-                    EmployeeId = employeeId,
-                    EmployeeName = "Employee Not Found",
-                    StartDate = startDate,
-                    EndDate = endDate
-                };
-            }
-
-            // Get ALL branch assignments for this employee (active and past)
-            var branchAssignments = await _context.BranchAssignments
-                .Include(ba => ba.Branch)
-                .Where(ba => ba.EmployeeId == employeeId)
-                .OrderBy(ba => ba.StartDate)
-                .ToListAsync();
-
-            // Get the branches the employee is assigned to
-            var assignedBranchIds = branchAssignments.Select(ba => ba.BranchId).Distinct().ToList();
-
-            // Get daily tasks ONLY for branches the employee is assigned to, within the date range
-            var dailyTasks = await _context.DailyTasks
-                .Include(dt => dt.TaskItem)
-                .Include(dt => dt.Branch)
-                .Include(dt => dt.TaskAssignment)
-                .Where(dt => dt.TaskAssignment != null &&
-                             dt.TaskAssignment.EmployeeId == employeeId &&
-                             assignedBranchIds.Contains(dt.BranchId) &&
-                             dt.TaskDate.Date >= startDate.Date &&
-                             dt.TaskDate.Date <= endDate.Date)
-                .OrderBy(dt => dt.TaskDate)
-                .ToListAsync();
-
-            var report = new EmployeePerformanceViewModel
-            {
-                EmployeeId = employeeId,
-                EmployeeName = employee.Name,
-                EmployeeIdNumber = employee.EmployeeId ?? employee.Id.ToString(),
-                Department = employee.Department?.Name ?? "N/A",
-                Position = employee.Position ?? "N/A",
-                StartDate = startDate,
-                EndDate = endDate,
-                TaskBreakdown = new Dictionary<string, TaskPerformanceStats>(),
-                DailyBreakdown = new List<DailyPerformance>(),
-                BranchBreakdown = new Dictionary<string, BranchStatViewModel>(),
-                Insights = new List<string>(),
-                Strengths = new List<string>(),
-                Weaknesses = new List<string>(),
-                Recommendations = new List<string>(),
-                DailyTrendDates = new List<string>(),
-                DailyCompletionRates = new List<double>(),
-                DailyOnTimeRates = new List<double>(),
-                TaskTypeLabels = new List<string>(),
-                TaskTypeValues = new List<int>(),
-                AverageCompletionTimes = new List<double>()
-            };
-
-            // Add branch assignments with their timelines
-            foreach (var assignment in branchAssignments)
-            {
-                var branchName = assignment.Branch?.Name ?? "Unknown";
-                if (!report.BranchBreakdown.ContainsKey(branchName))
-                {
-                    var startDateAssignment = assignment.StartDate;
-                    var endDateAssignment = assignment.EndDate;
-                    var isActive = !assignment.EndDate.HasValue || assignment.EndDate.Value.Date >= DateTime.Today.Date;
-
-                    var assignmentPeriod = isActive
-                        ? $"From {startDateAssignment:MMM dd, yyyy} → Present"
-                        : $"From {startDateAssignment:MMM dd, yyyy} to {endDateAssignment:MMM dd, yyyy}";
-
-                    report.BranchBreakdown[branchName] = new BranchStatViewModel
-                    {
-                        BranchName = branchName,
-                        TotalTasks = 0,
-                        CompletedTasks = 0,
-                        StartDate = startDateAssignment,
-                        EndDate = endDateAssignment,
-                        IsActive = isActive,
-                        AssignmentPeriod = assignmentPeriod
-                    };
-                }
-            }
-
-            // Process daily tasks
-            foreach (var dt in dailyTasks)
-            {
-                if (dt.TaskItem == null) continue;
-
-                var taskName = dt.TaskItem.Name;
-                var taskType = GetTaskTypeName(dt.TaskItem.ExecutionType);
-                var isCompleted = dt.IsCompleted;
-                var isOnTime = false;
-                var deadline = CalculateDeadline(dt.TaskItem, dt.TaskDate);
-                var completionTimeStr = "";
-                var score = 0;
-
-                if (isCompleted && dt.CompletedAt.HasValue)
-                {
-                    if (dt.AdjustmentMinutes > 0)
-                    {
-                        deadline = deadline.AddMinutes(dt.AdjustmentMinutes.Value);
-                    }
-                    isOnTime = dt.CompletedAt.Value <= deadline;
-                    completionTimeStr = dt.CompletedAt.Value.ToLocalTime().ToString("HH:mm");
-                    score = isOnTime ? 100 : 50;
-                }
-
-                report.DailyBreakdown.Add(new DailyPerformance
-                {
-                    Date = dt.TaskDate,
-                    BranchName = dt.Branch?.Name ?? "Unknown",
-                    TaskName = taskName,
-                    TaskType = taskType,
-                    Deadline = dt.TaskItem?.Deadline.ToString(@"hh\:mm") ?? "N/A",
-                    CompletionTime = completionTimeStr,
-                    CompletionDateTime = dt.CompletedAt?.ToLocalTime(),
-                    DeadlineDateTime = deadline,
-                    Status = isCompleted ? "Completed" : "Pending",
-                    IsOnTime = isOnTime,
-                    AssignedTo = employee.Name,
-                    AdjustmentMinutes = dt.AdjustmentMinutes,
-                    AdjustmentReason = dt.AdjustmentReason ?? "",
-                    Score = score
-                });
-
-                // Update task breakdown
-                if (!report.TaskBreakdown.ContainsKey(taskName))
-                {
-                    report.TaskBreakdown[taskName] = new TaskPerformanceStats();
-                }
-                report.TaskBreakdown[taskName].Total++;
-                if (isCompleted)
-                {
-                    report.TaskBreakdown[taskName].Completed++;
-                    if (isOnTime) report.TaskBreakdown[taskName].OnTime++;
-                    else report.TaskBreakdown[taskName].Late++;
-                }
-                else
-                {
-                    report.TaskBreakdown[taskName].Pending++;
-                }
-
-                // Update branch breakdown
-                var branchName = dt.Branch?.Name ?? "Unknown";
-                if (report.BranchBreakdown.ContainsKey(branchName))
-                {
-                    report.BranchBreakdown[branchName].TotalTasks++;
-                    if (isCompleted)
-                    {
-                        report.BranchBreakdown[branchName].CompletedTasks++;
-                    }
-                }
-            }
-
-            // Calculate totals
-            report.TotalTasks = report.DailyBreakdown.Count;
-            report.CompletedTasks = report.DailyBreakdown.Count(d => d.Status == "Completed");
-            report.PendingTasks = report.TotalTasks - report.CompletedTasks;
-            report.OnTimeTasks = report.DailyBreakdown.Count(d => d.IsOnTime);
-            report.LateTasks = report.CompletedTasks - report.OnTimeTasks;
-            report.CompletionRate = report.TotalTasks > 0 ? Math.Round((double)report.CompletedTasks / report.TotalTasks * 100, 1) : 0;
-            report.OnTimeRate = report.CompletedTasks > 0 ? Math.Round((double)report.OnTimeTasks / report.CompletedTasks * 100, 1) : 0;
-            report.OverallScore = report.CompletedTasks > 0 ? Math.Round((double)report.OnTimeTasks / report.CompletedTasks * 100, 1) : 0;
-
-            // Calculate branch completion rates
-            foreach (var branch in report.BranchBreakdown.Values)
-            {
-                branch.CompletionRate = branch.TotalTasks > 0
-                    ? Math.Round((double)branch.CompletedTasks / branch.TotalTasks * 100, 1)
-                    : 0;
-            }
-
-            // Calculate task breakdown rates
-            foreach (var task in report.TaskBreakdown.Values)
-            {
-                task.CompletionRate = task.Total > 0
-                    ? Math.Round((double)task.Completed / task.Total * 100, 1)
-                    : 0;
-                task.OnTimeRate = task.Completed > 0
-                    ? Math.Round((double)task.OnTime / task.Completed * 100, 1)
-                    : 0;
-            }
-
-            GenerateEmployeeInsights(report);
-
-            return report;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating employee report for {EmployeeId}", employeeId);
-            throw;
-        }
-    }
-
-    private string GetTaskTypeName(TaskExecutionType? executionType)
-    {
-        return executionType switch
-        {
-            TaskExecutionType.RecurringDaily => "Daily",
-            TaskExecutionType.RecurringWeekly => "Weekly",
-            TaskExecutionType.RecurringMonthly => "Monthly",
-            TaskExecutionType.MultiDay => "Multi-Day",
-            TaskExecutionType.OneTime => "One-Time",
-            _ => "Standard"
-        };
-    }
-
-    private DateTime CalculateDeadline(TaskItem task, DateTime taskDate)
-    {
-        var deadline = taskDate.Date;
-        if (task.IsSameDay)
-            deadline = deadline.Add(task.Deadline);
-        else
-            deadline = deadline.AddDays(1).Add(task.Deadline);
-        return deadline;
-    }
-
-    private void GenerateEmployeeInsights(EmployeePerformanceViewModel report)
-    {
-        if (report.OverallScore >= 90)
-        {
-            report.Strengths.Add("🏆 Exceptional performer - consistently exceeds expectations");
-            report.Recommendations.Add("Consider mentoring other team members");
-        }
-        else if (report.OverallScore >= 75)
-        {
-            report.Strengths.Add("📈 Strong performer with good consistency");
-            report.Recommendations.Add("Focus on maintaining quality while increasing task volume");
-        }
-        else if (report.OverallScore >= 60)
-        {
-            report.Strengths.Add("📊 Meets basic requirements consistently");
-            report.Recommendations.Add("Focus on improving punctuality");
-        }
-        else
-        {
-            report.Weaknesses.Add("⚠️ Performance below expectations");
-            report.Recommendations.Add("Schedule coaching session to identify challenges");
-        }
-
-        if (report.CompletionRate >= 90)
-        {
-            report.Strengths.Add($"✅ Excellent completion rate ({report.CompletionRate}%)");
-        }
-        else if (report.CompletionRate < 70 && report.CompletionRate > 0)
-        {
-            report.Weaknesses.Add($"❗ Low completion rate ({report.CompletionRate}%)");
-            report.Recommendations.Add("Review workload and prioritize pending tasks");
-        }
-
-        if (report.OnTimeRate >= 90)
-        {
-            report.Strengths.Add($"⏰ Outstanding punctuality ({report.OnTimeRate}%)");
-        }
-        else if (report.OnTimeRate < 70 && report.OnTimeRate > 0)
-        {
-            report.Weaknesses.Add($"⏰ Frequent late submissions ({report.OnTimeRate}% on time)");
-            report.Recommendations.Add("Improve time management and deadline tracking");
-        }
-    }
-
-    // Other report methods (BranchPerformance, DepartmentPerformance, etc.) remain the same...
     // GET: Report/BranchPerformance
     public async Task<IActionResult> BranchPerformance(int? branchId, DateTime? startDate, DateTime? endDate)
     {
@@ -508,6 +241,92 @@ public class ReportController : Controller
         }
     }
 
+    // GET: Report/EmployeeRanking
+    public async Task<IActionResult> EmployeeRanking(DateTime? startDate = null, DateTime? endDate = null)
+    {
+        try
+        {
+            startDate ??= DateTime.UtcNow.AddMonths(-1);
+            endDate ??= DateTime.UtcNow;
+
+            var rankings = await _reportService.GetEmployeeRankingAsync(startDate, endDate);
+
+            ViewBag.StartDate = startDate.Value.ToString("yyyy-MM-dd");
+            ViewBag.EndDate = endDate.Value.ToString("yyyy-MM-dd");
+            ViewBag.TotalEmployees = rankings.Count;
+            ViewBag.AverageScore = rankings.Any() ? Math.Round(rankings.Average(r => r.PerformanceScore), 0) : 0;
+            ViewBag.TopScore = rankings.Any() ? rankings.Max(r => r.PerformanceScore) : 0;
+
+            return View(rankings);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating employee ranking");
+            TempData["ErrorMessage"] = "Error generating ranking report. Please try again.";
+            return View(new List<EmployeeRankingViewModel>());
+        }
+    }
+
+    // GET: Report/ExportRanking
+    public async Task<IActionResult> ExportRanking(DateTime? startDate = null, DateTime? endDate = null, string format = "excel")
+    {
+        try
+        {
+            startDate ??= DateTime.UtcNow.AddMonths(-1);
+            endDate ??= DateTime.UtcNow;
+
+            var rankings = await _reportService.GetEmployeeRankingAsync(startDate, endDate);
+
+            var exportData = rankings.Select(r => new Dictionary<string, object>
+            {
+                ["Rank"] = r.Rank,
+                ["Employee Name"] = r.Name,
+                ["Employee ID"] = r.EmployeeId,
+                ["Position"] = r.Position,
+                ["Department"] = r.Department,
+                ["Performance Score (%)"] = r.PerformanceScore,
+                ["Completion Rate (%)"] = r.CompletionRate,
+                ["On-Time Rate (%)"] = r.OnTimeRate,
+                ["Total Tasks"] = r.TotalTasks,
+                ["Completed Tasks"] = r.CompletedTasks,
+                ["On-Time Tasks"] = r.OnTimeTasks,
+                ["Late Tasks"] = r.LateTasks,
+                ["Status"] = r.IsActive ? "Active" : "Inactive"
+            }).ToList();
+
+            byte[] fileData;
+            string fileName;
+            string contentType;
+
+            switch (format.ToLower())
+            {
+                case "csv":
+                    fileData = await _reportService.ExportToCsvAsync(exportData, "EmployeeRanking");
+                    fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                    contentType = "text/csv";
+                    break;
+                case "pdf":
+                    fileData = await _reportService.ExportToPdfAsync(exportData, "EmployeeRanking");
+                    fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+                    contentType = "application/pdf";
+                    break;
+                default:
+                    fileData = await _reportService.ExportToExcelAsync(exportData, "EmployeeRanking");
+                    fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                    contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    break;
+            }
+
+            return File(fileData, contentType, fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting employee ranking");
+            TempData["ErrorMessage"] = "Error exporting report. Please try again.";
+            return RedirectToAction(nameof(EmployeeRanking));
+        }
+    }
+
     // GET: Report/Custom
     public async Task<IActionResult> Custom()
     {
@@ -625,7 +444,7 @@ public class ReportController : Controller
         {
             _logger.LogError(ex, "Error exporting report {ReportId}", reportId);
             TempData["ErrorMessage"] = "Error exporting report. Please try again.";
-            return RedirectToAction(nameof(Index));
+            return RedirectToAction(nameof(Custom));
         }
     }
 
@@ -645,88 +464,363 @@ public class ReportController : Controller
         }
     }
 
-    // GET: Report/EmployeeRanking
-public async Task<IActionResult> EmployeeRanking(DateTime? startDate = null, DateTime? endDate = null)
-{
-    try
+    // GET: Report/VerifyTaskConsistency
+    [HttpGet]
+    public async Task<IActionResult> VerifyTaskConsistency(int employeeId, DateTime startDate, DateTime endDate)
     {
-        startDate ??= DateTime.UtcNow.AddMonths(-1);
-        endDate ??= DateTime.UtcNow;
-        
-        var rankings = await _reportService.GetEmployeeRankingAsync(startDate, endDate);
-        
-        ViewBag.StartDate = startDate.Value.ToString("yyyy-MM-dd");
-        ViewBag.EndDate = endDate.Value.ToString("yyyy-MM-dd");
-        ViewBag.TotalEmployees = rankings.Count;
-        ViewBag.AverageScore = rankings.Any() ? Math.Round(rankings.Average(r => r.PerformanceScore), 0) : 0;
-        ViewBag.TopScore = rankings.Any() ? rankings.Max(r => r.PerformanceScore) : 0;
-        
-        return View(rankings);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error generating employee ranking");
-        TempData["ErrorMessage"] = "Error generating ranking report. Please try again.";
-        return View(new List<EmployeeRankingViewModel>());
-    }
-}
+        try
+        {
+            var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(employeeId, startDate, endDate);
 
-// GET: Report/ExportRanking
-public async Task<IActionResult> ExportRanking(DateTime? startDate = null, DateTime? endDate = null, string format = "excel")
-{
-    try
-    {
-        startDate ??= DateTime.UtcNow.AddMonths(-1);
-        endDate ??= DateTime.UtcNow;
-        
-        var rankings = await _reportService.GetEmployeeRankingAsync(startDate, endDate);
-        
-        byte[] fileData;
-        string fileName;
-        string contentType;
-        
-        // Convert to list of dictionaries for export
-        var exportData = rankings.Select(r => new Dictionary<string, object>
-        {
-            ["Rank"] = r.Rank,
-            ["Employee Name"] = r.Name,
-            ["Employee ID"] = r.EmployeeId,
-            ["Position"] = r.Position,
-            ["Department"] = r.Department,
-            ["Performance Score (%)"] = r.PerformanceScore,
-            ["Total Tasks"] = r.TotalTasks,
-            ["Completed Tasks"] = r.CompletedTasks,
-            ["Status"] = r.IsActive ? "Active" : "Inactive"
-        }).ToList();
-        
-        switch (format.ToLower())
-        {
-            case "csv":
-                fileData = await _reportService.ExportToCsvAsync(exportData, "EmployeeRanking");
-                fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-                contentType = "text/csv";
-                break;
-            case "pdf":
-                fileData = await _reportService.ExportToPdfAsync(exportData, "EmployeeRanking");
-                fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
-                contentType = "application/pdf";
-                break;
-            default:
-                fileData = await _reportService.ExportToExcelAsync(exportData, "EmployeeRanking");
-                fileName = $"EmployeeRanking_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
-                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-                break;
+            var employee = await _context.Employees
+                .Include(e => e.BranchAssignments)
+                .FirstOrDefaultAsync(e => e.Id == employeeId);
+
+            if (employee == null)
+                return NotFound();
+
+            var assignedBranchIds = employee.BranchAssignments
+                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                .Select(ba => ba.BranchId)
+                .ToList();
+
+            var dailyTasks = await _context.DailyTasks
+                .Include(dt => dt.TaskItem)
+                .Where(dt => assignedBranchIds.Contains(dt.BranchId) &&
+                             dt.TaskDate.Date >= startDate.Date &&
+                             dt.TaskDate.Date <= endDate.Date)
+                .ToListAsync();
+
+            var taskDetails = new List<object>();
+            foreach (var dt in dailyTasks)
+            {
+                var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt);
+
+                taskDetails.Add(new
+                {
+                    dt.Id,
+                    dt.TaskDate,
+                    dt.TaskItem?.Name,
+                    dt.IsCompleted,
+                    dt.CompletedAt,
+                    Deadline = delayInfo.Deadline,
+                    IsOnTime = delayInfo.IsOnTime,
+                    DelayText = delayInfo.DelayText,
+                    AdjustmentMinutes = dt.AdjustmentMinutes,
+                    dt.AdjustmentReason
+                });
+            }
+
+            return Json(new
+            {
+                employeeName = employee.Name,
+                startDate,
+                endDate,
+                statistics = stats,
+                taskDetails = taskDetails
+            });
         }
-        
-        return File(fileData, contentType, fileName);
+        catch (Exception ex)
+        {
+            return Json(new { error = ex.Message });
+        }
     }
-    catch (Exception ex)
+
+    // GET: Report/ExportTaskReport
+    public async Task<IActionResult> ExportTaskReport(int taskId, DateTime startDate, DateTime endDate, string format = "excel")
     {
-        _logger.LogError(ex, "Error exporting employee ranking");
-        TempData["ErrorMessage"] = "Error exporting report. Please try again.";
-        return RedirectToAction(nameof(EmployeeRanking));
+        try
+        {
+            var report = await _reportService.ExecuteTaskReportAsync(taskId, startDate, endDate);
+            
+            var exportData = new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object>
+                {
+                    ["Task Name"] = report.TaskName,
+                    ["Period"] = $"{startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}",
+                    ["Total Assignments"] = report.TotalAssignments,
+                    ["Completed"] = report.Completed,
+                    ["Completion Rate (%)"] = report.CompletionRate,
+                    ["On Time"] = report.OnTime,
+                    ["On Time Rate (%)"] = report.OnTimeRate,
+                    ["Late"] = report.Late,
+                    ["Pending"] = report.Pending
+                }
+            };
+            
+            foreach (var branch in report.BranchStats ?? new Dictionary<string, BranchTaskStat>())
+            {
+                exportData.Add(new Dictionary<string, object>
+                {
+                    ["Branch"] = branch.Key,
+                    ["Total"] = branch.Value.Total,
+                    ["Completed"] = branch.Value.Completed,
+                    ["Completion Rate (%)"] = branch.Value.CompletionRate
+                });
+            }
+            
+            byte[] fileData;
+            string fileName;
+            string contentType;
+            
+            switch (format.ToLower())
+            {
+                case "csv":
+                    fileData = await _reportService.ExportToCsvAsync(exportData, report.TaskName);
+                    fileName = $"{report.TaskName}_Report_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                    contentType = "text/csv";
+                    break;
+                case "pdf":
+                    fileData = await _reportService.ExportToPdfAsync(exportData, report.TaskName);
+                    fileName = $"{report.TaskName}_Report_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+                    contentType = "application/pdf";
+                    break;
+                default:
+                    fileData = await _reportService.ExportToExcelAsync(exportData, report.TaskName);
+                    fileName = $"{report.TaskName}_Report_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                    contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    break;
+            }
+            
+            return File(fileData, contentType, fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting task report");
+            TempData["ErrorMessage"] = "Error exporting report. Please try again.";
+            return RedirectToAction(nameof(TaskCompletion), new { taskId, startDate, endDate });
+        }
     }
-}
+
+    #endregion
+
+    #region Unified Task Completion (Additional Feature)
+
+    // GET: Report/UnifiedTaskCompletion
+    public async Task<IActionResult> UnifiedTaskCompletion(int? taskId, DateTime? startDate, DateTime? endDate)
+    {
+        try
+        {
+            startDate ??= DateTime.Today.AddMonths(-1);
+            endDate ??= DateTime.Today;
+
+            var tasks = await _taskService.GetAllTasksAsync();
+            
+            var viewModel = new UnifiedTaskCompletionViewModel
+            {
+                TaskId = taskId ?? 0,
+                StartDate = startDate.Value,
+                EndDate = endDate.Value,
+                HasData = false,
+                FilterViewModel = new ReportFilterViewModel
+                {
+                    EntitySelectLabel = "Select Task",
+                    EntityIdName = "taskId",
+                    EntitySelectPlaceholder = "Choose a task...",
+                    EntitySelectItems = tasks.Select(t => new SelectListItem { Value = t.Id.ToString(), Text = t.Name }).ToList(),
+                    SelectedEntityId = taskId,
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    ButtonText = "Generate",
+                    ShowExport = taskId.HasValue && taskId.Value > 0
+                }
+            };
+
+            if (taskId.HasValue && taskId.Value > 0)
+            {
+                await LoadTaskCompletionData(viewModel, taskId.Value, startDate.Value, endDate.Value);
+            }
+
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating unified task completion report");
+            TempData["ErrorMessage"] = $"Error generating report: {ex.Message}";
+            return View(new UnifiedTaskCompletionViewModel());
+        }
+    }
+
+    // GET: Report/ExportUnifiedTaskReport
+    public async Task<IActionResult> ExportUnifiedTaskReport(int taskId, DateTime startDate, DateTime endDate, string format = "excel")
+    {
+        try
+        {
+            var viewModel = new UnifiedTaskCompletionViewModel();
+            await LoadTaskCompletionData(viewModel, taskId, startDate, endDate);
+
+            var exportData = new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object>
+                {
+                    ["Task Name"] = viewModel.TaskName,
+                    ["Period"] = $"{startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}",
+                    ["Total Assignments"] = viewModel.TotalAssignments,
+                    ["Completed"] = viewModel.Completed,
+                    ["Completion Rate (%)"] = viewModel.CompletionRate,
+                    ["On Time"] = viewModel.OnTime,
+                    ["On Time Rate (%)"] = viewModel.OnTimeRate,
+                    ["Late"] = viewModel.Late,
+                    ["Pending"] = viewModel.Pending,
+                    ["Average Completion Time"] = viewModel.AverageCompletionTime?.ToString(@"hh\:mm") ?? "N/A"
+                }
+            };
+
+            byte[] fileData;
+            string fileName = $"TaskReport_{viewModel.TaskName}_{DateTime.Now:yyyyMMdd_HHmmss}";
+            string contentType;
+
+            switch (format.ToLower())
+            {
+                case "csv":
+                    fileData = await _reportService.ExportToCsvAsync(exportData, fileName);
+                    fileName += ".csv";
+                    contentType = "text/csv";
+                    break;
+                default:
+                    fileData = await _reportService.ExportToExcelAsync(exportData, fileName);
+                    fileName += ".xlsx";
+                    contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    break;
+            }
+
+            return File(fileData, contentType, fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting task report");
+            TempData["ErrorMessage"] = "Error exporting report";
+            return RedirectToAction(nameof(UnifiedTaskCompletion), new { taskId, startDate, endDate });
+        }
+    }
+
+    #endregion
+
+    #region Helper Methods for Unified Task Completion
+
+    private async Task LoadTaskCompletionData(UnifiedTaskCompletionViewModel vm, int taskId, DateTime startDate, DateTime endDate)
+    {
+        var task = await _taskService.GetTaskByIdAsync(taskId);
+        if (task == null) return;
+
+        var report = await _reportService.ExecuteTaskReportAsync(taskId, startDate, endDate);
+
+        vm.TaskId = taskId;
+        vm.TaskName = task.Name;
+        vm.Deadline = task.Deadline;
+        vm.IsSameDay = task.IsSameDay;
+        vm.HasData = report.TotalAssignments > 0;
+        vm.TotalAssignments = report.TotalAssignments;
+        vm.Completed = report.Completed;
+        vm.Pending = report.Pending;
+        vm.OnTime = report.OnTime;
+        vm.Late = report.Late;
+        vm.CompletionRate = report.CompletionRate;
+        vm.OnTimeRate = report.OnTimeRate;
+        vm.AverageCompletionTime = report.AverageCompletionTime;
+        vm.FastestCompletion = report.FastestCompletion;
+        vm.SlowestCompletion = report.SlowestCompletion;
+        vm.BranchStats = report.BranchStats;
+        vm.EmployeeStats = report.EmployeeStats;
+        vm.DailyCompletions = report.DailyCompletions;
+
+        // Build Daily Breakdown from the report data
+        vm.DailyBreakdown = new List<DailyTaskBreakdownItem>();
+        
+        // Get daily tasks for detailed breakdown
+        var dailyTasks = await _context.DailyTasks
+            .Include(dt => dt.Branch)
+            .Include(dt => dt.TaskAssignment)
+                .ThenInclude(ta => ta.Employee)
+            .Where(dt => dt.TaskItemId == taskId && 
+                         dt.TaskDate.Date >= startDate.Date && 
+                         dt.TaskDate.Date <= endDate.Date)
+            .OrderByDescending(dt => dt.TaskDate)
+            .Take(50)
+            .ToListAsync();
+
+        foreach (var dt in dailyTasks)
+        {
+            var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt);
+            
+            vm.DailyBreakdown.Add(new DailyTaskBreakdownItem
+            {
+                Date = dt.TaskDate,
+                BranchName = dt.Branch?.Name ?? "Unknown",
+                AssignedTo = dt.TaskAssignment?.Employee?.Name ?? "Unassigned",
+                Status = dt.IsCompleted ? "Completed" : "Pending",
+                IsOnTime = delayInfo.IsOnTime,
+                CompletionTime = dt.CompletedAt?.ToLocalTime().ToString("HH:mm") ?? ""
+            });
+        }
+
+        // Build KPI Cards
+        vm.KpiCards = new List<StatsCardViewModel>
+        {
+            new() { Label = "Total Assignments", Value = vm.TotalAssignments.ToString(), Icon = "fa-calendar-alt", IconBgColor = "bg-blue-100", IconColor = "text-blue-600" },
+            new() { Label = "Completed", Value = vm.Completed.ToString(), Subtext = $"{vm.CompletionRate}% completion", ValueColor = "text-green-600", Icon = "fa-check-circle", IconBgColor = "bg-green-100", IconColor = "text-green-600", ShowProgressBar = true, ProgressValue = vm.CompletionRate, ProgressBarColor = "bg-green-500" },
+            new() { Label = "On Time", Value = vm.OnTime.ToString(), Subtext = $"{vm.OnTimeRate}% of completed", ValueColor = "text-blue-600", Icon = "fa-clock", IconBgColor = "bg-blue-100", IconColor = "text-blue-600", ShowProgressBar = true, ProgressValue = vm.OnTimeRate, ProgressBarColor = "bg-blue-500" },
+            new() { Label = "Pending", Value = vm.Pending.ToString(), ValueColor = "text-yellow-600", Icon = "fa-hourglass-half", IconBgColor = "bg-yellow-100", IconColor = "text-yellow-600" }
+        };
+
+        // Generate insights
+        vm.Insights = new List<string>();
+        vm.Recommendations = new List<string>();
+
+        if (vm.CompletionRate >= 90)
+            vm.Insights.Add($"✅ Excellent completion rate! {vm.CompletionRate}% of assignments completed.");
+        else if (vm.CompletionRate >= 70)
+            vm.Insights.Add($"📈 Good completion rate of {vm.CompletionRate}%. Room for improvement.");
+        else if (vm.CompletionRate > 0)
+            vm.Insights.Add($"⚠️ Low completion rate of {vm.CompletionRate}%. This task needs attention.");
+
+        if (vm.OnTimeRate >= 90)
+            vm.Insights.Add($"⏰ Excellent punctuality! {vm.OnTimeRate}% completed on time.");
+        else if (vm.OnTimeRate >= 70)
+            vm.Insights.Add($"📊 Good punctuality at {vm.OnTimeRate}%.");
+        else if (vm.OnTimeRate > 0)
+            vm.Insights.Add($"⌛ Punctuality needs improvement: {vm.OnTimeRate}% on time.");
+
+        if (vm.BranchStats != null && vm.BranchStats.Any())
+        {
+            var topBranch = vm.BranchStats.OrderByDescending(b => b.Value.CompletionRate).First();
+            vm.Insights.Add($"🏆 Top performing branch: {topBranch.Key} ({topBranch.Value.CompletionRate}%)");
+        }
+
+        if (vm.EmployeeStats != null && vm.EmployeeStats.Any())
+        {
+            var topEmployee = vm.EmployeeStats.OrderByDescending(e => e.Value.CompletionRate).First();
+            vm.Insights.Add($"⭐ Top performer: {topEmployee.Key} ({topEmployee.Value.CompletionRate}%)");
+        }
+
+        // Recommendations
+        if (vm.CompletionRate < 70 && vm.CompletionRate > 0)
+        {
+            vm.Recommendations.Add("• Review why this task isn't being completed consistently");
+            vm.Recommendations.Add("• Consider adjusting deadline or providing additional training");
+        }
+
+        if (vm.OnTimeRate < 70 && vm.Completed > 0)
+        {
+            vm.Recommendations.Add("• Start this task earlier in the day to meet deadlines");
+            vm.Recommendations.Add("• Set reminders 30 minutes before deadline");
+        }
+
+        if (vm.Pending > vm.Completed && vm.Pending > 0)
+        {
+            vm.Recommendations.Add("• Prioritize this task over others when assigned");
+        }
+
+        vm.FooterText = $"Data reflects task \"{task.Name}\" from {startDate:MMM dd, yyyy} to {endDate:MMM dd, yyyy}";
+        
+        vm.FilterViewModel.ShowExport = vm.HasData;
+        vm.FilterViewModel.ExportDataAvailable = vm.HasData;
+    }
+
+    #endregion
+
+    #region Scheduling Actions
 
     // POST: Report/Schedule
     [HttpPost]
@@ -760,14 +854,5 @@ public async Task<IActionResult> ExportRanking(DateTime? startDate = null, DateT
         }
     }
 
-    private string GetScheduleFrequency(string? cronExpression)
-    {
-        return cronExpression switch
-        {
-            "0 9 * * *" => "Daily",
-            "0 9 * * 1" => "Weekly",
-            "0 9 1 * *" => "Monthly",
-            _ => "Custom"
-        };
-    }
+    #endregion
 }

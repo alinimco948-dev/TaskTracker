@@ -1,0 +1,16 @@
+@model int
+@{
+    var (textColor, icon, barColor) = Model >= 90 ? ("text-green-600", "fa-trophy", "#22c55e") :
+                                      Model >= 75 ? ("text-blue-600", "fa-chart-line", "#3b82f6") :
+                                      Model >= 60 ? ("text-yellow-600", "fa-chart-simple", "#eab308") :
+                                      ("text-red-600", "fa-exclamation-triangle", "#ef4444");
+}
+<div class="flex flex-col items-center">
+    <div class="flex items-center gap-1">
+        <i class="fas @icon @textColor text-sm"></i>
+        <span class="font-bold @textColor">@Model%</span>
+    </div>
+    <div class="w-16 mt-1 bg-gray-200 rounded-full h-1.5">
+        <div class="h-1.5 rounded-full" style="width: @Model%; background-color: @barColor"></div>
+    </div>
+</div>

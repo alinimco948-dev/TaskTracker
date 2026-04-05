@@ -1,8 +1,8 @@
 ﻿@model IEnumerable<TaskTracker.Models.ViewModels.EmployeeListViewModel>
+@using TaskTracker.Models.ViewModels
 @{
     ViewData["Title"] = "Employees";
     
-    // Get anti-forgery token for AJAX calls
     var token = "";
     if (Context != null)
     {
@@ -14,7 +14,6 @@
         }
     }
     
-    // Calculate stats
     var totalEmployees = Model.Count();
     var activeEmployees = Model.Count(e => e.IsActive);
     var departments = Model.Select(e => e.Department).Where(d => d != "Unassigned").Distinct().Count();
@@ -33,7 +32,6 @@
         </a>
     </div>
 
-    <!-- Hidden anti-forgery token -->
     <input type="hidden" id="requestVerificationToken" value="@token" />
 
     <!-- Stats Cards -->
@@ -90,7 +88,7 @@
             <div class="flex-1 min-w-[200px]">
                 <div class="relative">
                     <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
-                    <input type="text" id="searchInput" placeholder="Search by name, ID, or position..." 
+                    <input type="text" id="searchInput" placeholder="Search by name or position..." 
                            class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
             </div>
@@ -128,7 +126,6 @@
                 <thead class="bg-gray-50 border-b border-gray-200">
                     <tr>
                         <th class="px-6 py-3 text-left font-semibold text-gray-600">Employee</th>
-                        <th class="px-6 py-3 text-left font-semibold text-gray-600">ID</th>
                         <th class="px-6 py-3 text-left font-semibold text-gray-600">Position</th>
                         <th class="px-6 py-3 text-left font-semibold text-gray-600">Department</th>
                         <th class="px-6 py-3 text-left font-semibold text-gray-600">Current Branch</th>
@@ -140,15 +137,12 @@
                 <tbody class="divide-y divide-gray-200" id="employeeTableBody">
                     @foreach (var employee in Model.OrderBy(e => e.Name))
                     {
-                        var performanceClass = employee.PerformanceScore >= 80 ? "text-green-600" : 
-                                              employee.PerformanceScore >= 60 ? "text-yellow-600" : "text-red-600";
-                        var performanceIcon = employee.PerformanceScore >= 80 ? "fa-trophy" : 
-                                             employee.PerformanceScore >= 60 ? "fa-chart-line" : "fa-exclamation-triangle";
-                        var scoreColor = employee.PerformanceScore >= 80 ? "green" : (employee.PerformanceScore >= 60 ? "yellow" : "red");
+                        var scoreClass = TaskTracker.Models.ViewModels.ViewHelpers.GetScoreColorClass(employee.PerformanceScore);
+                        var scoreIcon = TaskTracker.Models.ViewModels.ViewHelpers.GetScoreIcon(employee.PerformanceScore);
+                        var bgColor = TaskTracker.Models.ViewModels.ViewHelpers.GetScoreBgColor(employee.PerformanceScore);
                         
                         <tr class="hover:bg-gray-50 transition employee-row" 
                             data-name="@employee.Name.ToLower()" 
-                            data-id="@employee.EmployeeId.ToLower()"
                             data-position="@employee.Position.ToLower()"
                             data-department="@employee.Department"
                             data-status="@(employee.IsActive ? "active" : "inactive")"
@@ -156,7 +150,7 @@
                             <td class="px-6 py-4">
                                 <div class="flex items-center space-x-3">
                                     <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">
-                                        @employee.Initials
+                                        @TaskTracker.Models.ViewModels.ViewHelpers.GetInitials(employee.Name)
                                     </div>
                                     <div>
                                         <p class="font-medium text-gray-900">@employee.Name</p>
@@ -164,7 +158,6 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 font-mono text-sm">@employee.EmployeeId</td>
                             <td class="px-6 py-4">@employee.Position</td>
                             <td class="px-6 py-4">
                                 <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">@employee.Department</span>
@@ -195,13 +188,13 @@
                             <td class="px-6 py-4 text-center">
                                 <div class="flex flex-col items-center group relative">
                                     <div class="flex items-center gap-1">
-                                        <i class="fas @performanceIcon @performanceClass text-sm"></i>
-                                        <span class="font-bold @performanceClass" id="score-@employee.Id">@employee.PerformanceScore%</span>
+                                        <i class="fas @scoreIcon @scoreClass text-sm"></i>
+                                        <span class="font-bold @scoreClass">@employee.PerformanceScore%</span>
                                     </div>
                                     <div class="w-16 mt-1 bg-gray-200 rounded-full h-1.5">
-                                        <div class="bg-@scoreColor-500 h-1.5 rounded-full" style="width: @employee.PerformanceScore%"></div>
+                                        <div class="bg-@bgColor-500 h-1.5 rounded-full" style="width: @employee.PerformanceScore%"></div>
                                     </div>
-                                    <!-- Tooltip showing detailed stats -->
+                                    <!-- Tooltip -->
                                     <div class="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 hidden group-hover:block z-10">
                                         <div class="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
                                             <div class="font-semibold mb-1 text-center">@employee.Name</div>
@@ -228,7 +221,7 @@
                                         </div>
                                     </div>
                                 </div>
-                            </td>
+                             </td>
                             <td class="px-6 py-4 text-center">
                                 @if (employee.IsActive)
                                 {
@@ -242,42 +235,23 @@
                                         <i class="fas fa-circle text-red-500 mr-1 text-xs"></i>Inactive
                                     </span>
                                 }
-                            </td>
+                             </td>
                             <td class="px-6 py-4 text-center">
                                 <div class="flex items-center justify-center space-x-2">
-                                    <button onclick="viewDetails(@employee.Id)" 
-                                            class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View Details">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button onclick="editEmployee(@employee.Id)" 
-                                            class="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition" title="Edit">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button onclick="showBranchHistory(@employee.Id, '@employee.Name.Replace("'", "\\'")')" 
-                                            class="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition" title="Branch History">
-                                        <i class="fas fa-history"></i>
-                                    </button>
-                                    <button onclick="assignBranch(@employee.Id, '@employee.Name.Replace("'", "\\'")')" 
-                                            class="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition" title="Assign Branch">
-                                        <i class="fas fa-store"></i>
-                                    </button>
-                                    <button onclick="viewPerformanceReport(@employee.Id)" 
-                                            class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Performance Report">
-                                        <i class="fas fa-chart-bar"></i>
-                                    </button>
-                                    <button onclick="deleteEmployee(@employee.Id, '@employee.Name.Replace("'", "\\'")')" 
-                                            class="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    <button onclick="viewDetails(@employee.Id)" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View Details"><i class="fas fa-eye"></i></button>
+                                    <button onclick="editEmployee(@employee.Id)" class="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition" title="Edit"><i class="fas fa-edit"></i></button>
+                                    <button onclick="showBranchHistory(@employee.Id, '@employee.Name.Replace("'", "\\'")')" class="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition" title="Branch History"><i class="fas fa-history"></i></button>
+                                    <button onclick="assignBranch(@employee.Id, '@employee.Name.Replace("'", "\\'")')" class="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition" title="Assign Branch"><i class="fas fa-store"></i></button>
+                                    <button onclick="viewPerformanceReport(@employee.Id)" class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Performance Report"><i class="fas fa-chart-bar"></i></button>
+                                    <button onclick="deleteEmployee(@employee.Id, '@employee.Name.Replace("'", "\\'")')" class="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><i class="fas fa-trash"></i></button>
                                 </div>
-                            </td>
+                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
         
-        <!-- Empty State -->
         @if (!Model.Any())
         {
             <div class="text-center py-12">
@@ -345,22 +319,18 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-    // ========== Navigation Functions ==========
-    function viewDetails(id) {
-        window.location.href = '@Url.Action("Details", "Employee")/' + id;
-    }
+    // Navigation Functions
+    function viewDetails(id) { window.location.href = '@Url.Action("Details", "Employee")/' + id; }
+    function editEmployee(id) { window.location.href = '@Url.Action("Edit", "Employee")/' + id; }
+    function viewPerformanceReport(id) { window.location.href = '@Url.Action("EmployeePerformance", "Report")?employeeId=' + id; }
 
-    function editEmployee(id) {
-        window.location.href = '@Url.Action("Edit", "Employee")/' + id;
-    }
+    // Branch Assignment Functions
+    let currentEmployeeId = null;
+    let currentEmployeeName = null;
 
-    function viewPerformanceReport(id) {
-        window.location.href = '@Url.Action("EmployeePerformance", "Report")?employeeId=' + id;
-    }
-
-    // ========== Branch Assignment Functions ==========
     function assignBranch(employeeId, employeeName) {
-        $('#branchEmployeeId').val(employeeId);
+        currentEmployeeId = employeeId;
+        currentEmployeeName = employeeName;
         $('#branchModalTitle').text('Assign Branch to ' + employeeName);
         $('#branchModal').removeClass('hidden').addClass('flex');
     }
@@ -369,32 +339,20 @@
         $('#branchModal').removeClass('flex').addClass('hidden');
         $('#branchSelect').val('');
         $('#assignmentStartDate').val(new Date().toISOString().split('T')[0]);
+        currentEmployeeId = null;
     }
 
     function saveBranchAssignment() {
-        const employeeId = $('#branchEmployeeId').val();
         const branchId = $('#branchSelect').val();
         const startDate = $('#assignmentStartDate').val();
         const token = $('#requestVerificationToken').val();
 
-        if (!branchId) {
-            showNotification('Please select a branch', 'error');
-            return;
-        }
-
-        if (!startDate) {
-            showNotification('Please select a start date', 'error');
-            return;
-        }
+        if (!branchId) { showNotification('Please select a branch', 'error'); return; }
 
         $.ajax({
             url: '@Url.Action("AssignBranch", "Employee")',
             type: 'POST',
-            data: {
-                employeeId: employeeId,
-                branchId: branchId,
-                startDate: startDate
-            },
+            data: { employeeId: currentEmployeeId, branchId: branchId, startDate: startDate },
             headers: { 'RequestVerificationToken': token },
             success: function(response) {
                 if (response.success) {
@@ -405,18 +363,11 @@
                     showNotification(response.message, 'error');
                 }
             },
-            error: function(xhr) {
-                var errorMsg = 'Error assigning branch';
-                try {
-                    var response = JSON.parse(xhr.responseText);
-                    errorMsg = response.message || errorMsg;
-                } catch(e) {}
-                showNotification(errorMsg, 'error');
-            }
+            error: function() { showNotification('Error assigning branch', 'error'); }
         });
     }
 
-    // ========== Branch History Functions ==========
+    // Branch History Functions
     function showBranchHistory(employeeId, employeeName) {
         $('#branchHistoryTitle').text('Branch History - ' + employeeName);
         $('#branchHistoryModal').removeClass('hidden').addClass('flex');
@@ -425,94 +376,54 @@
             url: '@Url.Action("GetBranchHistory", "Employee")',
             type: 'GET',
             data: { id: employeeId },
-            success: function(data) {
-                displayBranchHistory(data);
-            },
-            error: function() {
-                $('#branchHistoryContent').html(`
-                    <div class="text-center py-8">
-                        <i class="fas fa-exclamation-circle text-red-500 text-3xl mb-3"></i>
-                        <p class="text-gray-500">Error loading branch history</p>
-                    </div>
-                `);
-            }
+            success: function(data) { displayBranchHistory(data); },
+            error: function() { $('#branchHistoryContent').html('<div class="text-center py-8"><i class="fas fa-exclamation-circle text-red-500 text-3xl mb-3"></i><p class="text-gray-500">Error loading branch history</p></div>'); }
         });
     }
 
     function displayBranchHistory(history) {
         if (!history || history.length === 0) {
-            $('#branchHistoryContent').html(`
-                <div class="text-center py-8">
-                    <i class="fas fa-store text-gray-300 text-3xl mb-3"></i>
-                    <p class="text-gray-500">No branch assignments found</p>
-                </div>
-            `);
+            $('#branchHistoryContent').html('<div class="text-center py-8"><i class="fas fa-store text-gray-300 text-3xl mb-3"></i><p class="text-gray-500">No branch assignments found</p></div>');
             return;
         }
-
-        var html = `
-            <div class="space-y-3">
-                <div class="grid grid-cols-4 gap-4 mb-2 pb-2 border-b font-semibold text-gray-700">
-                    <div>Branch</div>
-                    <div>Start Date</div>
-                    <div>End Date</div>
-                    <div>Duration</div>
-                </div>
-        `;
-        
+        var html = '<div class="space-y-3"><div class="grid grid-cols-4 gap-4 mb-2 pb-2 border-b font-semibold text-gray-700"><div>Branch</div><div>Start Date</div><div>End Date</div><div>Duration</div></div>';
         for (var i = 0; i < history.length; i++) {
             var item = history[i];
             var startDate = new Date(item.startDate).toLocaleDateString();
             var endDate = item.endDate ? new Date(item.endDate).toLocaleDateString() : 'Present';
-            html += `
-                <div class="grid grid-cols-4 gap-4 py-2 hover:bg-gray-50 rounded">
-                    <div class="font-medium">${item.branchName || 'Unknown'}</div>
-                    <div>${startDate}</div>
-                    <div>${endDate}</div>
-                    <div>${item.duration} days</div>
-                </div>
-            `;
+            html += `<div class="grid grid-cols-4 gap-4 py-2 hover:bg-gray-50 rounded"><div class="font-medium">${escapeHtml(item.branchName || 'Unknown')}</div><div>${startDate}</div><div>${endDate}</div><div>${item.duration} days</div></div>`;
         }
-        
-        html += `</div>`;
+        html += '</div>';
         $('#branchHistoryContent').html(html);
     }
 
     function closeBranchHistoryModal() {
         $('#branchHistoryModal').removeClass('flex').addClass('hidden');
-        $('#branchHistoryContent').html(`
-            <div class="text-center py-8">
-                <i class="fas fa-spinner fa-spin text-purple-600 text-2xl"></i>
-                <p class="mt-2 text-gray-500">Loading history...</p>
-            </div>
-        `);
+        $('#branchHistoryContent').html('<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-purple-600 text-2xl"></i><p class="mt-2 text-gray-500">Loading history...</p></div>');
     }
 
-    // ========== Delete Employee ==========
+    function escapeHtml(text) {
+        if (!text) return text;
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Delete Employee
     function deleteEmployee(id, name) {
         if (confirm('Are you sure you want to delete ' + name + '?')) {
-            var token = $('#requestVerificationToken').val();
-            
             $.ajax({
                 url: '@Url.Action("Delete", "Employee")/' + id,
                 type: 'POST',
-                headers: { 'RequestVerificationToken': token },
+                headers: { 'RequestVerificationToken': $('#requestVerificationToken').val() },
                 success: function(response) {
-                    if (response.success) {
-                        showNotification(response.message, 'success');
-                        setTimeout(function() { location.reload(); }, 1500);
-                    } else {
-                        showNotification(response.message, 'error');
-                    }
+                    if (response.success) { showNotification(response.message, 'success'); setTimeout(function() { location.reload(); }, 1500); }
+                    else { showNotification(response.message, 'error'); }
                 },
-                error: function() {
-                    showNotification('Error deleting employee', 'error');
-                }
+                error: function() { showNotification('Error deleting employee', 'error'); }
             });
         }
     }
 
-    // ========== Filter Functions ==========
+    // Filter Functions
     function filterTable() {
         var searchTerm = $('#searchInput').val().toLowerCase();
         var department = $('#departmentFilter').val();
@@ -520,26 +431,17 @@
 
         $('#employeeTableBody tr').each(function() {
             var name = $(this).data('name') || '';
-            var employeeId = $(this).data('id') || '';
             var position = $(this).data('position') || '';
             var employeeDepartment = $(this).data('department') || '';
             var employeeStatus = $(this).data('status') || '';
 
-            var matchesSearch = searchTerm === '' || 
-                name.indexOf(searchTerm) !== -1 || 
-                employeeId.indexOf(searchTerm) !== -1 || 
-                position.indexOf(searchTerm) !== -1;
-            
+            var matchesSearch = searchTerm === '' || name.indexOf(searchTerm) !== -1 || position.indexOf(searchTerm) !== -1;
             var matchesDepartment = department === '' || employeeDepartment === department;
             var matchesStatus = status === '' || employeeStatus === status;
 
-            if (matchesSearch && matchesDepartment && matchesStatus) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
+            if (matchesSearch && matchesDepartment && matchesStatus) { $(this).show(); }
+            else { $(this).hide(); }
         });
-
         updateStats();
         updateDepartmentFilter();
     }
@@ -553,65 +455,33 @@
         
         visibleRows.each(function() {
             var $row = $(this);
-            var status = $row.data('status');
+            if ($row.data('status') === 'active') active++;
             var department = $row.data('department');
-            var scoreText = $row.find('td:eq(5) .font-bold').text();
-            var score = parseInt(scoreText) || 0;
-            
-            // Count active employees
-            if (status === 'active') {
-                active++;
-            }
-            
-            // Collect unique departments (excluding 'Unassigned' or empty)
-            if (department && department !== 'Unassigned' && department !== '') {
-                uniqueDepartments.add(department);
-            }
-            
-            // Sum scores for average
-            totalScore += score;
+            if (department && department !== 'Unassigned' && department !== '') uniqueDepartments.add(department);
+            var scoreText = $row.find('td:eq(4) .font-bold').text();
+            totalScore += parseInt(scoreText) || 0;
         });
         
-        var avgScore = total > 0 ? Math.round(totalScore / total) : 0;
-        var departmentCount = uniqueDepartments.size;
-        
-        // Update the stats display
         $('#totalEmployees').text(total);
         $('#activeEmployees').text(active);
-        $('#departmentCount').text(departmentCount);
-        $('#avgPerformance').text(avgScore + '%');
-        
-        // Log for debugging
-        console.log('Stats updated - Total:', total, 'Active:', active, 'Departments:', departmentCount, 'Avg Score:', avgScore);
+        $('#departmentCount').text(uniqueDepartments.size);
+        $('#avgPerformance').text(total > 0 ? Math.round(totalScore / total) + '%' : '0%');
     }
 
     function updateDepartmentFilter() {
         var visibleRows = $('#employeeTableBody tr:visible');
         var uniqueDepartments = new Set();
-        
         visibleRows.each(function() {
             var department = $(this).data('department');
-            if (department && department !== 'Unassigned' && department !== '') {
-                uniqueDepartments.add(department);
-            }
+            if (department && department !== 'Unassigned' && department !== '') uniqueDepartments.add(department);
         });
         
         var currentValue = $('#departmentFilter').val();
         var $filter = $('#departmentFilter');
-        
-        // Clear and rebuild options
         $filter.empty();
         $filter.append('<option value="">All Departments</option>');
-        
-        // Sort departments alphabetically
-        Array.from(uniqueDepartments).sort().forEach(function(dept) {
-            $filter.append('<option value="' + dept + '">' + dept + '</option>');
-        });
-        
-        // Restore previously selected value if it still exists
-        if (currentValue && uniqueDepartments.has(currentValue)) {
-            $filter.val(currentValue);
-        }
+        Array.from(uniqueDepartments).sort().forEach(function(dept) { $filter.append('<option value="' + dept + '">' + dept + '</option>'); });
+        if (currentValue && uniqueDepartments.has(currentValue)) $filter.val(currentValue);
     }
 
     function resetFilters() {
@@ -622,83 +492,29 @@
         showNotification('Filters reset', 'info');
     }
 
-    // ========== Notification Function ==========
     function showNotification(message, type) {
-        var colors = {
-            success: 'bg-green-500',
-            error: 'bg-red-500',
-            info: 'bg-blue-500',
-            warning: 'bg-yellow-500'
-        };
-        
+        var colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500', warning: 'bg-yellow-500' };
         $('.custom-notification').remove();
         var notification = $('<div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ' + colors[type] + ' animate-slide-in flex items-center">' +
-            '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle') + ' mr-2"></i>' +
-            '<span>' + message + '</span>' +
-            '</div>');
-        
+            '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle') + ' mr-2"></i><span>' + escapeHtml(message) + '</span></div>');
         $('body').append(notification);
-        setTimeout(function() { 
-            notification.fadeOut(300, function() { $(this).remove(); }); 
-        }, 3000);
+        setTimeout(function() { notification.fadeOut(300, function() { $(this).remove(); }); }, 3000);
     }
 
-    // ========== Document Ready ==========
     $(document).ready(function() {
-        console.log('Employee index page loaded');
-        
-        // Setup event listeners
         $('#searchInput').on('keyup', filterTable);
         $('#departmentFilter').on('change', filterTable);
         $('#statusFilter').on('change', filterTable);
-        
-        // Close modals on escape key
-        $(document).keydown(function(e) {
-            if (e.key === 'Escape') {
-                closeBranchModal();
-                closeBranchHistoryModal();
-            }
-        });
-        
-        // Close modals when clicking outside
-        $(window).click(function(e) {
-            if ($(e.target).hasClass('fixed')) {
-                closeBranchModal();
-                closeBranchHistoryModal();
-            }
-        });
+        $(document).keydown(function(e) { if (e.key === 'Escape') { closeBranchModal(); closeBranchHistoryModal(); } });
+        $(window).click(function(e) { if ($(e.target).hasClass('fixed')) { closeBranchModal(); closeBranchHistoryModal(); } });
+        updateStats();
     });
 </script>
 
 <style>
-    .animate-slide-in {
-        animation: slideIn 0.3s ease-out;
-    }
-    
-    @@keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    .employee-row {
-        transition: background-color 0.2s ease;
-    }
-    
-    .employee-row:hover {
-        background-color: #f9fafb;
-    }
-    
-    #branchModal, #branchHistoryModal {
-        backdrop-filter: blur(4px);
-    }
-    
-    .group:hover .group-hover\:block {
-        display: block !important;
-    }
+    .animate-slide-in { animation: slideIn 0.3s ease-out; }
+    @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .employee-row:hover { background-color: #f9fafb; }
+    #branchModal, #branchHistoryModal { backdrop-filter: blur(4px); }
+    .group:hover .group-hover\:block { display: block !important; }
 </style>

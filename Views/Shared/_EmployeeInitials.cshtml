@@ -1,0 +1,10 @@
+@model string
+@{
+    var initials = string.IsNullOrWhiteSpace(Model) ? "?" : 
+        Model.Split(' ', StringSplitOptions.RemoveEmptyEntries) is var parts && parts.Length >= 2 
+        ? (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper() 
+        : parts[0][0].ToString().ToUpper();
+}
+<div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+    @initials
+</div>

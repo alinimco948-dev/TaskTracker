@@ -45,7 +45,6 @@ public class BranchController : Controller
             var totalEmployees = (await _employeeService.GetAllEmployeesAsync()).Count;
             ViewBag.TotalEmployees = totalEmployees;
 
-            // Calculate average completion rate
             var completionRates = await _branchService.GetBranchCompletionRatesAsync(DateTime.Today);
             var avgCompletion = completionRates.Values.Any() ? completionRates.Values.Average() : 0;
             ViewBag.CompletionRate = Math.Round(avgCompletion, 1);
@@ -55,6 +54,7 @@ public class BranchController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading branch index");
+            TempData["ErrorMessage"] = "Error loading branches. Please try again.";
             return View(new List<BranchListViewModel>());
         }
     }
@@ -71,6 +71,7 @@ public class BranchController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading create form");
+            TempData["ErrorMessage"] = "Error loading form. Please try again.";
             return View(new BranchViewModel());
         }
     }
@@ -84,8 +85,20 @@ public class BranchController : Controller
         {
             try
             {
+                // Check for duplicate branch name
+                var existingBranch = await _context.Branches
+                    .FirstOrDefaultAsync(b => b.Name.ToLower() == model.Name.ToLower());
+                
+                if (existingBranch != null)
+                {
+                    ModelState.AddModelError("Name", "A branch with this name already exists");
+                    ViewBag.Departments = await _departmentService.GetAllDepartmentsAsync();
+                    ViewBag.Tasks = await _taskService.GetAllTasksAsync();
+                    return View(model);
+                }
+
                 await _branchService.CreateBranchAsync(model);
-                TempData["SuccessMessage"] = "Branch created successfully!";
+                TempData["SuccessMessage"] = $"Branch '{model.Name}' created successfully!";
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
@@ -118,7 +131,8 @@ public class BranchController : Controller
                 Email = branch.Email ?? string.Empty,
                 DepartmentId = branch.DepartmentId,
                 Notes = branch.Notes ?? string.Empty,
-                IsActive = branch.IsActive
+                IsActive = branch.IsActive,
+                HiddenTaskIds = await GetTaskIdsFromNamesAsync(branch.HiddenTasks)
             };
 
             ViewBag.Departments = await _departmentService.GetAllDepartmentsAsync();
@@ -143,8 +157,21 @@ public class BranchController : Controller
         {
             try
             {
+                // Check for duplicate branch name (excluding current branch)
+                var existingBranch = await _context.Branches
+                    .FirstOrDefaultAsync(b => b.Name.ToLower() == model.Name.ToLower() && b.Id != model.Id);
+                
+                if (existingBranch != null)
+                {
+                    ModelState.AddModelError("Name", "A branch with this name already exists");
+                    ViewBag.Departments = await _departmentService.GetAllDepartmentsAsync();
+                    ViewBag.Tasks = await _taskService.GetAllTasksAsync();
+                    ViewBag.HiddenTaskNames = await GetHiddenTaskNamesForBranchAsync(model.Id);
+                    return View(model);
+                }
+
                 await _branchService.UpdateBranchAsync(model);
-                TempData["SuccessMessage"] = "Branch updated successfully!";
+                TempData["SuccessMessage"] = $"Branch '{model.Name}' updated successfully!";
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
@@ -156,6 +183,7 @@ public class BranchController : Controller
 
         ViewBag.Departments = await _departmentService.GetAllDepartmentsAsync();
         ViewBag.Tasks = await _taskService.GetAllTasksAsync();
+        ViewBag.HiddenTaskNames = await GetHiddenTaskNamesForBranchAsync(model.Id);
         return View(model);
     }
 
@@ -182,10 +210,25 @@ public class BranchController : Controller
     {
         try
         {
+            var branch = await _context.Branches.FindAsync(id);
+            if (branch == null)
+            {
+                return Json(new { success = false, message = "Branch not found" });
+            }
+
+            // Check if branch has active assignments
+            var hasActiveAssignments = await _context.BranchAssignments
+                .AnyAsync(ba => ba.BranchId == id && ba.EndDate == null);
+            
+            if (hasActiveAssignments)
+            {
+                return Json(new { success = false, message = "Cannot delete branch with active employee assignments. Please end all assignments first." });
+            }
+
             var result = await _branchService.DeleteBranchAsync(id);
             if (result)
             {
-                return Json(new { success = true, message = "Branch deleted successfully" });
+                return Json(new { success = true, message = $"Branch '{branch.Name}' deleted successfully" });
             }
             return Json(new { success = false, message = "Error deleting branch" });
         }
@@ -203,13 +246,30 @@ public class BranchController : Controller
     {
         try
         {
-            _logger.LogInformation($"Assigning employee {employeeId} to branch {branchId} starting {startDate}");
+            var branch = await _context.Branches.FindAsync(branchId);
+            var employee = await _context.Employees.FindAsync(employeeId);
+            
+            if (branch == null)
+                return Json(new { success = false, message = "Branch not found" });
+            if (employee == null)
+                return Json(new { success = false, message = "Employee not found" });
+
+            // Check if already assigned
+            var existingAssignment = await _context.BranchAssignments
+                .FirstOrDefaultAsync(ba => ba.BranchId == branchId && 
+                                           ba.EmployeeId == employeeId && 
+                                           ba.EndDate == null);
+
+            if (existingAssignment != null)
+            {
+                return Json(new { success = false, message = $"{employee.Name} is already assigned to {branch.Name}" });
+            }
 
             var result = await _branchService.AssignEmployeeAsync(branchId, employeeId, startDate);
 
             if (result)
             {
-                return Json(new { success = true, message = "Employee assigned successfully" });
+                return Json(new { success = true, message = $"Successfully assigned {employee.Name} to {branch.Name}" });
             }
             return Json(new { success = false, message = "Failed to assign employee" });
         }
@@ -227,10 +287,18 @@ public class BranchController : Controller
     {
         try
         {
+            var assignment = await _context.BranchAssignments
+                .Include(ba => ba.Employee)
+                .Include(ba => ba.Branch)
+                .FirstOrDefaultAsync(ba => ba.Id == id);
+            
+            if (assignment == null)
+                return Json(new { success = false, message = "Assignment not found" });
+
             var result = await _branchService.EndAssignmentAsync(id);
             if (result)
             {
-                return Json(new { success = true, message = "Assignment ended successfully" });
+                return Json(new { success = true, message = $"Ended assignment for {assignment.Employee?.Name} at {assignment.Branch?.Name}" });
             }
             return Json(new { success = false, message = "Failed to end assignment" });
         }
@@ -252,9 +320,11 @@ public class BranchController : Controller
             {
                 h.Id,
                 EmployeeName = h.Employee?.Name ?? "Unknown",
+                EmployeeId = h.Employee?.EmployeeId ?? "N/A",
                 StartDate = h.StartDate.ToString("yyyy-MM-dd"),
                 EndDate = h.EndDate?.ToString("yyyy-MM-dd"),
-                IsActive = h.EndDate == null
+                IsActive = h.EndDate == null,
+                Duration = h.EndDate.HasValue ? (h.EndDate.Value - h.StartDate).Days : (DateTime.Today - h.StartDate).Days
             });
 
             return Json(result);
@@ -273,14 +343,11 @@ public class BranchController : Controller
     {
         try
         {
-            _logger.LogInformation($"Received {updates?.Count ?? 0} visibility updates");
-
             if (updates == null || !updates.Any())
             {
                 return Json(new { success = false, message = "No updates received" });
             }
 
-            // Group updates by branch
             var branchGroups = updates.GroupBy(u => u.BranchId);
             int updatedCount = 0;
 
@@ -289,36 +356,23 @@ public class BranchController : Controller
                 var branchId = group.Key;
                 var branch = await _context.Branches.FindAsync(branchId);
 
-                if (branch == null)
-                {
-                    _logger.LogWarning($"Branch {branchId} not found");
-                    continue;
-                }
+                if (branch == null) continue;
 
-                // Get all task names
                 var allTasks = await _context.TaskItems
                     .Where(t => t.IsActive)
                     .Select(t => t.Name)
                     .ToListAsync();
 
-                // Determine which tasks should be visible (checked = visible)
+                // Visible tasks are those with Visible = true
                 var visibleTasks = group.Where(u => u.Visible).Select(u => u.TaskName).ToList();
-
-                // Hidden tasks are all tasks minus visible tasks
                 var hiddenTasks = allTasks.Except(visibleTasks).ToList();
 
-                _logger.LogInformation($"Branch {branchId}: {hiddenTasks.Count} hidden tasks");
-
-                // Update the branch's hidden tasks
                 branch.HiddenTasks = hiddenTasks;
                 branch.UpdatedAt = DateTime.UtcNow;
-
                 updatedCount++;
             }
 
             await _context.SaveChangesAsync();
-            _logger.LogInformation($"Saved visibility for {updatedCount} branches");
-
             return Json(new { success = true, message = $"Visibility updated for {updatedCount} branches" });
         }
         catch (Exception ex)
@@ -328,64 +382,17 @@ public class BranchController : Controller
         }
     }
 
-    // POST: Branch/UpdateSingleTaskVisibility (optional - for single task updates)
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateSingleTaskVisibility(int branchId, string taskName, bool isVisible)
-    {
-        try
-        {
-            var branch = await _context.Branches.FindAsync(branchId);
-            if (branch == null)
-            {
-                return Json(new { success = false, message = "Branch not found" });
-            }
-
-            var hiddenTasks = branch.HiddenTasks ?? new List<string>();
-
-            if (isVisible)
-            {
-                // Task should be visible - remove from hidden list
-                if (hiddenTasks.Contains(taskName))
-                {
-                    hiddenTasks.Remove(taskName);
-                }
-            }
-            else
-            {
-                // Task should be hidden - add to hidden list if not already there
-                if (!hiddenTasks.Contains(taskName))
-                {
-                    hiddenTasks.Add(taskName);
-                }
-            }
-
-            branch.HiddenTasks = hiddenTasks;
-            branch.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation($"Updated visibility for branch {branchId}, task {taskName}: {(isVisible ? "visible" : "hidden")}");
-
-            return Json(new { success = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error updating single task visibility");
-            return Json(new { success = false, message = "Error updating visibility" });
-        }
-    }
-
     // GET: Branch/GetAvailableEmployees
     [HttpGet]
     public async Task<IActionResult> GetAvailableEmployees(int branchId)
     {
         try
         {
-            // Get employees not currently assigned to any branch
+            // Get employees not currently assigned to ANY branch
             var assignedEmployeeIds = await _context.BranchAssignments
                 .Where(ba => ba.EndDate == null)
                 .Select(ba => ba.EmployeeId)
+                .Distinct()
                 .ToListAsync();
 
             var availableEmployees = await _context.Employees
@@ -395,6 +402,7 @@ public class BranchController : Controller
                 {
                     e.Id,
                     e.Name,
+                    e.EmployeeId,
                     e.Position,
                     Initials = GetInitials(e.Name)
                 })
@@ -409,7 +417,52 @@ public class BranchController : Controller
         }
     }
 
-    // Helper method to get initials
+ // GET: Branch/GetBranchEmployees
+[HttpGet]
+public async Task<IActionResult> GetBranchEmployees(int branchId)
+{
+    try
+    {
+        var employees = await _context.BranchAssignments
+            .Include(ba => ba.Employee)
+            .Where(ba => ba.BranchId == branchId && ba.EndDate == null)
+            .Select(ba => new
+            {
+                AssignmentId = ba.Id,
+                EmployeeId = ba.EmployeeId,
+                EmployeeName = ba.Employee != null ? ba.Employee.Name : "Unknown",
+                EmployeeNumber = ba.Employee != null ? ba.Employee.EmployeeId : "N/A",
+                Position = ba.Employee != null ? ba.Employee.Position : "N/A",
+                AssignedSince = ba.StartDate,
+                Initials = ba.Employee != null ? GetInitials(ba.Employee.Name) : "?"
+            })
+            .ToListAsync();
+
+        return Json(employees);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error getting branch employees");
+        return Json(new List<object>());
+    }
+}
+    // Helper Methods
+    private async Task<List<int>> GetTaskIdsFromNamesAsync(List<string> taskNames)
+    {
+        if (taskNames == null || !taskNames.Any()) return new List<int>();
+        
+        return await _context.TaskItems
+            .Where(t => taskNames.Contains(t.Name))
+            .Select(t => t.Id)
+            .ToListAsync();
+    }
+
+    private async Task<List<string>> GetHiddenTaskNamesForBranchAsync(int branchId)
+    {
+        var branch = await _context.Branches.FindAsync(branchId);
+        return branch?.HiddenTasks ?? new List<string>();
+    }
+
     private string GetInitials(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "?";

@@ -82,11 +82,12 @@ public class TaskListViewModel
     public int? DurationDays { get; set; }
 
     // Read-only computed properties
-    public string FormattedDeadline => Deadline.ToString(@"hh\:mm");
+    public string FormattedDeadline => Deadline.ToString(@"h\:mm tt");
     public string Type => IsSameDay ? "Same Day" : "Next Day";
     public string TypeColor => IsSameDay ? "blue" : "purple";
     public string Status => IsActive ? "Active" : "Inactive";
     public string StatusColor => IsActive ? "green" : "red";
+   
     public string ExecutionTypeDisplay => GetExecutionTypeDisplay();
     public string ScheduleInfo => GetScheduleInfo();
 

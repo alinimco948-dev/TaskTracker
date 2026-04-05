@@ -1,110 +1,256 @@
 ﻿@model TaskTracker.Models.ViewModels.DepartmentDetailsViewModel
 @{
     ViewData["Title"] = "Department Details";
+    
+    var initials = "?";
+    if (!string.IsNullOrEmpty(Model.Name))
+    {
+        var nameParts = Model.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (nameParts.Length == 1)
+            initials = nameParts[0].Substring(0, 1).ToUpper();
+        else if (nameParts.Length >= 2)
+            initials = (nameParts[0][0].ToString() + nameParts[^1][0].ToString()).ToUpper();
+    }
 }
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Left Column - Department Info Card -->
     <div class="lg:col-span-1">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div class="text-center mb-4">
-                <div class="w-20 h-20 mx-auto rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                    <i class="fas fa-building text-3xl text-blue-600"></i>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden sticky top-4">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-5">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-white">Department Information</h3>
+                    <div class="px-2 py-1 bg-white/20 rounded-lg text-white text-xs font-medium">
+                        ID: @Model.Id
+                    </div>
                 </div>
-                <h2 class="text-xl font-bold">@Model.Name</h2>
-                <p class="text-gray-500">@Model.Code</p>
-                <div class="mt-2">
+            </div>
+
+            <div class="p-6 text-center border-b">
+                <div class="w-24 h-24 mx-auto rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 flex items-center justify-center mb-4 shadow-inner">
+                    <span class="text-3xl font-bold text-blue-700">@initials</span>
+                </div>
+                <h2 class="text-xl font-bold text-gray-900">@Model.Name</h2>
+                <p class="text-gray-500 text-sm">@Model.Code</p>
+                <div class="mt-3">
                     @if (Model.IsActive)
                     {
-                        <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">Active</span>
+                        <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                            <i class="fas fa-circle text-green-500 mr-1 text-[8px]"></i>Active
+                        </span>
                     }
                     else
                     {
-                        <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs">Inactive</span>
+                        <span class="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                            <i class="fas fa-circle text-red-500 mr-1 text-[8px]"></i>Inactive
+                        </span>
                     }
                 </div>
             </div>
-            <div class="border-t pt-4">
-                <h3 class="font-semibold mb-2">Description</h3>
-                <p class="text-sm text-gray-600">@Model.Description</p>
+
+            <div class="p-5 border-b">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                    <i class="fas fa-align-left text-blue-500 mr-2 text-xs"></i>
+                    Description
+                </h4>
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">@(!string.IsNullOrEmpty(Model.Description) ? Model.Description : "No description provided")</p>
+                </div>
             </div>
-            <div class="border-t pt-4 mt-4">
-                <h3 class="font-semibold mb-2">Statistics</h3>
-                <div class="space-y-2">
+
+            <div class="p-5 border-b">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                    <i class="fas fa-calendar-alt text-blue-500 mr-2 text-xs"></i>
+                    Additional Info
+                </h4>
+                <div class="space-y-2 text-sm">
                     <div class="flex justify-between">
-                        <span class="text-gray-600">Created:</span>
-                        <span>@Model.CreatedAt.ToString("MMM dd, yyyy")</span>
+                        <span class="text-gray-500">Created:</span>
+                        <span class="font-medium text-gray-700">@Model.CreatedAt.ToString("MMM dd, yyyy")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Last Updated:</span>
+                        <span class="font-medium text-gray-700">@Model.CreatedAt.ToString("MMM dd, yyyy")</span>
                     </div>
                 </div>
+            </div>
+
+            <div class="p-5 bg-gray-50 flex space-x-2">
+                <a href="@Url.Action("Edit", new { id = Model.Id })" class="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition text-center flex items-center justify-center gap-2">
+                    <i class="fas fa-edit"></i> Edit
+                </a>
+                <a href="@Url.Action("Index")" class="flex-1 px-4 py-2.5 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg text-sm font-medium transition text-center flex items-center justify-center gap-2">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
             </div>
         </div>
     </div>
 
+    <!-- Right Column - Stats and Data -->
     <div class="lg:col-span-2 space-y-6">
-        <div class="grid grid-cols-2 gap-4">
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-2xl font-bold text-blue-600">@Model.BranchCount</div>
-                <div class="text-sm text-gray-500">Total Branches</div>
+        <!-- Quick Stats Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Total Branches</p>
+                        <p class="text-3xl font-bold text-blue-600">@Model.BranchCount</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-store text-blue-600 text-xl"></i>
+                    </div>
+                </div>
             </div>
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-2xl font-bold text-green-600">@Model.EmployeeCount</div>
-                <div class="text-sm text-gray-500">Total Employees</div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Total Employees</p>
+                        <p class="text-3xl font-bold text-green-600">@Model.EmployeeCount</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-users text-green-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Completion Rate</p>
+                        <p class="text-3xl font-bold text-purple-600">@Model.OverallCompletionRate%</p>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-chart-line text-purple-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+                    <div class="bg-purple-500 h-1.5 rounded-full" style="width: @Model.OverallCompletionRate%"></div>
+                </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="p-4 border-b border-gray-200">
-                <h3 class="font-semibold">Branches</h3>
+        <!-- Branches Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-white">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-store text-blue-600 mr-2"></i>
+                    Branches in this Department
+                    <span class="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">@Model.BranchCount</span>
+                </h3>
+                <p class="text-xs text-gray-500 mt-0.5">All branches belonging to @Model.Name</p>
             </div>
-            <div class="p-4">
+            <div class="p-5">
                 @if (Model.Branches.Any())
                 {
-                    <div class="grid grid-cols-1 gap-2">
+                    <div class="grid grid-cols-1 gap-3">
                         @foreach (var branch in Model.Branches)
                         {
-                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                <div>
-                                    <div class="font-medium">@branch.Name</div>
-                                    <div class="text-xs text-gray-500">@branch.Address</div>
+                            var barColor = branch.CompletionRate >= 80 ? "#22c55e" : branch.CompletionRate >= 60 ? "#eab308" : "#ef4444";
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-blue-50 transition group">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <i class="fas fa-store text-blue-600 text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <a href="@Url.Action("Details", "Branch", new { id = branch.Id })" class="font-medium text-gray-800 hover:text-blue-600 transition">
+                                            @branch.Name
+                                        </a>
+                                        <div class="text-xs text-gray-500">@branch.Address</div>
+                                    </div>
                                 </div>
-                                <div class="text-sm text-green-600">@branch.CompletionRate%</div>
+                                <div class="text-right">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-bold" style="color: @barColor">@branch.CompletionRate%</span>
+                                        <div class="w-16 bg-gray-200 rounded-full h-1.5">
+                                            <div class="h-1.5 rounded-full" style="width: @branch.CompletionRate%; background-color: @barColor"></div>
+                                        </div>
+                                    </div>
+                                    <a href="@Url.Action("Details", "Branch", new { id = branch.Id })" class="text-xs text-blue-500 hover:text-blue-700 opacity-0 group-hover:opacity-100 transition">
+                                        View Branch <i class="fas fa-arrow-right ml-1"></i>
+                                    </a>
+                                </div>
                             </div>
                         }
                     </div>
                 }
                 else
                 {
-                    <p class="text-gray-500 text-center py-4">No branches in this department</p>
+                    <div class="text-center py-12">
+                        <div class="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                            <i class="fas fa-store text-2xl text-gray-400"></i>
+                        </div>
+                        <p class="text-gray-500 font-medium">No branches in this department</p>
+                        <a href="@Url.Action("Create", "Branch")?departmentId=@Model.Id" class="mt-2 inline-block text-sm text-blue-600 hover:text-blue-700">
+                            <i class="fas fa-plus-circle mr-1"></i> Add a branch
+                        </a>
+                    </div>
                 }
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="p-4 border-b border-gray-200">
-                <h3 class="font-semibold">Employees</h3>
+        <!-- Employees Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gradient-to-r from-green-50 to-white">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-users text-green-600 mr-2"></i>
+                    Employees in this Department
+                    <span class="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">@Model.EmployeeCount</span>
+                </h3>
+                <p class="text-xs text-gray-500 mt-0.5">All employees belonging to @Model.Name</p>
             </div>
-            <div class="p-4">
+            <div class="p-5">
                 @if (Model.Employees.Any())
                 {
-                    <div class="grid grid-cols-1 gap-2">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         @foreach (var emp in Model.Employees)
                         {
-                            <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                    <span class="text-xs font-semibold text-blue-600">@emp.Initials</span>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-green-50 transition group">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                                        @emp.Initials
+                                    </div>
+                                    <div>
+                                        <a href="@Url.Action("Details", "Employee", new { id = emp.Id })" class="font-medium text-gray-800 hover:text-green-600 transition">
+                                            @emp.Name
+                                        </a>
+                                        <div class="text-xs text-gray-500">@emp.Position</div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <div class="font-medium">@emp.Name</div>
-                                    <div class="text-xs text-gray-500">@emp.Position</div>
-                                </div>
+                                <a href="@Url.Action("Details", "Employee", new { id = emp.Id })" class="text-xs text-green-500 hover:text-green-700 opacity-0 group-hover:opacity-100 transition">
+                                    View <i class="fas fa-arrow-right ml-1"></i>
+                                </a>
                             </div>
                         }
                     </div>
                 }
                 else
                 {
-                    <p class="text-gray-500 text-center py-4">No employees in this department</p>
+                    <div class="text-center py-12">
+                        <div class="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                            <i class="fas fa-users text-2xl text-gray-400"></i>
+                        </div>
+                        <p class="text-gray-500 font-medium">No employees in this department</p>
+                        <a href="@Url.Action("Create", "Employee")?departmentId=@Model.Id" class="mt-2 inline-block text-sm text-green-600 hover:text-green-700">
+                            <i class="fas fa-plus-circle mr-1"></i> Add an employee
+                        </a>
+                    </div>
                 }
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    function showNotification(message, type) {
+        var colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+        $('.custom-notification').remove();
+        var notification = $(`<div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${colors[type]} animate-slide-in">${message}</div>`);
+        $('body').append(notification);
+        setTimeout(() => notification.fadeOut(300, () => notification.remove()), 3000);
+    }
+</script>
+
+<style>
+    .animate-slide-in { animation: slideIn 0.3s ease-out; }
+    @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .sticky { position: sticky; }
+</style>

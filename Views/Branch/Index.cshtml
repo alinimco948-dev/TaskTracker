@@ -2,7 +2,6 @@
 @{
     ViewData["Title"] = "Branches";
     
-    // Get anti-forgery token for AJAX calls
     var token = "";
     if (Context != null)
     {
@@ -14,7 +13,6 @@
         }
     }
     
-    // Calculate stats safely
     var totalBranches = Model?.Count() ?? 0;
     var activeBranches = Model?.Count(b => b.IsActive) ?? 0;
     var avgCompletionRate = Model != null && Model.Any() ? Math.Round(Model.Average(b => b.CompletionRate), 1) : 0;
@@ -22,7 +20,6 @@
 }
 
 <div class="space-y-6">
-    <!-- Hidden anti-forgery token -->
     <input type="hidden" id="requestVerificationToken" value="@token" />
 
     <!-- Header -->
@@ -31,7 +28,7 @@
             <h1 class="text-2xl font-bold text-gray-800">Branch Management</h1>
             <p class="text-gray-500 mt-1">Manage your branch locations and track performance</p>
         </div>
-        <a href="@Url.Action("Create")" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition">
+        <a href="@Url.Action("Create")" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition shadow-sm">
             <i class="fas fa-plus-circle mr-2"></i>Add Branch
         </a>
     </div>
@@ -143,7 +140,7 @@
                         @foreach (var branch in Model.OrderBy(b => b.Name))
                         {
                             var completionRate = branch.CompletionRate;
-                            var completionColor = completionRate >= 80 ? "green" : (completionRate >= 60 ? "yellow" : "red");
+                            var barColor = completionRate >= 80 ? "#22c55e" : completionRate >= 60 ? "#eab308" : "#ef4444";
                             
                             <tr class="hover:bg-gray-50 transition branch-row" 
                                 data-name="@branch.Name.ToLower()" 
@@ -153,7 +150,7 @@
                                 data-branch-id="@branch.Id">
                                 <td class="px-6 py-4">
                                     <div class="flex items-center space-x-3">
-                                        <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-green-500 flex items-center justify-center text-white font-bold">
+                                        <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-green-500 flex items-center justify-center text-white font-bold text-sm">
                                             @{
                                                 var branchInitials = string.IsNullOrEmpty(branch.Name) ? "?" : branch.Name.Length > 1 ? branch.Name.Substring(0, 2).ToUpper() : branch.Name.Substring(0, 1).ToUpper();
                                             }
@@ -164,7 +161,7 @@
                                             <p class="text-xs text-gray-500">@branch.Code</p>
                                         </div>
                                     </div>
-                                </td>
+                                 </td>
                                 <td class="px-6 py-4 font-mono text-sm">@branch.Code</td>
                                 <td class="px-6 py-4">
                                     <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">@branch.Department</span>
@@ -175,17 +172,13 @@
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <div class="flex items-center justify-center">
-                                        <span class="text-sm font-medium">@branch.EmployeeCount</span>
-                                    </div>
+                                    <span class="text-sm font-medium">@branch.EmployeeCount</span>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <div class="flex flex-col items-center">
-                                        <div class="flex items-center gap-1 mb-1">
-                                            <span class="font-bold text-@(completionColor)-600">@completionRate%</span>
-                                        </div>
-                                        <div class="w-16 bg-gray-200 rounded-full h-1.5">
-                                            <div class="bg-@(completionColor)-500 h-1.5 rounded-full" style="width: @completionRate%"></div>
+                                        <span class="font-bold text-sm" style="color: @barColor">@completionRate%</span>
+                                        <div class="w-16 mt-1 bg-gray-200 rounded-full h-1.5">
+                                            <div class="h-1.5 rounded-full" style="width: @completionRate%; background-color: @barColor"></div>
                                         </div>
                                     </div>
                                 </td>
@@ -217,8 +210,9 @@
                                            class="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition" title="Performance Report">
                                             <i class="fas fa-chart-bar"></i>
                                         </a>
-                                        <button onclick="deleteBranch(@branch.Id, '@branch.Name')" 
-                                                class="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete">
+                                        <button onclick="deleteBranch(@branch.Id, '@branch.Name.Replace("'", "\\'")')" 
+                                                class="delete-btn p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"
+                                                data-id="@branch.Id" data-name="@branch.Name">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>
@@ -243,7 +237,6 @@
             </table>
         </div>
         
-        <!-- Pagination Info -->
         @if (Model != null && Model.Any())
         {
             <div class="px-6 py-3 border-t border-gray-200 bg-gray-50 text-sm text-gray-500">
@@ -253,18 +246,41 @@
     </div>
 </div>
 
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all">
+        <div class="bg-gradient-to-r from-red-600 to-red-800 px-5 py-3 rounded-t-xl">
+            <h3 class="text-lg font-semibold text-white flex items-center">
+                <i class="fas fa-exclamation-triangle mr-2"></i>Delete Branch
+            </h3>
+        </div>
+        <div class="p-5">
+            <p class="text-gray-700" id="deleteMessage">Are you sure you want to delete this branch?</p>
+            <p class="text-xs text-red-500 mt-2" id="deleteWarning"></p>
+            <input type="hidden" id="deleteBranchId" />
+        </div>
+        <div class="px-5 py-3 border-t border-gray-200 flex justify-end gap-2 rounded-b-xl">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
+            <button onclick="confirmDelete()" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition flex items-center gap-1">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
+    let pendingDeleteId = null;
+    let pendingDeleteName = null;
+
     $(document).ready(function() {
         console.log('Branch index page loaded');
         
-        // Setup event listeners for filters
         $('#searchInput').on('keyup', filterTable);
         $('#departmentFilter').on('change', filterTable);
         $('#statusFilter').on('change', filterTable);
     });
 
-    // Filter table function
     function filterTable() {
         var searchTerm = $('#searchInput').val().toLowerCase();
         var department = $('#departmentFilter').val();
@@ -278,10 +294,7 @@
             var branchDepartment = $(this).data('department') || '';
             var branchStatus = $(this).data('status') || '';
 
-            var matchesSearch = searchTerm === '' || 
-                name.indexOf(searchTerm) !== -1 || 
-                code.indexOf(searchTerm) !== -1;
-            
+            var matchesSearch = searchTerm === '' || name.indexOf(searchTerm) !== -1 || code.indexOf(searchTerm) !== -1;
             var matchesDepartment = department === '' || branchDepartment === department;
             var matchesStatus = status === '' || branchStatus === status;
 
@@ -293,14 +306,9 @@
             }
         });
         
-        // Update visible count
-        if (visibleCount === 0) {
-            if ($('#branchTableBody tr:visible').length === 0 && $('#branchTableBody tr').length > 0) {
-                if ($('#noResultsRow').length === 0) {
-                    $('#branchTableBody').append('<tr id="noResultsRow"><td colspan="8" class="px-6 py-12 text-center text-gray-500"><i class="fas fa-search text-3xl mb-2 text-gray-300"></i><p>No branches match your filters</p><button onclick="resetFilters()" class="mt-2 text-blue-600 hover:underline">Clear filters</button></td></tr>');
-                }
-            } else {
-                $('#noResultsRow').remove();
+        if (visibleCount === 0 && $('#branchTableBody tr').length > 0) {
+            if ($('#noResultsRow').length === 0) {
+                $('#branchTableBody').append('<tr id="noResultsRow"><td colspan="8" class="px-6 py-12 text-center text-gray-500"><i class="fas fa-search text-3xl mb-2 text-gray-300"></i><p>No branches match your filters</p><button onclick="resetFilters()" class="mt-2 text-blue-600 hover:underline">Clear filters</button></td></tr>');
             }
         } else {
             $('#noResultsRow').remove();
@@ -315,88 +323,78 @@
         showNotification('Filters reset', 'info');
     }
 
-    // Delete branch function
     function deleteBranch(id, name) {
-        if (confirm(`Are you sure you want to delete ${name}? This will deactivate the branch.`)) {
-            var token = $('#requestVerificationToken').val();
-            
-            $.ajax({
-                url: '@Url.Action("Delete", "Branch")/' + id,
+        pendingDeleteId = id;
+        pendingDeleteName = name;
+        $('#deleteMessage').text(`Are you sure you want to delete "${name}"?`);
+        $('#deleteWarning').text('This will deactivate the branch. Active employee assignments must be ended first.');
+        $('#deleteModal').removeClass('hidden').addClass('flex');
+    }
+
+    function closeDeleteModal() {
+        $('#deleteModal').addClass('hidden').removeClass('flex');
+        pendingDeleteId = null;
+        pendingDeleteName = null;
+    }
+
+    async function confirmDelete() {
+        if (!pendingDeleteId) return;
+        
+        const token = $('#requestVerificationToken').val();
+        const deleteBtn = $('#deleteModal .bg-red-600');
+        const originalText = deleteBtn.html();
+        deleteBtn.html('<i class="fas fa-spinner fa-spin mr-1"></i> Deleting...').prop('disabled', true);
+        
+        try {
+            const response = await $.ajax({
+                url: '@Url.Action("Delete", "Branch")/' + pendingDeleteId,
                 type: 'POST',
-                headers: { 'RequestVerificationToken': token },
-                success: function(response) {
-                    if (response.success) {
-                        showNotification(response.message, 'success');
-                        setTimeout(function() { location.reload(); }, 1500);
-                    } else {
-                        showNotification(response.message, 'error');
-                    }
-                },
-                error: function(xhr) {
-                    var errorMsg = 'Error deleting branch';
-                    try {
-                        var response = JSON.parse(xhr.responseText);
-                        errorMsg = response.message || errorMsg;
-                    } catch(e) {}
-                    showNotification(errorMsg, 'error');
-                }
+                headers: { 'RequestVerificationToken': token }
             });
+            
+            if (response.success) {
+                showNotification(response.message, 'success');
+                closeDeleteModal();
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showNotification(response.message, 'error');
+                deleteBtn.html(originalText).prop('disabled', false);
+                closeDeleteModal();
+            }
+        } catch (error) {
+            let errorMsg = 'Error deleting branch';
+            try {
+                const response = JSON.parse(error.responseText);
+                errorMsg = response.message || errorMsg;
+            } catch(e) {}
+            showNotification(errorMsg, 'error');
+            deleteBtn.html(originalText).prop('disabled', false);
+            closeDeleteModal();
         }
     }
 
-    // Notification function
     function showNotification(message, type) {
-        var colors = {
-            success: 'bg-green-500',
-            error: 'bg-red-500',
-            info: 'bg-blue-500',
-            warning: 'bg-yellow-500'
-        };
-        
+        var colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500', warning: 'bg-yellow-500' };
         $('.custom-notification').remove();
-        var notification = $('<div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ' + colors[type] + ' animate-slide-in flex items-center">' +
-            '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle') + ' mr-2"></i>' +
-            '<span>' + message + '</span>' +
-            '</div>');
-        
+        var notification = $(`<div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ${colors[type]} animate-slide-in flex items-center">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i>
+            <span>${escapeHtml(message)}</span>
+        </div>`);
         $('body').append(notification);
-        setTimeout(function() { 
-            notification.fadeOut(300, function() { $(this).remove(); }); 
-        }, 3000);
+        setTimeout(function() { notification.fadeOut(300, function() { $(this).remove(); }); }, 3000);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return text;
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 </script>
 
 <style>
-    .animate-slide-in {
-        animation: slideIn 0.3s ease-out;
-    }
-    
-    @@keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    .branch-row {
-        transition: background-color 0.2s ease;
-    }
-    
-    .branch-row:hover {
-        background-color: #f9fafb;
-    }
-    
-    .max-w-[200px] {
-        max-width: 200px;
-    }
-    
-    .truncate {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+    .animate-slide-in { animation: slideIn 0.3s ease-out; }
+    @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .branch-row { transition: background-color 0.2s ease; }
+    .branch-row:hover { background-color: #f9fafb; }
+    .max-w-[200px] { max-width: 200px; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

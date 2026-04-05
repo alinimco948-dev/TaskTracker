@@ -13,45 +13,43 @@
         <form asp-action="Create" method="post" class="p-6">
             @Html.AntiForgeryToken()
 
+            <div asp-validation-summary="ModelOnly" class="mb-6 p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200"></div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Left Column -->
                 <div class="space-y-4">
-                    <!-- Branch Name -->
                     <div>
                         <label asp-for="Name" class="block text-sm font-medium text-gray-700 mb-1">
                             Branch Name <span class="text-red-500">*</span>
                         </label>
-                        <input asp-for="Name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                        <input asp-for="Name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
                                placeholder="e.g., Ambassador, Waheen, Gabiley" />
                         <span asp-validation-for="Name" class="text-xs text-red-500 mt-1 block"></span>
+                        <p class="text-xs text-gray-400 mt-1">Branch name must be unique</p>
                     </div>
 
-                    <!-- Branch Code -->
                     <div>
                         <label asp-for="Code" class="block text-sm font-medium text-gray-700 mb-1">
                             Branch Code
                         </label>
-                        <input asp-for="Code" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                        <input asp-for="Code" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
                                placeholder="e.g., AMB-001, WAH-002" />
                         <p class="text-xs text-gray-500 mt-1">Unique identifier for the branch (optional)</p>
-                        <span asp-validation-for="Code" class="text-xs text-red-500 mt-1 block"></span>
                     </div>
 
-                    <!-- Address -->
                     <div>
                         <label asp-for="Address" class="block text-sm font-medium text-gray-700 mb-1">
                             Address
                         </label>
-                        <input asp-for="Address" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                        <input asp-for="Address" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
                                placeholder="Street address, city, etc." />
                     </div>
 
-                    <!-- Department -->
                     <div>
                         <label asp-for="DepartmentId" class="block text-sm font-medium text-gray-700 mb-1">
                             Department
                         </label>
-                        <select asp-for="DepartmentId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition">
+                        <select asp-for="DepartmentId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
                             <option value="">Select Department (Optional)</option>
                             @if (ViewBag.Departments != null)
                             {
@@ -66,35 +64,31 @@
 
                 <!-- Right Column -->
                 <div class="space-y-4">
-                    <!-- Phone -->
                     <div>
                         <label asp-for="Phone" class="block text-sm font-medium text-gray-700 mb-1">
                             Phone Number
                         </label>
-                        <input asp-for="Phone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                        <input asp-for="Phone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
                                placeholder="+1234567890" />
                     </div>
 
-                    <!-- Email -->
                     <div>
                         <label asp-for="Email" class="block text-sm font-medium text-gray-700 mb-1">
                             Email Address
                         </label>
-                        <input asp-for="Email" type="email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                        <input asp-for="Email" type="email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
                                placeholder="branch@example.com" />
                         <span asp-validation-for="Email" class="text-xs text-red-500 mt-1 block"></span>
                     </div>
 
-                    <!-- Notes -->
                     <div>
                         <label asp-for="Notes" class="block text-sm font-medium text-gray-700 mb-1">
                             Notes
                         </label>
-                        <textarea asp-for="Notes" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+                        <textarea asp-for="Notes" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
                                   placeholder="Additional information about this branch..."></textarea>
                     </div>
 
-                    <!-- Active Status -->
                     <div class="bg-gray-50 p-4 rounded-lg">
                         <label class="flex items-center space-x-3">
                             <input asp-for="IsActive" type="checkbox" class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" checked />
@@ -107,8 +101,8 @@
 
             <!-- Hidden Tasks Section -->
             <div class="mt-6 pt-6 border-t border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900 mb-3">Hidden Tasks</h3>
-                <p class="text-sm text-gray-600 mb-4">Select tasks that should NOT be visible for this branch:</p>
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Task Visibility</h3>
+                <p class="text-sm text-gray-600 mb-4">Select tasks that should be VISIBLE for this branch:</p>
 
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                     @if (ViewBag.Tasks != null)
@@ -116,7 +110,7 @@
                         @foreach (var task in ViewBag.Tasks)
                         {
                             <label class="flex items-center space-x-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition">
-                                <input type="checkbox" name="hiddenTaskIds" value="@task.Id" class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                                <input type="checkbox" name="hiddenTaskIds" value="@task.Id" class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" checked />
                                 <span class="text-sm text-gray-700">@task.Name</span>
                             </label>
                         }
@@ -124,7 +118,8 @@
                 </div>
                 <p class="text-xs text-gray-500 mt-3">
                     <i class="fas fa-info-circle mr-1"></i>
-                    Checked tasks will be visible, unchecked tasks will be hidden for this branch.
+                    <span class="text-green-600">Checked = Visible</span> | 
+                    <span class="text-gray-400">Unchecked = Hidden</span>
                 </p>
             </div>
 
@@ -148,12 +143,11 @@
             </div>
             <div class="text-sm text-green-800">
                 <p class="font-medium mb-1">About Branches</p>
-                <p>Branches represent physical locations where tasks are performed. Each branch can have multiple employees assigned to it over time.</p>
+                <p>Branches represent physical locations where tasks are performed.</p>
                 <ul class="list-disc list-inside mt-2 text-green-700">
-                    <li>Branch names should be unique and recognizable</li>
+                    <li>Branch names must be unique</li>
                     <li>You can assign employees to branches after creation</li>
-                    <li>Hidden tasks won't appear on the branch's daily task board</li>
-                    <li>Branches can be organized under departments</li>
+                    <li>Checked tasks will be visible, unchecked tasks will be hidden</li>
                 </ul>
             </div>
         </div>

@@ -16,28 +16,49 @@ public class HomeController : Controller
     private readonly ITaskService _taskService;
     private readonly IEmployeeService _employeeService;
     private readonly IHolidayService _holidayService;
+    private readonly ITaskCalculationService _taskCalculationService;
 
     public HomeController(
         ILogger<HomeController> logger,
         ApplicationDbContext context,
         ITaskService taskService,
         IEmployeeService employeeService,
-        IHolidayService holidayService)
+        IHolidayService holidayService,
+        ITaskCalculationService taskCalculationService)
     {
         _logger = logger;
         _context = context;
         _taskService = taskService;
         _employeeService = employeeService;
         _holidayService = holidayService;
+        _taskCalculationService = taskCalculationService;
     }
+
+    #region Dashboard Index
 
     public async Task<IActionResult> Index(DateTime? date)
     {
         try
         {
-            var currentDate = date?.Date ?? DateTime.Today;
+            var localDate = date?.Date ?? DateTime.Today;
+            var utcDate = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            
+            _logger.LogInformation($"Dashboard loading for date: {localDate:yyyy-MM-dd}");
 
-            var hiddenTasks = await GetHiddenTasks();
+            // Check if current date is a holiday
+            var isHoliday = await _taskCalculationService.IsHolidayAsync(utcDate);
+            var holidayName = string.Empty;
+            
+            if (isHoliday)
+            {
+                var holiday = await _context.Holidays
+                    .FirstOrDefaultAsync(h => (!h.IsWeekly && h.HolidayDate.Date == utcDate.Date) ||
+                                              (h.IsWeekly && h.WeekDay == (int)utcDate.DayOfWeek));
+                holidayName = holiday?.Description ?? GetHolidayNameFromDayOfWeek(utcDate.DayOfWeek);
+                _logger.LogInformation($"Date {localDate:yyyy-MM-dd} is a holiday: {holidayName}");
+            }
+
+            var hiddenTasks = await GetHiddenTasksAsync();
             ViewBag.HiddenTasks = hiddenTasks;
 
             var employeeScores = await _employeeService.GetEmployeeScoresAsync();
@@ -49,9 +70,9 @@ public class HomeController : Controller
                 .AsNoTracking()
                 .ToListAsync();
 
-            var visibleTasks = await _taskService.GetTasksVisibleOnDateAsync(currentDate);
+            var visibleTasks = await GetTasksVisibleOnDateAsync(utcDate);
 
-            var taskData = await GetTaskDataDictionary(currentDate);
+            var taskData = await GetTaskDataDictionaryAsync(utcDate);
 
             var filteredTaskData = taskData
                 .Where(kvp => visibleTasks.Any(t => t.Id.ToString() == kvp.Key.Split('_')[1]))
@@ -64,20 +85,22 @@ public class HomeController : Controller
                 .AsNoTracking()
                 .ToListAsync();
 
-            var branchAssignments = await GetBranchAssignments(currentDate);
+            var branchAssignments = await GetBranchAssignmentsAsync(utcDate);
 
             var holidays = await _context.Holidays.AsNoTracking().ToListAsync();
 
             var viewModel = new DashboardViewModel
             {
-                CurrentDate = currentDate,
+                CurrentDate = localDate,
                 Branches = branches,
                 Tasks = visibleTasks,
                 Employees = employees,
                 TaskData = filteredTaskData,
-                NotesData = await GetNotesData(),
+                NotesData = await GetNotesDataAsync(),
                 Holidays = holidays,
                 BranchAssignments = branchAssignments,
+                IsHoliday = isHoliday,
+                HolidayName = holidayName
             };
 
             return View(viewModel);
@@ -90,742 +113,21 @@ public class HomeController : Controller
         }
     }
 
-    // ========== UPDATE TASK TIME ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, string date, DateTime completionTime)
+    #endregion
+
+    #region Private Helper Methods
+
+    private async Task<Dictionary<string, DailyTask>> GetTaskDataDictionaryAsync(DateTime utcDate)
     {
         try
         {
-            var taskDate = DateTime.Parse(date).Date;
-            var task = await _context.TaskItems.FindAsync(taskItemId);
+            var utcStart = utcDate.Date;
+            var utcEnd = utcDate.Date.AddDays(1).AddSeconds(-1);
 
-            if (task == null)
-                return Json(new { success = false, message = "Task not found" });
-
-            // Convert completion time to local time for comparison
-            var completionTimeLocal = completionTime.Kind == DateTimeKind.Utc 
-                ? completionTime.ToLocalTime() 
-                : completionTime;
-            
-            var deadline = CalculateDeadline(task, taskDate);
-            
-            // Convert deadline to local time for comparison
-            var deadlineLocal = deadline.Kind == DateTimeKind.Utc 
-                ? deadline.ToLocalTime() 
-                : deadline;
-
-            var dailyTask = await _context.DailyTasks
-                .Include(dt => dt.TaskAssignment)
-                .ThenInclude(ta => ta != null ? ta.Employee : null)
-                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
-                                           dt.TaskItemId == taskItemId &&
-                                           dt.TaskDate.Date == taskDate.Date);
-
-            if (dailyTask == null)
-            {
-                dailyTask = new DailyTask
-                {
-                    BranchId = branchId,
-                    TaskItemId = taskItemId,
-                    TaskDate = taskDate,
-                    IsCompleted = true,
-                    CompletedAt = completionTime.ToUniversalTime()
-                };
-                _context.DailyTasks.Add(dailyTask);
-            }
-            else
-            {
-                dailyTask.IsCompleted = true;
-                dailyTask.CompletedAt = completionTime.ToUniversalTime();
-            }
-
-            await _context.SaveChangesAsync();
-
-            // Auto-assign to employee
-            await AutoAssignTaskToEmployee(dailyTask, taskDate);
-
-            // Calculate adjusted deadline with any existing adjustment
-            var adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0;
-            var adjustedDeadlineLocal = deadlineLocal.AddMinutes(adjustmentMinutes);
-            
-            // Get delay type and text based on adjusted deadline
-            var delayType = GetDelayType(adjustedDeadlineLocal, completionTimeLocal);
-            var delayText = GetDelayText(adjustedDeadlineLocal, completionTimeLocal);
-
-            var response = new
-            {
-                success = true,
-                taskData = new
-                {
-                    branchId = branchId,
-                    taskId = taskItemId,
-                    isCompleted = true,
-                    completedAt = completionTimeLocal,
-                    delayType = delayType,
-                    delayText = delayText,
-                    adjustmentMinutes = adjustmentMinutes,
-                    adjustmentReason = dailyTask.AdjustmentReason ?? "",
-                    assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
-                    deadline = adjustedDeadlineLocal
-                }
-            };
-
-            return Json(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error updating task time");
-            return Json(new { success = false, message = ex.Message });
-        }
-    }
-
-    // ========== GET TASK STATUS ==========
-    [HttpGet]
-    public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, string date)
-    {
-        try
-        {
-            var taskDate = DateTime.Parse(date).Date;
-            var task = await _context.TaskItems.FindAsync(taskItemId);
-            
-            if (task == null)
-                return Json(new { exists = false });
-
-            var deadline = CalculateDeadline(task, taskDate);
-            var deadlineLocal = deadline.Kind == DateTimeKind.Utc ? deadline.ToLocalTime() : deadline;
-
-            var dailyTask = await _context.DailyTasks
-                .Include(dt => dt.TaskAssignment)
-                .ThenInclude(ta => ta != null ? ta.Employee : null)
-                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
-                                           dt.TaskItemId == taskItemId &&
-                                           dt.TaskDate.Date == taskDate.Date);
-
-            if (dailyTask == null)
-            {
-                return Json(new { exists = false });
-            }
-
-            // Calculate adjusted deadline
-            var adjustedDeadlineLocal = deadlineLocal.AddMinutes(dailyTask.AdjustmentMinutes ?? 0);
-            
-            string delayType = "pending";
-            string delayText = "Pending";
-            DateTime? completedAtLocal = null;
-            
-            if (dailyTask.IsCompleted && dailyTask.CompletedAt.HasValue)
-            {
-                completedAtLocal = dailyTask.CompletedAt.Value.ToLocalTime();
-                delayType = GetDelayType(adjustedDeadlineLocal, completedAtLocal.Value);
-                delayText = GetDelayText(adjustedDeadlineLocal, completedAtLocal.Value);
-            }
-
-            var response = new
-            {
-                exists = true,
-                branchId = branchId,
-                taskId = taskItemId,
-                isCompleted = dailyTask.IsCompleted,
-                completedAt = completedAtLocal,
-                delayType = delayType,
-                delayText = delayText,
-                adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
-                adjustmentReason = dailyTask.AdjustmentReason ?? "",
-                assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
-                deadline = adjustedDeadlineLocal
-            };
-
-            return Json(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting task status");
-            return Json(new { exists = false, error = ex.Message });
-        }
-    }
-
-    // ========== RESET SINGLE TASK ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ResetTask(int branchId, int taskItemId, string date)
-    {
-        try
-        {
-            var taskDate = DateTime.Parse(date).Date;
-            var task = await _context.TaskItems.FindAsync(taskItemId);
-            
-            if (task == null)
-                return Json(new { success = false, message = "Task not found" });
-
-            var deadline = CalculateDeadline(task, taskDate);
-            var deadlineLocal = deadline.Kind == DateTimeKind.Utc ? deadline.ToLocalTime() : deadline;
-
-            var dailyTask = await _context.DailyTasks
-                .Include(dt => dt.TaskAssignment)
-                .ThenInclude(ta => ta != null ? ta.Employee : null)
-                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
-                                           dt.TaskItemId == taskItemId &&
-                                           dt.TaskDate.Date == taskDate.Date);
-
-            if (dailyTask != null)
-            {
-                dailyTask.IsCompleted = false;
-                dailyTask.CompletedAt = null;
-                await _context.SaveChangesAsync();
-            }
-
-            var adjustedDeadline = deadlineLocal.AddMinutes(dailyTask?.AdjustmentMinutes ?? 0);
-
-            var response = new
-            {
-                success = true,
-                taskData = new
-                {
-                    branchId = branchId,
-                    taskId = taskItemId,
-                    isCompleted = false,
-                    completedAt = (DateTime?)null,
-                    delayType = "pending",
-                    delayText = "Pending",
-                    adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0,
-                    adjustmentReason = dailyTask?.AdjustmentReason ?? "",
-                    assignedTo = dailyTask?.TaskAssignment?.Employee?.Name ?? "",
-                    deadline = adjustedDeadline
-                }
-            };
-
-            return Json(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error resetting task");
-            return Json(new { success = false, message = ex.Message });
-        }
-    }
-
-    // ========== RESET ALL FOR TASK ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ResetAllForTask(int taskItemId, string date)
-    {
-        try
-        {
-            var taskDate = DateTime.Parse(date).Date;
-            var task = await _context.TaskItems.FindAsync(taskItemId);
-
-            if (task == null)
-                return Json(new { success = false, message = "Task not found" });
-
-            var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
-            var count = 0;
-            var taskData = new Dictionary<int, object>();
-
-            foreach (var branch in branches)
-            {
-                if (branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name))
-                    continue;
-
-                var dailyTask = await _context.DailyTasks
-                    .Include(dt => dt.TaskAssignment)
-                    .ThenInclude(ta => ta != null ? ta.Employee : null)
-                    .FirstOrDefaultAsync(dt => dt.BranchId == branch.Id &&
-                                               dt.TaskItemId == taskItemId &&
-                                               dt.TaskDate.Date == taskDate.Date);
-
-                var deadline = CalculateDeadline(task, taskDate);
-                var deadlineLocal = deadline.Kind == DateTimeKind.Utc ? deadline.ToLocalTime() : deadline;
-                var adjustedDeadline = deadlineLocal.AddMinutes(dailyTask?.AdjustmentMinutes ?? 0);
-
-                if (dailyTask != null && dailyTask.IsCompleted)
-                {
-                    dailyTask.IsCompleted = false;
-                    dailyTask.CompletedAt = null;
-                    count++;
-                }
-
-                taskData[branch.Id] = new
-                {
-                    branchId = branch.Id,
-                    taskId = taskItemId,
-                    isCompleted = false,
-                    completedAt = (DateTime?)null,
-                    delayType = "pending",
-                    delayText = "Pending",
-                    adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0,
-                    adjustmentReason = dailyTask?.AdjustmentReason ?? "",
-                    assignedTo = dailyTask?.TaskAssignment?.Employee?.Name ?? "",
-                    deadline = adjustedDeadline
-                };
-            }
-
-            await _context.SaveChangesAsync();
-
-            return Json(new
-            {
-                success = true,
-                count = count,
-                taskData = taskData
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in reset all for task");
-            return Json(new { success = false, message = ex.Message });
-        }
-    }
-
-    // ========== RESET ALL TASKS FOR A BRANCH ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ResetAllTasksForBranch(int branchId, string date)
-    {
-        try
-        {
-            var taskDate = DateTime.Parse(date).Date;
-            var branch = await _context.Branches.FindAsync(branchId);
-
-            if (branch == null)
-                return Json(new { success = false, message = "Branch not found" });
-
-            var visibleTasks = await _taskService.GetTasksVisibleOnDateAsync(taskDate);
-            var hiddenTaskNames = branch.HiddenTasks ?? new List<string>();
-            var visibleTaskIds = visibleTasks
-                .Where(t => !hiddenTaskNames.Contains(t.Name))
-                .Select(t => t.Id)
-                .ToList();
-
-            var dailyTasks = await _context.DailyTasks
-                .Include(dt => dt.TaskAssignment)
-                .ThenInclude(ta => ta != null ? ta.Employee : null)
-                .Where(dt => dt.BranchId == branchId &&
-                             dt.TaskDate.Date == taskDate.Date &&
-                             visibleTaskIds.Contains(dt.TaskItemId) &&
-                             dt.IsCompleted)
-                .ToListAsync();
-
-            var count = 0;
-            foreach (var dailyTask in dailyTasks)
-            {
-                dailyTask.IsCompleted = false;
-                dailyTask.CompletedAt = null;
-                count++;
-            }
-
-            await _context.SaveChangesAsync();
-
-            // Build response data for all tasks
-            var taskData = new Dictionary<int, object>();
-            foreach (var task in visibleTasks.Where(t => !hiddenTaskNames.Contains(t.Name)))
-            {
-                var dailyTask = dailyTasks.FirstOrDefault(dt => dt.TaskItemId == task.Id);
-                var deadline = CalculateDeadline(task, taskDate);
-                var deadlineLocal = deadline.Kind == DateTimeKind.Utc ? deadline.ToLocalTime() : deadline;
-                var adjustedDeadline = deadlineLocal.AddMinutes(dailyTask?.AdjustmentMinutes ?? 0);
-
-                taskData[task.Id] = new
-                {
-                    branchId = branchId,
-                    taskId = task.Id,
-                    isCompleted = false,
-                    completedAt = (DateTime?)null,
-                    delayType = "pending",
-                    delayText = "Pending",
-                    adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0,
-                    adjustmentReason = dailyTask?.AdjustmentReason ?? "",
-                    assignedTo = dailyTask?.TaskAssignment?.Employee?.Name ?? "",
-                    deadline = adjustedDeadline
-                };
-            }
-
-            return Json(new
-            {
-                success = true,
-                count = count,
-                taskData = taskData
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in reset all tasks for branch");
-            return Json(new { success = false, message = ex.Message });
-        }
-    }
-
-    // ========== RESET ALL TASKS FOR ALL BRANCHES ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ResetAllTasksForAllBranches(string date)
-    {
-        try
-        {
-            var taskDate = DateTime.Parse(date).Date;
-            var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
-            var allTasks = await _taskService.GetTasksVisibleOnDateAsync(taskDate);
-            var totalReset = 0;
-            var allTaskData = new Dictionary<string, object>(); // Key: "branchId_taskId"
-
-            foreach (var branch in branches)
-            {
-                var hiddenTaskNames = branch.HiddenTasks ?? new List<string>();
-                var visibleTaskIds = allTasks
-                    .Where(t => !hiddenTaskNames.Contains(t.Name))
-                    .Select(t => t.Id)
-                    .ToList();
-
-                var dailyTasks = await _context.DailyTasks
-                    .Include(dt => dt.TaskAssignment)
-                    .ThenInclude(ta => ta != null ? ta.Employee : null)
-                    .Where(dt => dt.BranchId == branch.Id &&
-                                 dt.TaskDate.Date == taskDate.Date &&
-                                 visibleTaskIds.Contains(dt.TaskItemId) &&
-                                 dt.IsCompleted)
-                    .ToListAsync();
-
-                foreach (var dailyTask in dailyTasks)
-                {
-                    dailyTask.IsCompleted = false;
-                    dailyTask.CompletedAt = null;
-                    totalReset++;
-                }
-
-                // Build response data
-                foreach (var task in allTasks.Where(t => !hiddenTaskNames.Contains(t.Name)))
-                {
-                    var dailyTask = dailyTasks.FirstOrDefault(dt => dt.TaskItemId == task.Id);
-                    var deadline = CalculateDeadline(task, taskDate);
-                    var deadlineLocal = deadline.Kind == DateTimeKind.Utc ? deadline.ToLocalTime() : deadline;
-                    var adjustedDeadline = deadlineLocal.AddMinutes(dailyTask?.AdjustmentMinutes ?? 0);
-                    var key = $"{branch.Id}_{task.Id}";
-
-                    allTaskData[key] = new
-                    {
-                        branchId = branch.Id,
-                        taskId = task.Id,
-                        isCompleted = false,
-                        completedAt = (DateTime?)null,
-                        delayType = "pending",
-                        delayText = "Pending",
-                        adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0,
-                        adjustmentReason = dailyTask?.AdjustmentReason ?? "",
-                        assignedTo = dailyTask?.TaskAssignment?.Employee?.Name ?? "",
-                        deadline = adjustedDeadline
-                    };
-                }
-            }
-
-            await _context.SaveChangesAsync();
-
-            return Json(new
-            {
-                success = true,
-                count = totalReset,
-                taskData = allTaskData
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in reset all tasks for all branches");
-            return Json(new { success = false, message = ex.Message });
-        }
-    }
-
-    // ========== COMPLETE ALL FOR TASK ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CompleteAllForTask(int taskItemId, string date)
-    {
-        try
-        {
-            var taskDate = DateTime.Parse(date).Date;
-            var completionTime = DateTime.Now;
-            var task = await _context.TaskItems.FindAsync(taskItemId);
-
-            if (task == null)
-                return Json(new { success = false, message = "Task not found" });
-
-            var deadline = CalculateDeadline(task, taskDate);
-            var deadlineLocal = deadline.Kind == DateTimeKind.Utc ? deadline.ToLocalTime() : deadline;
-            var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
-            var count = 0;
-            var taskData = new Dictionary<int, object>();
-
-            foreach (var branch in branches)
-            {
-                if (branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name))
-                {
-                    continue;
-                }
-
-                var dailyTask = await _context.DailyTasks
-                    .Include(dt => dt.TaskAssignment)
-                    .ThenInclude(ta => ta != null ? ta.Employee : null)
-                    .FirstOrDefaultAsync(dt => dt.BranchId == branch.Id &&
-                                               dt.TaskItemId == taskItemId &&
-                                               dt.TaskDate.Date == taskDate.Date);
-
-                var completionTimeLocal = completionTime.Kind == DateTimeKind.Utc ? completionTime.ToLocalTime() : completionTime;
-
-                if (dailyTask == null)
-                {
-                    dailyTask = new DailyTask
-                    {
-                        BranchId = branch.Id,
-                        TaskItemId = taskItemId,
-                        TaskDate = taskDate,
-                        IsCompleted = true,
-                        CompletedAt = completionTime.ToUniversalTime()
-                    };
-                    _context.DailyTasks.Add(dailyTask);
-                    count++;
-                    
-                    await AutoAssignTaskToEmployee(dailyTask, taskDate);
-                }
-                else if (!dailyTask.IsCompleted)
-                {
-                    dailyTask.IsCompleted = true;
-                    dailyTask.CompletedAt = completionTime.ToUniversalTime();
-                    count++;
-                }
-
-                var adjustedDeadline = deadlineLocal.AddMinutes(dailyTask.AdjustmentMinutes ?? 0);
-                var delayType = GetDelayType(adjustedDeadline, completionTimeLocal);
-                var delayText = GetDelayText(adjustedDeadline, completionTimeLocal);
-
-                taskData[branch.Id] = new
-                {
-                    branchId = branch.Id,
-                    taskId = taskItemId,
-                    isCompleted = true,
-                    completedAt = completionTimeLocal,
-                    delayType = delayType,
-                    delayText = delayText,
-                    adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
-                    adjustmentReason = dailyTask.AdjustmentReason ?? "",
-                    assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
-                    deadline = adjustedDeadline
-                };
-            }
-
-            await _context.SaveChangesAsync();
-
-            return Json(new
-            {
-                success = true,
-                count = count,
-                taskData = taskData
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in complete all for task");
-            return Json(new { success = false, message = ex.Message });
-        }
-    }
-
-    // ========== SAVE ADJUSTMENT ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SaveAdjustment(int branchId, int taskItemId, string date, int adjustmentMinutes, string adjustmentReason)
-    {
-        try
-        {
-            var taskDate = DateTime.Parse(date).Date;
-            var task = await _context.TaskItems.FindAsync(taskItemId);
-            
-            if (task == null)
-                return Json(new { success = false, message = "Task not found" });
-
-            var deadline = CalculateDeadline(task, taskDate);
-            var deadlineLocal = deadline.Kind == DateTimeKind.Utc ? deadline.ToLocalTime() : deadline;
-
-            var dailyTask = await _context.DailyTasks
-                .Include(dt => dt.TaskAssignment)
-                .ThenInclude(ta => ta != null ? ta.Employee : null)
-                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
-                                           dt.TaskItemId == taskItemId &&
-                                           dt.TaskDate.Date == taskDate.Date);
-
-            if (dailyTask == null)
-            {
-                dailyTask = new DailyTask
-                {
-                    BranchId = branchId,
-                    TaskItemId = taskItemId,
-                    TaskDate = taskDate,
-                    AdjustmentMinutes = adjustmentMinutes > 0 ? adjustmentMinutes : null,
-                    AdjustmentReason = adjustmentReason
-                };
-                _context.DailyTasks.Add(dailyTask);
-            }
-            else
-            {
-                dailyTask.AdjustmentMinutes = adjustmentMinutes > 0 ? adjustmentMinutes : null;
-                dailyTask.AdjustmentReason = adjustmentReason;
-            }
-
-            await _context.SaveChangesAsync();
-
-            var adjustedDeadlineLocal = deadlineLocal.AddMinutes(adjustmentMinutes);
-            var completedAt = dailyTask.IsCompleted ? dailyTask.CompletedAt : null;
-            var completedAtLocal = completedAt.HasValue ? completedAt.Value.ToLocalTime() : (DateTime?)null;
-
-            var response = new
-            {
-                success = true,
-                taskData = new
-                {
-                    branchId = branchId,
-                    taskId = taskItemId,
-                    isCompleted = dailyTask.IsCompleted,
-                    completedAt = completedAtLocal,
-                    delayType = GetDelayType(adjustedDeadlineLocal, completedAtLocal),
-                    delayText = GetDelayText(adjustedDeadlineLocal, completedAtLocal),
-                    adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
-                    adjustmentReason = dailyTask.AdjustmentReason ?? "",
-                    assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
-                    deadline = adjustedDeadlineLocal
-                }
-            };
-
-            return Json(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error saving adjustment");
-            return Json(new { success = false, message = ex.Message });
-        }
-    }
-
-    // ========== BULK UPDATE ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> BulkUpdate(int taskItemId, DateTime completionDateTime, List<int> branchIds)
-    {
-        try
-        {
-            var task = await _context.TaskItems.FindAsync(taskItemId);
-            if (task == null)
-                return Json(new { success = false, message = "Task not found" });
-
-            var taskDate = completionDateTime.Date;
-            var deadline = CalculateDeadline(task, taskDate);
-            var deadlineLocal = deadline.Kind == DateTimeKind.Utc ? deadline.ToLocalTime() : deadline;
-            var completionTimeLocal = completionDateTime.Kind == DateTimeKind.Utc ? completionDateTime.ToLocalTime() : completionDateTime;
-            var count = 0;
-            var taskData = new Dictionary<int, object>();
-
-            foreach (var branchId in branchIds)
-            {
-                var branch = await _context.Branches.FindAsync(branchId);
-
-                if (branch != null && branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name))
-                {
-                    continue;
-                }
-
-                var dailyTask = await _context.DailyTasks
-                    .Include(dt => dt.TaskAssignment)
-                    .ThenInclude(ta => ta != null ? ta.Employee : null)
-                    .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
-                                               dt.TaskItemId == taskItemId &&
-                                               dt.TaskDate.Date == taskDate.Date);
-
-                if (dailyTask == null)
-                {
-                    dailyTask = new DailyTask
-                    {
-                        BranchId = branchId,
-                        TaskItemId = taskItemId,
-                        TaskDate = taskDate,
-                        IsCompleted = true,
-                        CompletedAt = completionDateTime.ToUniversalTime(),
-                        IsBulkUpdated = true,
-                        BulkUpdateTime = DateTime.UtcNow
-                    };
-                    _context.DailyTasks.Add(dailyTask);
-                    count++;
-                    
-                    await AutoAssignTaskToEmployee(dailyTask, taskDate);
-                }
-                else if (!dailyTask.IsCompleted)
-                {
-                    dailyTask.IsCompleted = true;
-                    dailyTask.CompletedAt = completionDateTime.ToUniversalTime();
-                    dailyTask.IsBulkUpdated = true;
-                    dailyTask.BulkUpdateTime = DateTime.UtcNow;
-                    count++;
-                }
-
-                var adjustedDeadline = deadlineLocal.AddMinutes(dailyTask.AdjustmentMinutes ?? 0);
-                var delayType = GetDelayType(adjustedDeadline, completionTimeLocal);
-                var delayText = GetDelayText(adjustedDeadline, completionTimeLocal);
-
-                taskData[branchId] = new
-                {
-                    branchId = branchId,
-                    taskId = taskItemId,
-                    isCompleted = true,
-                    completedAt = completionTimeLocal,
-                    delayType = delayType,
-                    delayText = delayText,
-                    adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
-                    adjustmentReason = dailyTask.AdjustmentReason ?? "",
-                    assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
-                    deadline = adjustedDeadline
-                };
-            }
-
-            await _context.SaveChangesAsync();
-
-            return Json(new
-            {
-                success = true,
-                count = count,
-                taskData = taskData
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in bulk update");
-            return Json(new { success = false, message = ex.Message });
-        }
-    }
-
-    // ========== SAVE NOTES ==========
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SaveNotes(int branchId, string notes)
-    {
-        try
-        {
-            var branch = await _context.Branches.FindAsync(branchId);
-            if (branch != null)
-            {
-                branch.Notes = notes ?? string.Empty;
-                await _context.SaveChangesAsync();
-                _logger.LogInformation($"Notes saved for branch {branchId}");
-            }
-
-            return Json(new { success = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error saving notes");
-            return Json(new { success = false, message = "Error saving notes" });
-        }
-    }
-
-    // ========== HELPER METHODS ==========
-
-    private async Task<Dictionary<string, DailyTask>> GetTaskDataDictionary(DateTime date)
-    {
-        try
-        {
             var tasks = await _context.DailyTasks
                 .Include(d => d.TaskAssignment)
                     .ThenInclude(ta => ta != null ? ta.Employee : null)
-                .Where(d => d.TaskDate.Date == date.Date)
+                .Where(d => d.TaskDate >= utcStart && d.TaskDate <= utcEnd)
                 .AsNoTracking()
                 .ToListAsync();
 
@@ -843,7 +145,7 @@ public class HomeController : Controller
         }
     }
 
-    private async Task<Dictionary<string, string>> GetNotesData()
+    private async Task<Dictionary<string, string>> GetNotesDataAsync()
     {
         try
         {
@@ -858,14 +160,14 @@ public class HomeController : Controller
         }
     }
 
-    private async Task<Dictionary<int, string>> GetBranchAssignments(DateTime date)
+    private async Task<Dictionary<int, string>> GetBranchAssignmentsAsync(DateTime utcDate)
     {
         try
         {
             var assignments = await _context.BranchAssignments
                 .Include(ba => ba.Employee)
-                .Where(ba => ba.StartDate.Date <= date.Date &&
-                             (ba.EndDate == null || ba.EndDate.Value.Date >= date.Date))
+                .Where(ba => ba.StartDate <= utcDate &&
+                             (ba.EndDate == null || ba.EndDate >= utcDate))
                 .AsNoTracking()
                 .ToListAsync();
 
@@ -882,7 +184,7 @@ public class HomeController : Controller
         }
     }
 
-    private async Task<Dictionary<int, List<string>>> GetHiddenTasks()
+    private async Task<Dictionary<int, List<string>>> GetHiddenTasksAsync()
     {
         try
         {
@@ -906,14 +208,33 @@ public class HomeController : Controller
         }
     }
 
-    private async Task AutoAssignTaskToEmployee(DailyTask dailyTask, DateTime date)
+    private async Task<List<TaskItem>> GetTasksVisibleOnDateAsync(DateTime utcDate)
+    {
+        try
+        {
+            var allTasks = await _context.TaskItems
+                .Where(t => t.IsActive)
+                .OrderBy(t => t.DisplayOrder)
+                .AsNoTracking()
+                .ToListAsync();
+
+            return allTasks.Where(t => _taskCalculationService.IsTaskVisibleOnDate(t, utcDate)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting visible tasks for date {Date}", utcDate);
+            return new List<TaskItem>();
+        }
+    }
+
+    private async Task AutoAssignTaskToEmployeeAsync(DailyTask dailyTask, DateTime utcDate)
     {
         try
         {
             var branchAssignment = await _context.BranchAssignments
                 .FirstOrDefaultAsync(ba => ba.BranchId == dailyTask.BranchId &&
-                                           ba.StartDate.Date <= date.Date &&
-                                           (ba.EndDate == null || ba.EndDate.Value.Date >= date.Date));
+                                           ba.StartDate <= utcDate &&
+                                           (ba.EndDate == null || ba.EndDate >= utcDate));
 
             if (branchAssignment != null && branchAssignment.EmployeeId > 0)
             {
@@ -930,6 +251,8 @@ public class HomeController : Controller
                     };
                     _context.TaskAssignments.Add(taskAssignment);
                     await _context.SaveChangesAsync();
+                    
+                    _logger.LogInformation($"Auto-assigned task {dailyTask.TaskItemId} to employee {branchAssignment.EmployeeId}");
                 }
             }
         }
@@ -939,58 +262,749 @@ public class HomeController : Controller
         }
     }
 
-    private DateTime CalculateDeadline(TaskItem task, DateTime taskDate)
+    private string GetHolidayNameFromDayOfWeek(DayOfWeek dayOfWeek)
     {
-        var deadline = taskDate.Date;
-        if (task.IsSameDay)
-            deadline = deadline.Add(task.Deadline);
-        else
-            deadline = deadline.AddDays(1).Add(task.Deadline);
-        return deadline;
-    }
-
-    private string GetDelayType(DateTime deadline, DateTime? completedAt)
-    {
-        if (!completedAt.HasValue) return "pending";
-
-        var completedTime = completedAt.Value;
-
-        if (completedTime < deadline)
-            return "early";
-        if (completedTime <= deadline.AddSeconds(30))
-            return "on-time";
-
-        var diff = completedTime - deadline;
-        if (diff.TotalMinutes < 60) return "minutes";
-        if (diff.TotalHours < 24) return "hours";
-        return "days";
-    }
-
-    private string GetDelayText(DateTime deadline, DateTime? completedAt)
-    {
-        if (!completedAt.HasValue) return "Pending";
-
-        var completedTime = completedAt.Value;
-
-        if (completedTime < deadline)
+        return dayOfWeek switch
         {
-            var diff = deadline - completedTime;
-            if (diff.TotalDays >= 1) return $"{diff.TotalDays:F0}d early";
-            if (diff.TotalHours >= 1) return $"{diff.TotalHours:F0}h early";
-            if (diff.TotalMinutes >= 1) return $"{diff.TotalMinutes:F0}m early";
-            return "Early";
+            DayOfWeek.Friday => "Friday Holiday",
+            DayOfWeek.Saturday => "Saturday Holiday",
+            DayOfWeek.Sunday => "Sunday Holiday",
+            _ => $"{dayOfWeek} Holiday"
+        };
+    }
+
+    #endregion
+
+    #region API Endpoints - Task Status
+
+[HttpGet]
+public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, string date)
+{
+    try
+    {
+        var localDate = DateTime.Parse(date).Date;
+        var utcStart = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+        var utcEnd = utcStart.AddDays(1).AddSeconds(-1);
+        
+        var task = await _context.TaskItems.FindAsync(taskItemId);
+        if (task == null)
+            return Json(new { exists = false });
+
+        var dailyTask = await _context.DailyTasks
+            .Include(dt => dt.TaskItem)
+            .Include(dt => dt.TaskAssignment)
+                .ThenInclude(ta => ta != null ? ta.Employee : null)
+            .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
+                                       dt.TaskItemId == taskItemId &&
+                                       dt.TaskDate >= utcStart &&
+                                       dt.TaskDate <= utcEnd);
+
+        if (dailyTask == null)
+        {
+            return Json(new { exists = false });
         }
 
-        if (completedTime <= deadline.AddSeconds(30))
-            return "On time";
+        // Use the service to get delay info (now fixed with local time)
+        var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
+        
+        // Return deadline in LOCAL time for display
+        var localDeadline = delayInfo.Deadline.HasValue 
+            ? delayInfo.Deadline.Value 
+            : (DateTime?)null;
 
-        var lateDiff = completedTime - deadline;
-        if (lateDiff.TotalMinutes < 60) return $"{lateDiff.TotalMinutes:F0}m late";
-        if (lateDiff.TotalHours < 24) return $"{lateDiff.TotalHours:F0}h late";
-        return $"{lateDiff.TotalDays:F0}d late";
+        var response = new
+        {
+            exists = true,
+            branchId = branchId,
+            taskId = taskItemId,
+            isCompleted = dailyTask.IsCompleted,
+            completedAt = dailyTask.CompletedAt?.ToLocalTime(),
+            delayType = delayInfo.DelayType,
+            delayText = delayInfo.DelayText,
+            adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
+            adjustmentReason = dailyTask.AdjustmentReason ?? "",
+            assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
+            deadline = localDeadline?.ToLocalTime(),
+            holidayAdjusted = delayInfo.WasAdjustedForHoliday,
+            holidayNote = delayInfo.HolidayAdjustmentNote
+        };
+
+        return Json(response);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error getting task status: {Message}", ex.Message);
+        return Json(new { exists = false, error = ex.Message });
+    }
+}
+    #endregion
+
+    #region API Endpoints - Update Task Time
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, string date, DateTime completionTime)
+    {
+        try
+        {
+            var localDate = DateTime.Parse(date).Date;
+            var utcTaskDate = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            var utcStart = utcTaskDate;
+            var utcEnd = utcTaskDate.AddDays(1).AddSeconds(-1);
+            
+            var task = await _context.TaskItems.FindAsync(taskItemId);
+            if (task == null)
+                return Json(new { success = false, message = "Task not found" });
+
+            var utcCompletionTime = completionTime.Kind == DateTimeKind.Utc 
+                ? completionTime 
+                : DateTime.SpecifyKind(completionTime, DateTimeKind.Utc);
+
+            var dailyTask = await _context.DailyTasks
+                .Include(dt => dt.TaskAssignment)
+                    .ThenInclude(ta => ta != null ? ta.Employee : null)
+                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
+                                           dt.TaskItemId == taskItemId &&
+                                           dt.TaskDate >= utcStart &&
+                                           dt.TaskDate <= utcEnd);
+
+            if (dailyTask == null)
+            {
+                dailyTask = new DailyTask
+                {
+                    BranchId = branchId,
+                    TaskItemId = taskItemId,
+                    TaskDate = utcTaskDate,
+                    IsCompleted = true,
+                    CompletedAt = utcCompletionTime
+                };
+                _context.DailyTasks.Add(dailyTask);
+            }
+            else
+            {
+                dailyTask.IsCompleted = true;
+                dailyTask.CompletedAt = utcCompletionTime;
+            }
+
+            await _context.SaveChangesAsync();
+
+            await AutoAssignTaskToEmployeeAsync(dailyTask, utcTaskDate);
+
+            var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
+            var deadline = _taskCalculationService.CalculateDeadline(task, utcTaskDate);
+            var adjustedDeadline = deadline.AddMinutes(dailyTask.AdjustmentMinutes ?? 0);
+            var holidayAdjustedDeadline = await _taskCalculationService.AdjustDeadlineForHolidaysAsync(adjustedDeadline);
+
+            var response = new
+            {
+                success = true,
+                taskData = new
+                {
+                    branchId = branchId,
+                    taskId = taskItemId,
+                    isCompleted = true,
+                    completedAt = utcCompletionTime.ToLocalTime(),
+                    delayType = delayInfo.DelayType,
+                    delayText = delayInfo.DelayText,
+                    adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
+                    adjustmentReason = dailyTask.AdjustmentReason ?? "",
+                    assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
+                    deadline = holidayAdjustedDeadline.ToLocalTime(),
+                    holidayAdjusted = delayInfo.WasAdjustedForHoliday,
+                    holidayNote = delayInfo.HolidayAdjustmentNote
+                }
+            };
+
+            return Json(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating task time: {Message}", ex.Message);
+            return Json(new { success = false, message = ex.Message });
+        }
     }
 
-    // ========== DIAGNOSTIC ENDPOINTS ==========
+    #endregion
+
+    #region API Endpoints - Reset Tasks
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetTask(int branchId, int taskItemId, string date)
+    {
+        try
+        {
+            var localDate = DateTime.Parse(date).Date;
+            var utcStart = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            var utcEnd = utcStart.AddDays(1).AddSeconds(-1);
+
+            var dailyTask = await _context.DailyTasks
+                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
+                                           dt.TaskItemId == taskItemId &&
+                                           dt.TaskDate >= utcStart &&
+                                           dt.TaskDate <= utcEnd);
+
+            if (dailyTask != null)
+            {
+                dailyTask.IsCompleted = false;
+                dailyTask.CompletedAt = null;
+                await _context.SaveChangesAsync();
+            }
+
+            var task = await _context.TaskItems.FindAsync(taskItemId);
+            var deadline = _taskCalculationService.CalculateDeadline(task, utcStart);
+            var adjustedDeadline = deadline.AddMinutes(dailyTask?.AdjustmentMinutes ?? 0);
+
+            return Json(new
+            {
+                success = true,
+                taskData = new
+                {
+                    branchId = branchId,
+                    taskId = taskItemId,
+                    isCompleted = false,
+                    completedAt = (DateTime?)null,
+                    delayType = "pending",
+                    delayText = "Pending",
+                    adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0,
+                    adjustmentReason = dailyTask?.AdjustmentReason ?? "",
+                    assignedTo = dailyTask?.TaskAssignment?.Employee?.Name ?? "",
+                    deadline = adjustedDeadline.ToLocalTime()
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting task: {Message}", ex.Message);
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetAllForTask(int taskItemId, string date)
+    {
+        try
+        {
+            var localDate = DateTime.Parse(date).Date;
+            var utcStart = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            var utcEnd = utcStart.AddDays(1).AddSeconds(-1);
+            
+            var task = await _context.TaskItems.FindAsync(taskItemId);
+            if (task == null)
+                return Json(new { success = false, message = "Task not found" });
+
+            var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
+            var count = 0;
+            var taskData = new Dictionary<int, object>();
+
+            foreach (var branch in branches)
+            {
+                if (branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name))
+                    continue;
+
+                var dailyTask = await _context.DailyTasks
+                    .FirstOrDefaultAsync(dt => dt.BranchId == branch.Id &&
+                                               dt.TaskItemId == taskItemId &&
+                                               dt.TaskDate >= utcStart &&
+                                               dt.TaskDate <= utcEnd);
+
+                if (dailyTask != null && dailyTask.IsCompleted)
+                {
+                    dailyTask.IsCompleted = false;
+                    dailyTask.CompletedAt = null;
+                    count++;
+                }
+
+                var deadline = _taskCalculationService.CalculateDeadline(task, utcStart);
+                var adjustedDeadline = deadline.AddMinutes(dailyTask?.AdjustmentMinutes ?? 0);
+
+                taskData[branch.Id] = new
+                {
+                    branchId = branch.Id,
+                    taskId = taskItemId,
+                    isCompleted = false,
+                    completedAt = (DateTime?)null,
+                    delayType = "pending",
+                    delayText = "Pending",
+                    adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0,
+                    adjustmentReason = dailyTask?.AdjustmentReason ?? "",
+                    assignedTo = dailyTask?.TaskAssignment?.Employee?.Name ?? "",
+                    deadline = adjustedDeadline.ToLocalTime()
+                };
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                count = count,
+                taskData = taskData
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in reset all for task: {Message}", ex.Message);
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetAllTasksForBranch(int branchId, string date)
+    {
+        try
+        {
+            var localDate = DateTime.Parse(date).Date;
+            var utcStart = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            var utcEnd = utcStart.AddDays(1).AddSeconds(-1);
+            
+            var dailyTasks = await _context.DailyTasks
+                .Where(dt => dt.BranchId == branchId && 
+                             dt.TaskDate >= utcStart && 
+                             dt.TaskDate <= utcEnd &&
+                             dt.IsCompleted)
+                .ToListAsync();
+            
+            var count = 0;
+            foreach (var task in dailyTasks)
+            {
+                task.IsCompleted = false;
+                task.CompletedAt = null;
+                count++;
+            }
+            
+            await _context.SaveChangesAsync();
+            return Json(new { success = true, count = count });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting all tasks for branch: {Message}", ex.Message);
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetAllTasksForAllBranches(string date)
+    {
+        try
+        {
+            var localDate = DateTime.Parse(date).Date;
+            var utcStart = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            var utcEnd = utcStart.AddDays(1).AddSeconds(-1);
+            
+            var dailyTasks = await _context.DailyTasks
+                .Where(dt => dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd && dt.IsCompleted)
+                .ToListAsync();
+            
+            var count = 0;
+            foreach (var task in dailyTasks)
+            {
+                task.IsCompleted = false;
+                task.CompletedAt = null;
+                count++;
+            }
+            
+            await _context.SaveChangesAsync();
+            return Json(new { success = true, count = count });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting all tasks for all branches: {Message}", ex.Message);
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region API Endpoints - Complete Tasks
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CompleteAllForTask(int taskItemId, string date)
+    {
+        try
+        {
+            var localDate = DateTime.Parse(date).Date;
+            var utcStart = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            var utcEnd = utcStart.AddDays(1).AddSeconds(-1);
+            var completionTime = DateTime.UtcNow;
+            
+            var task = await _context.TaskItems.FindAsync(taskItemId);
+            if (task == null)
+                return Json(new { success = false, message = "Task not found" });
+
+            var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
+            var count = 0;
+            var taskData = new Dictionary<int, object>();
+
+            foreach (var branch in branches)
+            {
+                if (branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name))
+                    continue;
+
+                var dailyTask = await _context.DailyTasks
+                    .FirstOrDefaultAsync(dt => dt.BranchId == branch.Id &&
+                                               dt.TaskItemId == taskItemId &&
+                                               dt.TaskDate >= utcStart &&
+                                               dt.TaskDate <= utcEnd);
+
+                if (dailyTask == null)
+                {
+                    dailyTask = new DailyTask
+                    {
+                        BranchId = branch.Id,
+                        TaskItemId = taskItemId,
+                        TaskDate = utcStart,
+                        IsCompleted = true,
+                        CompletedAt = completionTime,
+                        IsBulkUpdated = true,
+                        BulkUpdateTime = DateTime.UtcNow
+                    };
+                    _context.DailyTasks.Add(dailyTask);
+                    count++;
+                    
+                    await AutoAssignTaskToEmployeeAsync(dailyTask, utcStart);
+                }
+                else if (!dailyTask.IsCompleted)
+                {
+                    dailyTask.IsCompleted = true;
+                    dailyTask.CompletedAt = completionTime;
+                    count++;
+                }
+
+                var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
+                var deadline = _taskCalculationService.CalculateDeadline(task, utcStart);
+                var adjustedDeadline = deadline.AddMinutes(dailyTask.AdjustmentMinutes ?? 0);
+                var holidayAdjustedDeadline = await _taskCalculationService.AdjustDeadlineForHolidaysAsync(adjustedDeadline);
+
+                taskData[branch.Id] = new
+                {
+                    branchId = branch.Id,
+                    taskId = taskItemId,
+                    isCompleted = true,
+                    completedAt = completionTime.ToLocalTime(),
+                    delayType = delayInfo.DelayType,
+                    delayText = delayInfo.DelayText,
+                    adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
+                    adjustmentReason = dailyTask.AdjustmentReason ?? "",
+                    assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
+                    deadline = holidayAdjustedDeadline.ToLocalTime(),
+                    holidayAdjusted = delayInfo.WasAdjustedForHoliday,
+                    holidayNote = delayInfo.HolidayAdjustmentNote
+                };
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                count = count,
+                taskData = taskData
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in complete all for task: {Message}", ex.Message);
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region API Endpoints - Adjustments
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveAdjustment(int branchId, int taskItemId, string date, int adjustmentMinutes, string adjustmentReason)
+    {
+        try
+        {
+            var localDate = DateTime.Parse(date).Date;
+            var utcStart = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            var utcEnd = utcStart.AddDays(1).AddSeconds(-1);
+            
+            var task = await _context.TaskItems.FindAsync(taskItemId);
+            if (task == null)
+                return Json(new { success = false, message = "Task not found" });
+
+            var dailyTask = await _context.DailyTasks
+                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
+                                           dt.TaskItemId == taskItemId &&
+                                           dt.TaskDate >= utcStart &&
+                                           dt.TaskDate <= utcEnd);
+
+            if (dailyTask == null)
+            {
+                dailyTask = new DailyTask
+                {
+                    BranchId = branchId,
+                    TaskItemId = taskItemId,
+                    TaskDate = utcStart,
+                    AdjustmentMinutes = adjustmentMinutes > 0 ? adjustmentMinutes : null,
+                    AdjustmentReason = adjustmentReason
+                };
+                _context.DailyTasks.Add(dailyTask);
+            }
+            else
+            {
+                dailyTask.AdjustmentMinutes = adjustmentMinutes > 0 ? adjustmentMinutes : null;
+                dailyTask.AdjustmentReason = adjustmentReason;
+            }
+
+            await _context.SaveChangesAsync();
+
+            var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
+            var deadline = _taskCalculationService.CalculateDeadline(task, utcStart);
+            var adjustedDeadline = deadline.AddMinutes(adjustmentMinutes);
+            var holidayAdjustedDeadline = await _taskCalculationService.AdjustDeadlineForHolidaysAsync(adjustedDeadline);
+            
+            var completedAt = dailyTask.IsCompleted ? dailyTask.CompletedAt : null;
+
+            var response = new
+            {
+                success = true,
+                taskData = new
+                {
+                    branchId = branchId,
+                    taskId = taskItemId,
+                    isCompleted = dailyTask.IsCompleted,
+                    completedAt = completedAt?.ToLocalTime(),
+                    delayType = delayInfo.DelayType,
+                    delayText = delayInfo.DelayText,
+                    adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
+                    adjustmentReason = dailyTask.AdjustmentReason ?? "",
+                    assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
+                    deadline = holidayAdjustedDeadline.ToLocalTime(),
+                    holidayAdjusted = delayInfo.WasAdjustedForHoliday,
+                    holidayNote = delayInfo.HolidayAdjustmentNote
+                }
+            };
+
+            return Json(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving adjustment: {Message}", ex.Message);
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region API Endpoints - Notes
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveNotes(int branchId, string notes)
+    {
+        try
+        {
+            var branch = await _context.Branches.FindAsync(branchId);
+            if (branch != null)
+            {
+                branch.Notes = notes ?? string.Empty;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Notes saved for branch {branchId}");
+            }
+
+            return Json(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving notes: {Message}", ex.Message);
+            return Json(new { success = false, message = "Error saving notes" });
+        }
+    }
+
+    #endregion
+
+    #region API Endpoints - Bulk Update
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BulkUpdate(int taskItemId, DateTime completionDateTime, List<int> branchIds)
+    {
+        try
+        {
+            var task = await _context.TaskItems.FindAsync(taskItemId);
+            if (task == null)
+                return Json(new { success = false, message = "Task not found" });
+
+            var localDate = completionDateTime.Date;
+            var utcTaskDate = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+            var utcStart = utcTaskDate;
+            var utcEnd = utcTaskDate.AddDays(1).AddSeconds(-1);
+            var utcCompletion = completionDateTime.Kind == DateTimeKind.Utc 
+                ? completionDateTime 
+                : DateTime.SpecifyKind(completionDateTime, DateTimeKind.Utc);
+            
+            var count = 0;
+            var taskData = new Dictionary<int, object>();
+
+            foreach (var branchId in branchIds)
+            {
+                var branch = await _context.Branches.FindAsync(branchId);
+
+                if (branch != null && branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name))
+                    continue;
+
+                var dailyTask = await _context.DailyTasks
+                    .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
+                                               dt.TaskItemId == taskItemId &&
+                                               dt.TaskDate >= utcStart &&
+                                               dt.TaskDate <= utcEnd);
+
+                if (dailyTask == null)
+                {
+                    dailyTask = new DailyTask
+                    {
+                        BranchId = branchId,
+                        TaskItemId = taskItemId,
+                        TaskDate = utcTaskDate,
+                        IsCompleted = true,
+                        CompletedAt = utcCompletion,
+                        IsBulkUpdated = true,
+                        BulkUpdateTime = DateTime.UtcNow
+                    };
+                    _context.DailyTasks.Add(dailyTask);
+                    count++;
+                    
+                    await AutoAssignTaskToEmployeeAsync(dailyTask, utcTaskDate);
+                }
+                else if (!dailyTask.IsCompleted)
+                {
+                    dailyTask.IsCompleted = true;
+                    dailyTask.CompletedAt = utcCompletion;
+                    dailyTask.IsBulkUpdated = true;
+                    dailyTask.BulkUpdateTime = DateTime.UtcNow;
+                    count++;
+                }
+
+                var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
+                var deadline = _taskCalculationService.CalculateDeadline(task, utcTaskDate);
+                var adjustedDeadline = deadline.AddMinutes(dailyTask.AdjustmentMinutes ?? 0);
+                var holidayAdjustedDeadline = await _taskCalculationService.AdjustDeadlineForHolidaysAsync(adjustedDeadline);
+
+                taskData[branchId] = new
+                {
+                    branchId = branchId,
+                    taskId = taskItemId,
+                    isCompleted = true,
+                    completedAt = utcCompletion.ToLocalTime(),
+                    delayType = delayInfo.DelayType,
+                    delayText = delayInfo.DelayText,
+                    adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
+                    adjustmentReason = dailyTask.AdjustmentReason ?? "",
+                    assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
+                    deadline = holidayAdjustedDeadline.ToLocalTime(),
+                    holidayAdjusted = delayInfo.WasAdjustedForHoliday,
+                    holidayNote = delayInfo.HolidayAdjustmentNote
+                };
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                count = count,
+                taskData = taskData
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in bulk update: {Message}", ex.Message);
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Diagnostic Endpoints
+
+    [HttpGet]
+    public async Task<IActionResult> DebugDateRange(DateTime? date)
+    {
+        var localDate = date?.Date ?? DateTime.Today;
+        var utcDate = DateTime.SpecifyKind(localDate, DateTimeKind.Utc);
+        var utcStart = utcDate.Date;
+        var utcEnd = utcDate.Date.AddDays(1).AddSeconds(-1);
+        
+        var dailyTasks = await _context.DailyTasks
+            .Where(dt => dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
+            .Select(dt => new { dt.Id, dt.BranchId, dt.TaskItemId, dt.TaskDate, dt.IsCompleted })
+            .ToListAsync();
+        
+        var branchAssignments = await _context.BranchAssignments
+            .Where(ba => ba.StartDate <= utcDate && (ba.EndDate == null || ba.EndDate >= utcDate))
+            .Select(ba => new { ba.Id, ba.BranchId, ba.EmployeeId, ba.StartDate, ba.EndDate })
+            .ToListAsync();
+        
+        return Json(new
+        {
+            localDate = localDate.ToString("yyyy-MM-dd"),
+            utcDate = utcDate.ToString("yyyy-MM-dd HH:mm:ss"),
+            utcRange = new { start = utcStart.ToString("yyyy-MM-dd HH:mm:ss"), end = utcEnd.ToString("yyyy-MM-dd HH:mm:ss") },
+            dailyTasksCount = dailyTasks.Count,
+            dailyTasks = dailyTasks.Take(10),
+            branchAssignmentsCount = branchAssignments.Count,
+            branchAssignments = branchAssignments.Take(10),
+            serverTimeUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+            serverTimeLocal = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+        });
+    }
+    [HttpGet]
+public async Task<IActionResult> GetDashboardStats(DateTime date)
+{
+    var utcDate = DateTime.SpecifyKind(date, DateTimeKind.Utc);
+    var utcStart = utcDate.Date;
+    var utcEnd = utcDate.Date.AddDays(1).AddSeconds(-1);
+    
+    var dailyTasks = await _context.DailyTasks
+        .Where(dt => dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
+        .ToListAsync();
+    
+    var completed = dailyTasks.Count(dt => dt.IsCompleted);
+    var pending = dailyTasks.Count(dt => !dt.IsCompleted);
+    var completionRate = (completed + pending) > 0 ? Math.Round((double)completed / (completed + pending) * 100) : 0;
+    
+    return Json(new { completed, pending, completionRate });
+}
+
+[HttpGet]
+public async Task<IActionResult> GetSparklineData(DateTime date)
+{
+    var result = new Dictionary<int, List<int>>();
+    var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
+    
+    for (int i = 6; i >= 0; i--)
+    {
+        var pastDate = date.AddDays(-i);
+        var utcDate = DateTime.SpecifyKind(pastDate, DateTimeKind.Utc);
+        var utcStart = utcDate.Date;
+        var utcEnd = utcDate.Date.AddDays(1).AddSeconds(-1);
+        
+        foreach (var branch in branches)
+        {
+            if (!result.ContainsKey(branch.Id))
+                result[branch.Id] = new List<int>();
+            
+            var dailyTasks = await _context.DailyTasks
+                .Where(dt => dt.BranchId == branch.Id && dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
+                .ToListAsync();
+            
+            var completed = dailyTasks.Count(dt => dt.IsCompleted);
+            result[branch.Id].Add(completed);
+        }
+    }
+    
+    return Json(result);
+}
+
     [HttpGet]
     public async Task<IActionResult> CheckHolidays(DateTime? date)
     {
@@ -1016,6 +1030,8 @@ public class HomeController : Controller
             specificHolidays = specificHolidays.Select(h => new { h.HolidayDate, h.Description })
         });
     }
+
+    #endregion
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
