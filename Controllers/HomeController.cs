@@ -1086,7 +1086,55 @@ public async Task<IActionResult> TestDatabase()
         return Json(new { success = false, error = ex.Message });
     }
 }
-
+[HttpGet]
+public async Task<IActionResult> DebugTaskDates(int branchId, int taskId, string date)
+{
+    try
+    {
+        var localDate = DateTime.Parse(date).Date;
+        var utcStart = _timezoneService.GetStartOfDayLocal(localDate);
+        var utcEnd = _timezoneService.GetEndOfDayLocal(localDate);
+        
+        var dailyTask = await _context.DailyTasks
+            .Include(dt => dt.TaskItem)
+            .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
+                                       dt.TaskItemId == taskId &&
+                                       dt.TaskDate >= utcStart &&
+                                       dt.TaskDate <= utcEnd);
+        
+        if (dailyTask == null)
+        {
+            return Json(new { 
+                exists = false,
+                localDate = localDate.ToString("yyyy-MM-dd HH:mm:ss"),
+                utcStart = utcStart.ToString("yyyy-MM-dd HH:mm:ss"),
+                utcEnd = utcEnd.ToString("yyyy-MM-dd HH:mm:ss"),
+                serverTime = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                localTime = _timezoneService.GetCurrentLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+            });
+        }
+        
+        var deadline = _taskCalculationService.CalculateDeadline(dailyTask.TaskItem, dailyTask.TaskDate);
+        
+        return Json(new
+        {
+            exists = true,
+            storedTaskDate = dailyTask.TaskDate.ToString("yyyy-MM-dd HH:mm:ss"),
+            storedTaskDateKind = dailyTask.TaskDate.Kind.ToString(),
+            storedCompletedAt = dailyTask.CompletedAt?.ToString("yyyy-MM-dd HH:mm:ss"),
+            storedCompletedAtKind = dailyTask.CompletedAt?.Kind.ToString(),
+            calculatedDeadline = deadline.ToString("yyyy-MM-dd HH:mm:ss"),
+            deadlineKind = deadline.Kind.ToString(),
+            localDeadline = _timezoneService.ConvertToLocalTime(deadline).ToString("yyyy-MM-dd HH:mm:ss"),
+            isCompleted = dailyTask.IsCompleted,
+            isOnTime = _taskCalculationService.IsTaskOnTime(dailyTask)
+        });
+    }
+    catch (Exception ex)
+    {
+        return Json(new { error = ex.Message });
+    }
+}
 [HttpGet]
 public IActionResult Test()
 {
