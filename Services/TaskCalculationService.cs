@@ -31,44 +31,42 @@ public class TaskCalculationService : ITaskCalculationService
 
     #region Core Calculations
 
-public DateTime CalculateDeadline(TaskItem task, DateTime taskDate)
-{
-    // Ensure taskDate has UTC kind
-    DateTime utcTaskDate;
-    
-    if (taskDate.Kind == DateTimeKind.Unspecified)
+    /// <summary>
+    /// Calculate deadline in UTC - SIMPLIFIED
+    /// Assumes taskDate is already in UTC
+    /// </summary>
+    public DateTime CalculateDeadline(TaskItem task, DateTime taskDate)
     {
-        utcTaskDate = DateTime.SpecifyKind(taskDate, DateTimeKind.Utc);
+        // Ensure taskDate is UTC
+        DateTime utcTaskDate;
+        if (taskDate.Kind == DateTimeKind.Unspecified)
+        {
+            utcTaskDate = DateTime.SpecifyKind(taskDate, DateTimeKind.Utc);
+        }
+        else if (taskDate.Kind == DateTimeKind.Local)
+        {
+            utcTaskDate = taskDate.ToUniversalTime();
+        }
+        else
+        {
+            utcTaskDate = taskDate;
+        }
+        
+        // Calculate deadline in UTC
+        var deadline = utcTaskDate.Date;
+        
+        if (task.IsSameDay)
+        {
+            deadline = deadline.Add(task.Deadline);
+        }
+        else
+        {
+            deadline = deadline.AddDays(1).Add(task.Deadline);
+        }
+        
+        return deadline;
     }
-    else if (taskDate.Kind == DateTimeKind.Local)
-    {
-        utcTaskDate = taskDate.ToUniversalTime();
-    }
-    else
-    {
-        utcTaskDate = taskDate;
-    }
-    
-    // Calculate deadline in UTC
-    var deadline = utcTaskDate.Date;
-    
-    if (task.IsSameDay)
-    {
-        deadline = deadline.Add(task.Deadline);
-    }
-    else
-    {
-        deadline = deadline.AddDays(1).Add(task.Deadline);
-    }
-    
-    return deadline;
-}
 
-public DateTime GetLocalDeadline(TaskItem task, DateTime taskDate, ITimezoneService timezoneService)
-{
-    var utcDeadline = CalculateDeadline(task, taskDate);
-    return timezoneService.ConvertToLocalTime(utcDeadline);
-}
     public DateTime GetLocalDeadline(TaskItem task, DateTime taskDate)
     {
         var utcDeadline = CalculateDeadline(task, taskDate);
@@ -88,7 +86,7 @@ public DateTime GetLocalDeadline(TaskItem task, DateTime taskDate, ITimezoneServ
         }
 
         var diffSeconds = (dailyTask.CompletedAt.Value - deadline).TotalSeconds;
-        return diffSeconds <= 300;
+        return diffSeconds <= 300; // 5 minute grace period
     }
 
     public bool IsTaskOnTime(DateTime taskDate, DateTime? completedAt, TimeSpan deadlineTime, bool isSameDay, int? adjustmentMinutes)

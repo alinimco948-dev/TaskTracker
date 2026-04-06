@@ -331,61 +331,63 @@ public async Task<IActionResult> Index(DateTime? date)
 
     #region API Endpoints - Task Status
 
-    [HttpGet]
-    public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, string date)
+[HttpGet]
+public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, string date)
+{
+    try
     {
-        try
+        // Parse the date as local
+        var localDate = DateTime.Parse(date).Date;
+        
+        // Convert to UTC for database query
+        var utcStart = _timezoneService.GetStartOfDayLocal(localDate);
+        var utcEnd = _timezoneService.GetEndOfDayLocal(localDate);
+        
+        var task = await _context.TaskItems.FindAsync(taskItemId);
+        if (task == null)
+            return Json(new { exists = false });
+
+        var dailyTask = await _context.DailyTasks
+            .Include(dt => dt.TaskItem)
+            .Include(dt => dt.TaskAssignment)
+                .ThenInclude(ta => ta != null ? ta.Employee : null)
+            .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
+                                       dt.TaskItemId == taskItemId &&
+                                       dt.TaskDate >= utcStart &&
+                                       dt.TaskDate <= utcEnd);
+
+        if (dailyTask == null)
         {
-            var localDate = DateTime.Parse(date).Date;
-            var utcStart = _timezoneService.GetStartOfDayLocal(localDate);
-            var utcEnd = _timezoneService.GetEndOfDayLocal(localDate);
-            
-            var task = await _context.TaskItems.FindAsync(taskItemId);
-            if (task == null)
-                return Json(new { exists = false });
-
-            var dailyTask = await _context.DailyTasks
-                .Include(dt => dt.TaskItem)
-                .Include(dt => dt.TaskAssignment)
-                    .ThenInclude(ta => ta != null ? ta.Employee : null)
-                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
-                                           dt.TaskItemId == taskItemId &&
-                                           dt.TaskDate >= utcStart &&
-                                           dt.TaskDate <= utcEnd);
-
-            if (dailyTask == null)
-            {
-                return Json(new { exists = false });
-            }
-
-            var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
-
-            var response = new
-            {
-                exists = true,
-                branchId = branchId,
-                taskId = taskItemId,
-                isCompleted = dailyTask.IsCompleted,
-                completedAt = dailyTask.CompletedAt.HasValue ? _timezoneService.ConvertToLocalTime(dailyTask.CompletedAt.Value) : (DateTime?)null,
-                delayType = delayInfo.DelayType,
-                delayText = delayInfo.DelayText,
-                adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
-                adjustmentReason = dailyTask.AdjustmentReason ?? "",
-                assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
-                deadline = delayInfo.Deadline,
-                holidayAdjusted = delayInfo.WasAdjustedForHoliday,
-                holidayNote = delayInfo.HolidayAdjustmentNote
-            };
-
-            return Json(response);
+            return Json(new { exists = false });
         }
-        catch (Exception ex)
+
+        var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
+
+        var response = new
         {
-            _logger.LogError(ex, "Error getting task status: {Message}", ex.Message);
-            return Json(new { exists = false, error = ex.Message });
-        }
+            exists = true,
+            branchId = branchId,
+            taskId = taskItemId,
+            isCompleted = dailyTask.IsCompleted,
+            completedAt = dailyTask.CompletedAt.HasValue ? _timezoneService.ConvertToLocalTime(dailyTask.CompletedAt.Value) : (DateTime?)null,
+            delayType = delayInfo.DelayType,
+            delayText = delayInfo.DelayText,
+            adjustmentMinutes = dailyTask.AdjustmentMinutes ?? 0,
+            adjustmentReason = dailyTask.AdjustmentReason ?? "",
+            assignedTo = dailyTask.TaskAssignment?.Employee?.Name ?? "",
+            deadline = delayInfo.Deadline,
+            holidayAdjusted = delayInfo.WasAdjustedForHoliday,
+            holidayNote = delayInfo.HolidayAdjustmentNote
+        };
+
+        return Json(response);
     }
-
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error getting task status: {Message}", ex.Message);
+        return Json(new { exists = false, error = ex.Message });
+    }
+}
     #endregion
 
     #region API Endpoints - Update Task Time
