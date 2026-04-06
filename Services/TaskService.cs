@@ -14,19 +14,22 @@ public class TaskService : ITaskService
     private readonly IAuditService _auditService;
     private readonly IHolidayService _holidayService;
     private readonly ITaskCalculationService _taskCalculationService;
+    private readonly ITimezoneService _timezoneService;
 
     public TaskService(
         ApplicationDbContext context,
         ILogger<TaskService> logger,
         IAuditService auditService,
         IHolidayService holidayService,
-        ITaskCalculationService taskCalculationService)
+        ITaskCalculationService taskCalculationService,
+        ITimezoneService timezoneService)
     {
         _context = context;
         _logger = logger;
         _auditService = auditService;
         _holidayService = holidayService;
         _taskCalculationService = taskCalculationService;
+        _timezoneService = timezoneService;
     }
 
     public async Task<List<TaskListViewModel>> GetAllTasksAsync()
@@ -36,9 +39,16 @@ public class TaskService : ITaskService
             var tasks = await _context.TaskItems.OrderBy(t => t.DisplayOrder).ToListAsync();
             return tasks.Select(t => new TaskListViewModel
             {
-                Id = t.Id, Name = t.Name, Deadline = t.Deadline, IsSameDay = t.IsSameDay,
-                DisplayOrder = t.DisplayOrder, IsActive = t.IsActive, ExecutionType = t.ExecutionType,
-                StartDate = t.StartDate, EndDate = t.EndDate, DurationDays = t.DurationDays
+                Id = t.Id,
+                Name = t.Name,
+                Deadline = t.Deadline,
+                IsSameDay = t.IsSameDay,
+                DisplayOrder = t.DisplayOrder,
+                IsActive = t.IsActive,
+                ExecutionType = t.ExecutionType,
+                StartDate = t.StartDate.HasValue ? _timezoneService.ConvertToLocalTime(t.StartDate.Value) : null,
+                EndDate = t.EndDate.HasValue ? _timezoneService.ConvertToLocalTime(t.EndDate.Value) : null,
+                DurationDays = t.DurationDays
             }).ToList();
         }
         catch (Exception ex)
@@ -48,7 +58,8 @@ public class TaskService : ITaskService
         }
     }
 
-    public async Task<TaskItem?> GetTaskByIdAsync(int id) => await _context.TaskItems.FindAsync(id);
+    public async Task<TaskItem?> GetTaskByIdAsync(int id) 
+        => await _context.TaskItems.FindAsync(id);
 
     public async Task<TaskItem> CreateTaskAsync(TaskItemViewModel model)
     {
@@ -57,22 +68,48 @@ public class TaskService : ITaskService
             if (await _context.TaskItems.AnyAsync(t => t.Name == model.Name))
                 throw new InvalidOperationException($"Task with name '{model.Name}' already exists");
 
-            int displayOrder = model.DisplayOrder > 0 ? model.DisplayOrder : (await _context.TaskItems.MaxAsync(t => (int?)t.DisplayOrder) ?? 0) + 1;
+            int displayOrder = model.DisplayOrder > 0 
+                ? model.DisplayOrder 
+                : (await _context.TaskItems.MaxAsync(t => (int?)t.DisplayOrder) ?? 0) + 1;
+
+            // Convert dates to UTC
+            DateTime? startDateUtc = model.StartDate.HasValue
+                ? _timezoneService.GetStartOfDayLocal(model.StartDate.Value)
+                : null;
+            DateTime? endDateUtc = model.EndDate.HasValue
+                ? _timezoneService.GetEndOfDayLocal(model.EndDate.Value)
+                : null;
+            DateTime? availableFromUtc = model.AvailableFrom.HasValue
+                ? _timezoneService.GetStartOfDayLocal(model.AvailableFrom.Value)
+                : null;
+            DateTime? availableToUtc = model.AvailableTo.HasValue
+                ? _timezoneService.GetEndOfDayLocal(model.AvailableTo.Value)
+                : null;
+
+            // Calculate EndDate for Multi-Day tasks
+            if (model.ExecutionType == TaskExecutionType.MultiDay && model.DurationDays.HasValue && startDateUtc.HasValue)
+            {
+                endDateUtc = startDateUtc.Value.AddDays(model.DurationDays.Value - 1);
+            }
 
             var task = new TaskItem
             {
-                Name = model.Name, Deadline = model.Deadline, IsSameDay = model.IsSameDay,
-                DisplayOrder = displayOrder, Description = model.Description, IsActive = true,
-                CreatedAt = DateTime.UtcNow, ExecutionType = model.ExecutionType,
+                Name = model.Name,
+                Deadline = model.Deadline,
+                IsSameDay = model.IsSameDay,
+                DisplayOrder = displayOrder,
+                Description = model.Description,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                ExecutionType = model.ExecutionType,
                 WeeklyDays = model.WeeklyDays.Any() ? string.Join(",", model.WeeklyDays) : null,
-                MonthlyPattern = model.MonthlyPattern, DurationDays = model.DurationDays,
-                StartDate = model.StartDate.HasValue ? DateTime.SpecifyKind(model.StartDate.Value, DateTimeKind.Utc) : null,
-                EndDate = model.ExecutionType == TaskExecutionType.MultiDay && model.DurationDays.HasValue && model.StartDate.HasValue
-                    ? DateTime.SpecifyKind(model.StartDate.Value, DateTimeKind.Utc).AddDays(model.DurationDays.Value - 1)
-                    : (model.EndDate.HasValue ? DateTime.SpecifyKind(model.EndDate.Value, DateTimeKind.Utc) : null),
+                MonthlyPattern = model.MonthlyPattern,
+                DurationDays = model.DurationDays,
+                StartDate = startDateUtc,
+                EndDate = endDateUtc,
                 MaxOccurrences = model.MaxOccurrences,
-                AvailableFrom = model.AvailableFrom.HasValue ? DateTime.SpecifyKind(model.AvailableFrom.Value, DateTimeKind.Utc) : null,
-                AvailableTo = model.AvailableTo.HasValue ? DateTime.SpecifyKind(model.AvailableTo.Value, DateTimeKind.Utc) : null
+                AvailableFrom = availableFromUtc,
+                AvailableTo = availableToUtc
             };
 
             _context.TaskItems.Add(task);
@@ -97,18 +134,41 @@ public class TaskService : ITaskService
             if (await _context.TaskItems.AnyAsync(t => t.Name == model.Name && t.Id != model.Id))
                 throw new InvalidOperationException($"Task with name '{model.Name}' already exists");
 
-            task.Name = model.Name; task.Deadline = model.Deadline; task.IsSameDay = model.IsSameDay;
-            task.Description = model.Description; task.IsActive = model.IsActive; task.UpdatedAt = DateTime.UtcNow;
+            // Convert dates to UTC
+            DateTime? startDateUtc = model.StartDate.HasValue
+                ? _timezoneService.GetStartOfDayLocal(model.StartDate.Value)
+                : null;
+            DateTime? endDateUtc = model.EndDate.HasValue
+                ? _timezoneService.GetEndOfDayLocal(model.EndDate.Value)
+                : null;
+            DateTime? availableFromUtc = model.AvailableFrom.HasValue
+                ? _timezoneService.GetStartOfDayLocal(model.AvailableFrom.Value)
+                : null;
+            DateTime? availableToUtc = model.AvailableTo.HasValue
+                ? _timezoneService.GetEndOfDayLocal(model.AvailableTo.Value)
+                : null;
+
+            // Calculate EndDate for Multi-Day tasks
+            if (model.ExecutionType == TaskExecutionType.MultiDay && model.DurationDays.HasValue && startDateUtc.HasValue)
+            {
+                endDateUtc = startDateUtc.Value.AddDays(model.DurationDays.Value - 1);
+            }
+
+            task.Name = model.Name;
+            task.Deadline = model.Deadline;
+            task.IsSameDay = model.IsSameDay;
+            task.Description = model.Description;
+            task.IsActive = model.IsActive;
+            task.UpdatedAt = DateTime.UtcNow;
             task.ExecutionType = model.ExecutionType;
             task.WeeklyDays = model.WeeklyDays.Any() ? string.Join(",", model.WeeklyDays) : null;
-            task.MonthlyPattern = model.MonthlyPattern; task.DurationDays = model.DurationDays;
-            task.StartDate = model.StartDate.HasValue ? DateTime.SpecifyKind(model.StartDate.Value, DateTimeKind.Utc) : null;
-            task.EndDate = model.ExecutionType == TaskExecutionType.MultiDay && model.DurationDays.HasValue && model.StartDate.HasValue
-                ? DateTime.SpecifyKind(model.StartDate.Value, DateTimeKind.Utc).AddDays(model.DurationDays.Value - 1)
-                : (model.EndDate.HasValue ? DateTime.SpecifyKind(model.EndDate.Value, DateTimeKind.Utc) : null);
+            task.MonthlyPattern = model.MonthlyPattern;
+            task.DurationDays = model.DurationDays;
+            task.StartDate = startDateUtc;
+            task.EndDate = endDateUtc;
             task.MaxOccurrences = model.MaxOccurrences;
-            task.AvailableFrom = model.AvailableFrom.HasValue ? DateTime.SpecifyKind(model.AvailableFrom.Value, DateTimeKind.Utc) : null;
-            task.AvailableTo = model.AvailableTo.HasValue ? DateTime.SpecifyKind(model.AvailableTo.Value, DateTimeKind.Utc) : null;
+            task.AvailableFrom = availableFromUtc;
+            task.AvailableTo = availableToUtc;
 
             await _context.SaveChangesAsync();
             await _auditService.LogAsync("Update", "TaskItem", task.Id, $"Updated task: {task.Name}");
@@ -210,8 +270,16 @@ public class TaskService : ITaskService
     {
         try
         {
-            var allTasks = await _context.TaskItems.Where(t => t.IsActive).OrderBy(t => t.DisplayOrder).ToListAsync();
-            return allTasks.Where(t => _taskCalculationService.IsTaskVisibleOnDate(t, date)).ToList();
+            // Convert input date to UTC for consistent comparison
+            var utcDate = _timezoneService.GetStartOfDayLocal(date);
+            var allTasks = await _context.TaskItems
+                .Where(t => t.IsActive)
+                .OrderBy(t => t.DisplayOrder)
+                .ToListAsync();
+            
+            // Use local date for visibility check
+            var localDate = _timezoneService.ConvertToLocalTime(utcDate);
+            return allTasks.Where(t => _taskCalculationService.IsTaskVisibleOnDate(t, localDate)).ToList();
         }
         catch (Exception ex)
         {
@@ -224,21 +292,29 @@ public class TaskService : ITaskService
     {
         try
         {
-            var dailyTask = await _context.DailyTasks.FirstOrDefaultAsync(dt => dt.BranchId == branchId && dt.TaskItemId == task.Id && dt.TaskDate.Date == viewingDate.Date);
+            var utcViewingDate = _timezoneService.GetStartOfDayLocal(viewingDate);
+            var dailyTask = await _context.DailyTasks
+                .FirstOrDefaultAsync(dt => dt.BranchId == branchId && 
+                                          dt.TaskItemId == task.Id && 
+                                          dt.TaskDate.Date == utcViewingDate.Date);
+            
             var isHoliday = await _holidayService.IsHolidayAsync(viewingDate);
 
-            var deadline = _taskCalculationService.CalculateDeadline(task, viewingDate);
-            if (dailyTask?.AdjustmentMinutes > 0) deadline = deadline.AddMinutes(dailyTask.AdjustmentMinutes.Value);
+            var deadline = _taskCalculationService.CalculateDeadline(task, utcViewingDate);
+            if (dailyTask?.AdjustmentMinutes > 0) 
+                deadline = deadline.AddMinutes(dailyTask.AdjustmentMinutes.Value);
 
             if (!completionTime.HasValue)
             {
                 var now = DateTime.UtcNow;
-                if (now <= deadline) return new DelayResult { Type = isHoliday ? "holiday" : "on-time", IsHoliday = isHoliday };
+                if (now <= deadline) 
+                    return new DelayResult { Type = isHoliday ? "holiday" : "on-time", IsHoliday = isHoliday };
+                
                 var diff = now - deadline;
                 return FormatDelay(diff, isHoliday);
             }
 
-            var compTimeUtc = DateTime.SpecifyKind(completionTime.Value, DateTimeKind.Utc);
+            var compTimeUtc = _timezoneService.ConvertToUtc(completionTime.Value);
             var deadlineUtc = DateTime.SpecifyKind(deadline, DateTimeKind.Utc);
 
             if (compTimeUtc <= deadlineUtc)
@@ -269,8 +345,10 @@ public class TaskService : ITaskService
         var hours = (int)diff.TotalHours;
         var days = (int)diff.TotalDays;
 
-        if (days > 0) return new DelayResult { Type = "days", Text = $"{days}d late", IsHoliday = isHoliday };
-        if (hours > 0) return new DelayResult { Type = "hours", Text = $"{hours}h {mins % 60}m late", IsHoliday = isHoliday };
+        if (days > 0) 
+            return new DelayResult { Type = "days", Text = $"{days}d late", IsHoliday = isHoliday };
+        if (hours > 0) 
+            return new DelayResult { Type = "hours", Text = $"{hours}h {mins % 60}m late", IsHoliday = isHoliday };
         return new DelayResult { Type = "minutes", Text = $"{mins}m late", IsHoliday = isHoliday };
     }
 }

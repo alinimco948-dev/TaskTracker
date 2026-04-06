@@ -2,8 +2,34 @@
 @using TaskTracker.Models.Entities
 @{
     ViewData["Title"] = "Dashboard";
-    var dateKey = Model.CurrentDate.ToString("yyyy-MM-dd");
-
+    
+    // Helper function for safe date arithmetic
+    DateTime SafeDate(DateTime date)
+    {
+        if (date == DateTime.MinValue || date == DateTime.MaxValue)
+            date = DateTime.UtcNow;
+        if (date.Kind == DateTimeKind.Unspecified)
+            date = DateTime.SpecifyKind(date, DateTimeKind.Local);
+        return date;
+    }
+    
+    DateTime SafeAddDays(DateTime date, int days)
+    {
+        try
+        {
+            return SafeDate(date).AddDays(days);
+        }
+        catch
+        {
+            return SafeDate(date);
+        }
+    }
+    
+    var safeCurrentDate = SafeDate(Model.CurrentDate);
+    var dateKey = safeCurrentDate.ToString("yyyy-MM-dd");
+    var previousDate = SafeAddDays(safeCurrentDate, -1);
+    var previousDateKey = previousDate.ToString("yyyy-MM-dd");
+    
     var hiddenTasksDict = ViewBag.HiddenTasks as Dictionary<int, List<string>> ?? new Dictionary<int, List<string>>();
 
     var token = "";
@@ -17,12 +43,11 @@
         }
     }
     
-    var notesDict = Model.NotesData;
+    var notesDict = Model.NotesData ?? new Dictionary<string, string>();
     
-    var previousDate = Model.CurrentDate.AddDays(-1);
-    var previousDateKey = previousDate.ToString("yyyy-MM-dd");
+    // Calculate completed tasks count only (on-time rate will be calculated client-side)
+    var completedTasks = Model.TaskData.Count(kvp => kvp.Value?.IsCompleted == true);
 }
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -47,57 +72,58 @@
         </script>
 
         <!-- Header with Holiday Warning -->
-<div class="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-xl shadow-xl mb-4 overflow-hidden">
-    <div class="px-6 py-5">
-        <div class="flex flex-wrap justify-between items-center">
-            <div>
-                <div class="flex items-center gap-2 mb-1">
-                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <span class="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Live Dashboard</span>
-                </div>
-                <h1 class="text-2xl font-bold text-white">Task Dashboard</h1>
-                <div class="flex items-center gap-2 mt-1">
-                    <span class="text-xs text-gray-400">
-                        <i class="far fa-calendar-alt mr-1"></i>@Model.CurrentDate.ToString("dddd, MMMM d, yyyy")
-                    </span>
-                    @if (Model.IsHoliday)
-                    {
-                        <span class="px-2 py-0.5 bg-purple-500/30 text-purple-300 rounded-full text-[10px]">
-                            <i class="fas fa-calendar-alt mr-1"></i>@Model.HolidayName
-                        </span>
-                    }
-                </div>
-            </div>
-
-            <div class="flex items-center gap-3">
-                <div class="flex items-center bg-white/5 border border-gray-700 rounded-lg">
-                    <button type="button" onclick="changeDate(-1)" 
-                            class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-l-lg transition">
-                        <i class="fas fa-chevron-left text-xs"></i>
-                    </button>
-                    <div class="px-2 py-1 text-xs font-medium text-gray-300 border-x border-gray-700">
-                        @Model.CurrentDate.ToString("MMM dd")
+        <div class="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-xl shadow-xl mb-4 overflow-hidden">
+            <div class="px-6 py-5">
+                <div class="flex flex-wrap justify-between items-center">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                            <span class="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Live Dashboard</span>
+                        </div>
+                        <h1 class="text-2xl font-bold text-white">Task Dashboard</h1>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-xs text-gray-400">
+                                <i class="far fa-calendar-alt mr-1"></i>@safeCurrentDate.ToString("dddd, MMMM d, yyyy")
+                            </span>
+                            @if (Model.IsHoliday)
+                            {
+                                <span class="px-2 py-0.5 bg-purple-500/30 text-purple-300 rounded-full text-[10px]">
+                                    <i class="fas fa-calendar-alt mr-1"></i>@Model.HolidayName
+                                </span>
+                            }
+                        </div>
                     </div>
-                    <button type="button" onclick="changeDate(1)" 
-                            class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-r-lg transition">
-                        <i class="fas fa-chevron-right text-xs"></i>
-                    </button>
-                </div>
-                <input type="date" id="datePicker" value="@Model.CurrentDate.ToString("yyyy-MM-dd")"
-                       class="text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                       style="color-scheme: dark;" />
 
-                @if (!Model.IsHoliday)
-                {
-                    <button type="button" onclick="openBulkUpdateModal()" 
-                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition shadow-sm flex items-center gap-2">
-                        <i class="fas fa-layer-group text-[10px]"></i> Bulk
-                    </button>
-                }
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center bg-white/5 border border-gray-700 rounded-lg">
+                            <button type="button" onclick="changeDate(-1)" 
+                                    class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-l-lg transition">
+                                <i class="fas fa-chevron-left text-xs"></i>
+                            </button>
+                            <div class="px-2 py-1 text-xs font-medium text-gray-300 border-x border-gray-700">
+                                @safeCurrentDate.ToString("MMM dd")
+                            </div>
+                            <button type="button" onclick="changeDate(1)" 
+                                    class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-r-lg transition">
+                                <i class="fas fa-chevron-right text-xs"></i>
+                            </button>
+                        </div>
+                        <input type="date" id="datePicker" value="@safeCurrentDate.ToString("yyyy-MM-dd")"
+                               class="text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               style="color-scheme: dark;" />
+
+                        @if (!Model.IsHoliday)
+                        {
+                            <button type="button" onclick="openBulkUpdateModal()" 
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition shadow-sm flex items-center gap-2">
+                                <i class="fas fa-layer-group text-[10px]"></i> Bulk
+                            </button>
+                        }
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
+        
         <!-- Export Buttons -->
         <div class="flex justify-end gap-2 mb-3">
             <button onclick="exportDashboardToExcel()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg flex items-center transition">
@@ -188,9 +214,6 @@
                     <div>
                         <div class="text-[9px] text-gray-500 uppercase tracking-wider">Completed</div>
                         <p class="text-base font-bold text-green-600" id="completedCount">
-                            @{
-                                var completedTasks = Model.TaskData.Count(kvp => kvp.Value?.IsCompleted == true);
-                            }
                             @completedTasks
                         </p>
                         <div class="text-[8px] text-green-500" id="completedTrend">
@@ -339,7 +362,7 @@
                                             <i class="fas fa-user mr-0.5"></i>@Model.BranchAssignments[branch.Id]
                                         }
                                     </div>
-                                 </td>
+                                </td>
 
                                 @foreach (var task in Model.Tasks.OrderBy(t => t.DisplayOrder))
                                 {
@@ -745,7 +768,7 @@
             let newHtml = `<span class="font-mono font-bold flex-1 time-display">${timeDisplay}</span><span class="flex-1 text-[8px] truncate px-0.5 status-display">${statusDisplay}</span>`;
             if (data.assignedTo) {
                 const initial = data.assignedTo.charAt(0).toUpperCase();
-                newHtml += `<span class="inline-flex items-center justify-center w-3.5 h-3.5 bg-gray-200 text-gray-700 rounded-full text-[6px] font-bold flex-shrink-0" title="${data.assignedTo}">${initial}</span>`;
+                newHtml += `<span class="inline-flex items-center justify-center w-3.5 h-3.5 bg-gray-200 text-gray-700 rounded-full text-[6px] font-bold flex-shrink-0 employee-initial" title="${data.assignedTo}">${initial}</span>`;
             }
             
             button.html(newHtml).prop('disabled', false);
@@ -786,6 +809,16 @@
             });
             $('#completedCount').text(completed);
             $('#pendingCount').text(total - completed);
+            
+            // Calculate and update on-time rate
+            let onTimeCount = 0;
+            $('.task-button').each(function() {
+                if ($(this).hasClass('bg-green-100')) {
+                    onTimeCount++;
+                }
+            });
+            const onTimeRate = total > 0 ? Math.round((onTimeCount / total) * 100) : 0;
+            $('#onTimeRate').text(onTimeRate + '%');
         }
         
         function updateNotesIcon(branchId, notes) {
@@ -873,6 +906,18 @@
                 const completionRate = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
                 $('#overallCompletionRate').text(`${completionRate}%`);
                 $('#completionBar').css('width', `${completionRate}%`);
+                
+                // Update on-time rate based on visible tasks
+                let visibleOnTimeCount = 0;
+                let visibleTotalCount = 0;
+                $('.task-cell:not(.filtered-out) .task-button').each(function() {
+                    visibleTotalCount++;
+                    if ($(this).hasClass('bg-green-100')) {
+                        visibleOnTimeCount++;
+                    }
+                });
+                const visibleOnTimeRate = visibleTotalCount > 0 ? Math.round((visibleOnTimeCount / visibleTotalCount) * 100) : 0;
+                $('#onTimeRate').text(visibleOnTimeRate + '%');
                 
                 updateTrendIndicators();
                 $('#filterLoadingIndicator').remove();

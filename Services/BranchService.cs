@@ -11,15 +11,18 @@ public class BranchService : IBranchService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<BranchService> _logger;
     private readonly IAuditService _auditService;
+    private readonly ITimezoneService _timezoneService;
 
     public BranchService(
         ApplicationDbContext context,
         ILogger<BranchService> logger,
-        IAuditService auditService)
+        IAuditService auditService,
+        ITimezoneService timezoneService)
     {
         _context = context;
         _logger = logger;
         _auditService = auditService;
+        _timezoneService = timezoneService;
     }
 
     public async Task<List<BranchListViewModel>> GetAllBranchesAsync()
@@ -34,18 +37,19 @@ public class BranchService : IBranchService
                 .ToListAsync();
 
             var result = new List<BranchListViewModel>();
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
 
             foreach (var branch in branches)
             {
                 var activeEmployees = branch.BranchAssignments
-                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.Today.Date)
+                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
                     .Select(ba => ba.Employee)
                     .Where(e => e != null)
                     .ToList();
 
                 var employeeCount = activeEmployees.Count;
                 var employeeNames = activeEmployees.Select(e => e!.Name).ToList();
-                var completionRate = await GetBranchCompletionRateAsync(branch.Id, DateTime.Today);
+                var completionRate = await GetBranchCompletionRateAsync(branch.Id, todayLocal);
 
                 result.Add(new BranchListViewModel
                 {
@@ -165,6 +169,17 @@ public class BranchService : IBranchService
             var branch = await _context.Branches.FindAsync(id);
             if (branch == null) return false;
 
+            // Check if branch has active assignments
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            var hasActiveAssignments = await _context.BranchAssignments
+                .AnyAsync(ba => ba.BranchId == id && (ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal));
+
+            if (hasActiveAssignments)
+            {
+                _logger.LogWarning("Cannot delete branch {Id} with active employee assignments", id);
+                return false;
+            }
+
             branch.IsActive = false;
             branch.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -200,11 +215,15 @@ public class BranchService : IBranchService
             if (branch == null)
                 throw new Exception($"Branch {id} not found");
 
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            var utcStart = _timezoneService.GetStartOfDayLocal(todayLocal);
+            var utcEnd = _timezoneService.GetEndOfDayLocal(todayLocal);
+
             var employeeCount = branch.BranchAssignments
-                .Count(ba => ba.EndDate == null);
+                .Count(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal);
 
             var tasks = branch.DailyTasks
-                .Where(dt => dt.TaskDate.Date == DateTime.Today.Date)
+                .Where(dt => dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
                 .ToList();
 
             var totalTasks = tasks.Count;
@@ -266,7 +285,6 @@ public class BranchService : IBranchService
         }
     }
 
-    // FIXED: Allows employee to be assigned to multiple branches
     public async Task<bool> AssignEmployeeAsync(int branchId, int employeeId, DateTime startDate)
     {
         try
@@ -298,11 +316,14 @@ public class BranchService : IBranchService
                 return false;
             }
 
-            // Check if employee is already assigned to THIS SPECIFIC branch (not any branch)
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            var utcStartDate = _timezoneService.GetStartOfDayLocal(startDate);
+
+            // Check if employee is already assigned to THIS SPECIFIC branch
             var existingAssignment = await _context.BranchAssignments
                 .FirstOrDefaultAsync(ba => ba.EmployeeId == employeeId &&
                                            ba.BranchId == branchId &&
-                                           (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.Today.Date));
+                                           (ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal));
 
             if (existingAssignment != null)
             {
@@ -314,7 +335,7 @@ public class BranchService : IBranchService
             {
                 BranchId = branchId,
                 EmployeeId = employeeId,
-                StartDate = startDate.Date
+                StartDate = utcStartDate
             };
 
             _context.BranchAssignments.Add(assignment);
@@ -349,7 +370,8 @@ public class BranchService : IBranchService
 
             if (assignment == null) return false;
 
-            assignment.EndDate = DateTime.Today;
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            assignment.EndDate = _timezoneService.GetStartOfDayLocal(todayLocal);
             await _context.SaveChangesAsync();
 
             await _auditService.LogAsync(
@@ -438,10 +460,25 @@ public class BranchService : IBranchService
         return rates;
     }
 
+    public async Task<Dictionary<int, int>> GetActiveEmployeeCountsAsync()
+    {
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+        var assignments = await _context.BranchAssignments
+            .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
+            .GroupBy(ba => ba.BranchId)
+            .Select(g => new { BranchId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.BranchId, g => g.Count);
+
+        return assignments;
+    }
+
     private async Task<double> GetBranchCompletionRateAsync(int branchId, DateTime date)
     {
+        var utcStart = _timezoneService.GetStartOfDayLocal(date);
+        var utcEnd = _timezoneService.GetEndOfDayLocal(date);
+        
         var tasks = await _context.DailyTasks
-            .Where(dt => dt.BranchId == branchId && dt.TaskDate.Date == date.Date)
+            .Where(dt => dt.BranchId == branchId && dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
             .ToListAsync();
 
         if (!tasks.Any()) return 0;

@@ -3,8 +3,7 @@ using TaskTracker.Data;
 using TaskTracker.Models.Entities;
 using TaskTracker.Models.ViewModels;
 using TaskTracker.Services.Interfaces;
-using TaskTracker.Helpers;
-using ViewHelpers = TaskTracker.Models.ViewModels.ViewHelpers; // Add this using statement
+using ViewHelpers = TaskTracker.Models.ViewModels.ViewHelpers;
 
 namespace TaskTracker.Services;
 
@@ -13,15 +12,18 @@ public class DepartmentService : IDepartmentService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<DepartmentService> _logger;
     private readonly IAuditService _auditService;
+    private readonly ITimezoneService _timezoneService;
 
     public DepartmentService(
         ApplicationDbContext context,
         ILogger<DepartmentService> logger,
-        IAuditService auditService)
+        IAuditService auditService,
+        ITimezoneService timezoneService)
     {
         _context = context;
         _logger = logger;
         _auditService = auditService;
+        _timezoneService = timezoneService;
     }
 
     public async Task<List<DepartmentListViewModel>> GetAllDepartmentsAsync()
@@ -178,7 +180,6 @@ public class DepartmentService : IDepartmentService
             if (department == null)
                 throw new Exception($"Department {id} not found");
 
-            // Use ViewHelpers.GetInitials instead of local method
             var branches = department.Branches != null && department.Branches.Any()
                 ? department.Branches.Where(b => b.IsActive).Select(b => new DepartmentBranchItem
                 {
@@ -195,7 +196,7 @@ public class DepartmentService : IDepartmentService
                     Id = e.Id,
                     Name = e.Name,
                     Position = e.Position ?? string.Empty,
-                    Initials = ViewHelpers.GetInitials(e.Name) // Using shared helper
+                    Initials = ViewHelpers.GetInitials(e.Name)
                 }).ToList()
                 : new List<DepartmentEmployeeItem>();
 
@@ -245,12 +246,16 @@ public class DepartmentService : IDepartmentService
             .ToDictionaryAsync(g => g.DepartmentId, g => g.Count);
     }
 
-    // Private helper methods
+    #region Private Helper Methods
+
     private double GetBranchCompletionRate(int branchId)
     {
-        var today = DateTime.Today;
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+        var utcStart = _timezoneService.GetStartOfDayLocal(todayLocal);
+        var utcEnd = _timezoneService.GetEndOfDayLocal(todayLocal);
+        
         var tasks = _context.DailyTasks
-            .Where(dt => dt.BranchId == branchId && dt.TaskDate.Date == today.Date)
+            .Where(dt => dt.BranchId == branchId && dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
             .ToList();
 
         if (!tasks.Any()) return 0;
@@ -262,31 +267,39 @@ public class DepartmentService : IDepartmentService
     private async Task<int> GetDepartmentTaskCountAsync(int departmentId)
     {
         var branchIds = await _context.Branches
-            .Where(b => b.DepartmentId == departmentId)
+            .Where(b => b.DepartmentId == departmentId && b.IsActive)
             .Select(b => b.Id)
             .ToListAsync();
 
         if (!branchIds.Any()) return 0;
 
-        var today = DateTime.Today;
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+        var utcStart = _timezoneService.GetStartOfDayLocal(todayLocal);
+        var utcEnd = _timezoneService.GetEndOfDayLocal(todayLocal);
+        
         return await _context.DailyTasks
             .CountAsync(dt => branchIds.Contains(dt.BranchId) &&
-                             dt.TaskDate.Date == today.Date);
+                             dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd);
     }
 
     private async Task<int> GetDepartmentCompletedTaskCountAsync(int departmentId)
     {
         var branchIds = await _context.Branches
-            .Where(b => b.DepartmentId == departmentId)
+            .Where(b => b.DepartmentId == departmentId && b.IsActive)
             .Select(b => b.Id)
             .ToListAsync();
 
         if (!branchIds.Any()) return 0;
 
-        var today = DateTime.Today;
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+        var utcStart = _timezoneService.GetStartOfDayLocal(todayLocal);
+        var utcEnd = _timezoneService.GetEndOfDayLocal(todayLocal);
+        
         return await _context.DailyTasks
             .CountAsync(dt => branchIds.Contains(dt.BranchId) &&
-                             dt.TaskDate.Date == today.Date &&
+                             dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd &&
                              dt.IsCompleted);
     }
+
+    #endregion
 }

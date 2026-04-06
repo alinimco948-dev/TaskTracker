@@ -13,17 +13,20 @@ public class TaskController : Controller
     private readonly IBranchService _branchService;
     private readonly ILogger<TaskController> _logger;
     private readonly ApplicationDbContext _context;
+    private readonly ITimezoneService _timezoneService;
 
     public TaskController(
         ITaskService taskService,
         IBranchService branchService,
         ILogger<TaskController> logger,
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        ITimezoneService timezoneService)
     {
         _taskService = taskService;
         _branchService = branchService;
         _logger = logger;
         _context = context;
+        _timezoneService = timezoneService;
     }
 
     public async Task<IActionResult> Index()
@@ -89,18 +92,18 @@ public class TaskController : Controller
                 _logger.LogInformation($"Auto-assigned display order: {displayOrder}");
             }
 
-            // Convert dates to UTC
+            // Convert dates to UTC using timezone service
             DateTime? startDateUtc = model.StartDate.HasValue
-                ? DateTime.SpecifyKind(model.StartDate.Value, DateTimeKind.Utc)
+                ? _timezoneService.GetStartOfDayLocal(model.StartDate.Value)
                 : null;
             DateTime? endDateUtc = model.EndDate.HasValue
-                ? DateTime.SpecifyKind(model.EndDate.Value, DateTimeKind.Utc)
+                ? _timezoneService.GetEndOfDayLocal(model.EndDate.Value)
                 : null;
             DateTime? availableFromUtc = model.AvailableFrom.HasValue
-                ? DateTime.SpecifyKind(model.AvailableFrom.Value, DateTimeKind.Utc)
+                ? _timezoneService.GetStartOfDayLocal(model.AvailableFrom.Value)
                 : null;
             DateTime? availableToUtc = model.AvailableTo.HasValue
-                ? DateTime.SpecifyKind(model.AvailableTo.Value, DateTimeKind.Utc)
+                ? _timezoneService.GetEndOfDayLocal(model.AvailableTo.Value)
                 : null;
 
             // Calculate EndDate for Multi-Day tasks based on DurationDays
@@ -226,11 +229,11 @@ public class TaskController : Controller
 
             // Ensure dates are in UTC
             var startDate = task.StartDate.HasValue
-                ? DateTime.SpecifyKind(task.StartDate.Value, DateTimeKind.Utc)
-                : DateTime.UtcNow.Date;
+                ? task.StartDate.Value
+                : _timezoneService.GetStartOfDayLocal(_timezoneService.GetCurrentLocalTime());
             var endDate = task.EndDate.HasValue
-                ? DateTime.SpecifyKind(task.EndDate.Value, DateTimeKind.Utc)
-                : DateTime.UtcNow.AddYears(1);
+                ? task.EndDate.Value
+                : _timezoneService.GetEndOfDayLocal(_timezoneService.GetCurrentLocalTime().AddYears(1));
 
             var taskDates = GetTaskDates(task, startDate, endDate);
 
@@ -240,7 +243,7 @@ public class TaskController : Controller
             {
                 // Get active branch assignments for this employee
                 var activeAssignments = employee.BranchAssignments
-                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= _timezoneService.GetCurrentLocalTime().Date)
                     .ToList();
 
                 foreach (var assignment in activeAssignments)
@@ -319,11 +322,11 @@ public class TaskController : Controller
 
     private bool IsTaskVisibleOnDate(TaskItem task, DateTime date)
     {
+        // Use local date for visibility check (since task schedules are date-based)
+        var compareDate = date.Date;
+
         // Check if task is active
         if (!task.IsActive) return false;
-
-        // Ensure date is in UTC for comparison
-        var compareDate = date.Date;
 
         // Check availability range
         if (task.AvailableFrom.HasValue && compareDate < task.AvailableFrom.Value.Date)
@@ -454,11 +457,11 @@ public class TaskController : Controller
             WeeklyDays = !string.IsNullOrEmpty(task.WeeklyDays) ? task.WeeklyDays.Split(',').Select(int.Parse).ToList() : new List<int>(),
             MonthlyPattern = task.MonthlyPattern ?? "15",
             DurationDays = task.DurationDays,
-            StartDate = task.StartDate,
-            EndDate = task.EndDate,
+            StartDate = task.StartDate.HasValue ? _timezoneService.ConvertToLocalTime(task.StartDate.Value) : null,
+            EndDate = task.EndDate.HasValue ? _timezoneService.ConvertToLocalTime(task.EndDate.Value) : null,
             MaxOccurrences = task.MaxOccurrences,
-            AvailableFrom = task.AvailableFrom,
-            AvailableTo = task.AvailableTo
+            AvailableFrom = task.AvailableFrom.HasValue ? _timezoneService.ConvertToLocalTime(task.AvailableFrom.Value) : null,
+            AvailableTo = task.AvailableTo.HasValue ? _timezoneService.ConvertToLocalTime(task.AvailableTo.Value) : null
         };
 
         return View(model);

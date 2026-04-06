@@ -19,6 +19,7 @@ public class ReportService : IReportService
     private readonly IAuditService _auditService;
     private readonly IHolidayService _holidayService;
     private readonly ITaskCalculationService _taskCalculationService;
+    private readonly ITimezoneService _timezoneService;
 
     public ReportService(
         ApplicationDbContext context,
@@ -29,7 +30,8 @@ public class ReportService : IReportService
         ITaskService taskService,
         IAuditService auditService,
         IHolidayService holidayService,
-        ITaskCalculationService taskCalculationService)
+        ITaskCalculationService taskCalculationService,
+        ITimezoneService timezoneService)
     {
         _context = context;
         _logger = logger;
@@ -40,6 +42,7 @@ public class ReportService : IReportService
         _auditService = auditService;
         _holidayService = holidayService;
         _taskCalculationService = taskCalculationService;
+        _timezoneService = timezoneService;
         ExcelPackage.License.SetNonCommercialPersonal($"TaskTracker-{Environment.UserName}");
     }
 
@@ -158,13 +161,19 @@ public class ReportService : IReportService
             report.LastRunAt = DateTime.UtcNow;
             report.RunCount = (report.RunCount ?? 0) + 1;
 
-            var startDate = parameters?.ContainsKey("startDate") == true
-                ? DateTime.Parse(parameters["startDate"]?.ToString() ?? DateTime.Today.AddMonths(-1).ToString())
-                : report.StartDate ?? DateTime.Today.AddMonths(-1);
+            var todayLocal = _timezoneService.GetCurrentLocalTime();
+            
+            var startDateParam = parameters?.ContainsKey("startDate") == true
+                ? DateTime.Parse(parameters["startDate"]?.ToString() ?? todayLocal.AddMonths(-1).ToString())
+                : report.StartDate ?? todayLocal.AddMonths(-1);
 
-            var endDate = parameters?.ContainsKey("endDate") == true
-                ? DateTime.Parse(parameters["endDate"]?.ToString() ?? DateTime.Today.ToString())
-                : report.EndDate ?? DateTime.Today;
+            var endDateParam = parameters?.ContainsKey("endDate") == true
+                ? DateTime.Parse(parameters["endDate"]?.ToString() ?? todayLocal.ToString())
+                : report.EndDate ?? todayLocal;
+
+            // Convert to UTC for database queries
+            var startDate = _timezoneService.GetStartOfDayLocal(startDateParam);
+            var endDate = _timezoneService.GetEndOfDayLocal(endDateParam);
 
             object result = report.ReportType?.ToLower() switch
             {
@@ -180,13 +189,13 @@ public class ReportService : IReportService
                 "task" => await ExecuteTaskReportAsync(
                     parameters?.ContainsKey("taskId") == true ? Convert.ToInt32(parameters["taskId"]) : 0,
                     startDate, endDate),
-                "audit" => await ExecuteAuditReportAsync(startDate, endDate,
+                "audit" => await ExecuteAuditReportAsync(startDateParam, endDateParam,
                     parameters?.ContainsKey("action") == true ? parameters["action"]?.ToString() : null,
                     parameters?.ContainsKey("entityType") == true ? parameters["entityType"]?.ToString() : null),
                 _ => await ExecuteCustomReportAsync(new CustomReportRequest
                 {
-                    StartDate = startDate,
-                    EndDate = endDate,
+                    StartDate = startDateParam,
+                    EndDate = endDateParam,
                     BranchIds = parameters?.ContainsKey("branchIds") == true
                         ? JsonSerializer.Deserialize<List<int>>(parameters["branchIds"]?.ToString() ?? "[]") ?? new List<int>()
                         : new List<int>(),
@@ -226,8 +235,8 @@ public class ReportService : IReportService
                 { 
                     EmployeeId = employeeId, 
                     EmployeeName = "Unknown", 
-                    StartDate = startDate, 
-                    EndDate = endDate 
+                    StartDate = _timezoneService.ConvertToLocalTime(startDate), 
+                    EndDate = _timezoneService.ConvertToLocalTime(endDate) 
                 };
 
             var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(employeeId, startDate, endDate);
@@ -244,14 +253,15 @@ public class ReportService : IReportService
                 .Include(dt => dt.TaskItem)
                 .Include(dt => dt.Branch)
                 .Where(dt => assignedBranchIds.Contains(dt.BranchId) &&
-                             dt.TaskDate.Date >= startDate.Date &&
-                             dt.TaskDate.Date <= endDate.Date)
+                             dt.TaskDate >= startDate &&
+                             dt.TaskDate <= endDate)
                 .OrderBy(dt => dt.TaskDate)
                 .ToListAsync();
 
             var dailyBreakdown = new List<DailyPerformance>();
             var taskBreakdown = new Dictionary<string, TaskPerformanceStats>();
             var branchBreakdown = new Dictionary<string, BranchStatViewModel>();
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
 
             foreach (var dt in dailyTasks)
             {
@@ -259,16 +269,17 @@ public class ReportService : IReportService
 
                 var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt);
                 var taskName = dt.TaskItem.Name;
+                var localTaskDate = _timezoneService.ConvertToLocalTime(dt.TaskDate);
 
                 dailyBreakdown.Add(new DailyPerformance
                 {
-                    Date = dt.TaskDate,
+                    Date = localTaskDate,
                     BranchName = dt.Branch?.Name ?? "Unknown",
                     TaskName = taskName,
                     TaskType = GetTaskTypeName(dt.TaskItem.ExecutionType),
                     Deadline = dt.TaskItem.Deadline.ToString(@"hh\:mm"),
-                    CompletionTime = dt.CompletedAt?.ToLocalTime().ToString("HH:mm"),
-                    CompletionDateTime = dt.CompletedAt?.ToLocalTime(),
+                    CompletionTime = dt.CompletedAt.HasValue ? _timezoneService.ConvertToLocalTime(dt.CompletedAt.Value).ToString("HH:mm") : "",
+                    CompletionDateTime = dt.CompletedAt.HasValue ? _timezoneService.ConvertToLocalTime(dt.CompletedAt.Value) : null,
                     DeadlineDateTime = delayInfo.Deadline ?? DateTime.MinValue,
                     Status = dt.IsCompleted ? "Completed" : "Pending",
                     IsOnTime = delayInfo.IsOnTime,
@@ -302,11 +313,11 @@ public class ReportService : IReportService
                         BranchName = branchName,
                         StartDate = assignment?.StartDate,
                         EndDate = assignment?.EndDate,
-                        IsActive = assignment?.EndDate == null || assignment.EndDate.Value.Date >= DateTime.Today.Date,
+                        IsActive = assignment?.EndDate == null || _timezoneService.ConvertToLocalTime(assignment.EndDate.Value).Date >= todayLocal,
                         AssignmentPeriod = assignment != null 
                             ? (assignment.EndDate == null 
-                                ? $"From {assignment.StartDate:MMM dd, yyyy} → Present"
-                                : $"From {assignment.StartDate:MMM dd, yyyy} to {assignment.EndDate:MMM dd, yyyy}")
+                                ? $"From {_timezoneService.ConvertToLocalTime(assignment.StartDate):MMM dd, yyyy} → Present"
+                                : $"From {_timezoneService.ConvertToLocalTime(assignment.StartDate):MMM dd, yyyy} to {_timezoneService.ConvertToLocalTime(assignment.EndDate.Value):MMM dd, yyyy}")
                             : "Unknown"
                     };
                 }
@@ -327,6 +338,9 @@ public class ReportService : IReportService
                     ? Math.Round((double)branch.CompletedTasks / branch.TotalTasks * 100, 1) 
                     : 0;
             }
+
+            var localStartDate = _timezoneService.ConvertToLocalTime(startDate);
+            var localEndDate = _timezoneService.ConvertToLocalTime(endDate);
 
             var insights = await GenerateInsightsAsync(new EmployeePerformanceViewModel
             {
@@ -400,8 +414,8 @@ public class ReportService : IReportService
                 EmployeeIdNumber = employee.EmployeeId ?? employee.Id.ToString(),
                 Department = employee.Department?.Name ?? "N/A",
                 Position = employee.Position ?? "N/A",
-                StartDate = startDate,
-                EndDate = endDate,
+                StartDate = localStartDate,
+                EndDate = localEndDate,
                 TotalTasks = stats.TotalTasks,
                 CompletedTasks = stats.CompletedTasks,
                 PendingTasks = stats.PendingTasks,
@@ -445,8 +459,8 @@ public class ReportService : IReportService
                 { 
                     BranchId = branchId, 
                     BranchName = "Unknown", 
-                    StartDate = startDate, 
-                    EndDate = endDate 
+                    StartDate = _timezoneService.ConvertToLocalTime(startDate), 
+                    EndDate = _timezoneService.ConvertToLocalTime(endDate) 
                 };
 
             var stats = await _taskCalculationService.GetBranchTaskStatisticsAsync(branchId, startDate, endDate);
@@ -456,8 +470,8 @@ public class ReportService : IReportService
                 .Include(dt => dt.TaskAssignment)
                     .ThenInclude(ta => ta.Employee)
                 .Where(dt => dt.BranchId == branchId && 
-                             dt.TaskDate.Date >= startDate.Date && 
-                             dt.TaskDate.Date <= endDate.Date)
+                             dt.TaskDate >= startDate && 
+                             dt.TaskDate <= endDate)
                 .OrderBy(dt => dt.TaskDate)
                 .ToListAsync();
 
@@ -470,10 +484,10 @@ public class ReportService : IReportService
                 
                 dailyBreakdown.Add(new BranchDailyTaskViewModel
                 {
-                    Date = dt.TaskDate,
+                    Date = _timezoneService.ConvertToLocalTime(dt.TaskDate),
                     TaskName = dt.TaskItem?.Name ?? "Unknown",
                     Status = dt.IsCompleted ? "Completed" : "Pending",
-                    CompletionTime = dt.CompletedAt?.ToLocalTime(),
+                    CompletionTime = dt.CompletedAt.HasValue ? _timezoneService.ConvertToLocalTime(dt.CompletedAt.Value) : null,
                     Deadline = delayInfo.Deadline ?? DateTime.MinValue,
                     IsOnTime = delayInfo.IsOnTime,
                     AssignedTo = dt.TaskAssignment?.Employee?.Name ?? "Unassigned",
@@ -510,7 +524,7 @@ public class ReportService : IReportService
             var needsImprovement = new List<EmployeePerformanceSummary>();
 
             var employees = await _context.Employees
-                .Where(e => e.BranchAssignments.Any(ba => ba.BranchId == branchId && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.Today.Date)))
+                .Where(e => e.BranchAssignments.Any(ba => ba.BranchId == branchId && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)))
                 .ToListAsync();
 
             foreach (var emp in employees)
@@ -549,6 +563,9 @@ public class ReportService : IReportService
                 insights.Add($"👥 Average employee performance score: {avgEmployeeScore:F1}%");
             }
 
+            var localStartDate = _timezoneService.ConvertToLocalTime(startDate);
+            var localEndDate = _timezoneService.ConvertToLocalTime(endDate);
+
             return new BranchPerformanceViewModel
             {
                 BranchId = branchId,
@@ -556,8 +573,8 @@ public class ReportService : IReportService
                 BranchCode = branch.Code ?? "N/A",
                 Department = branch.Department?.Name ?? "N/A",
                 Location = branch.Address ?? "N/A",
-                StartDate = startDate,
-                EndDate = endDate,
+                StartDate = localStartDate,
+                EndDate = localEndDate,
                 TotalTasks = stats.TotalTasks,
                 CompletedTasks = stats.CompletedTasks,
                 PendingTasks = stats.TotalTasks - stats.CompletedTasks,
@@ -597,8 +614,8 @@ public class ReportService : IReportService
                 { 
                     DepartmentId = departmentId, 
                     DepartmentName = "Unknown", 
-                    StartDate = startDate, 
-                    EndDate = endDate 
+                    StartDate = _timezoneService.ConvertToLocalTime(startDate), 
+                    EndDate = _timezoneService.ConvertToLocalTime(endDate) 
                 };
 
             var stats = await _taskCalculationService.GetDepartmentTaskStatisticsAsync(departmentId, startDate, endDate);
@@ -647,13 +664,16 @@ public class ReportService : IReportService
             if (bottomBranches.Any())
                 recommendations.Add($"📋 Focus on improving: {string.Join(", ", bottomBranches.Take(3).Select(b => b.BranchName))}");
 
+            var localStartDate = _timezoneService.ConvertToLocalTime(startDate);
+            var localEndDate = _timezoneService.ConvertToLocalTime(endDate);
+
             return new DepartmentPerformanceViewModel
             {
                 DepartmentId = departmentId,
                 DepartmentName = department.Name,
                 DepartmentCode = department.Code ?? "N/A",
-                StartDate = startDate,
-                EndDate = endDate,
+                StartDate = localStartDate,
+                EndDate = localEndDate,
                 TotalBranches = branches.Count,
                 ActiveBranches = branches.Count,
                 TotalEmployees = branchPerformance.Sum(b => b.Value.EmployeeCount),
@@ -687,8 +707,8 @@ public class ReportService : IReportService
                 { 
                     TaskId = taskId, 
                     TaskName = "Unknown", 
-                    StartDate = startDate, 
-                    EndDate = endDate 
+                    StartDate = _timezoneService.ConvertToLocalTime(startDate), 
+                    EndDate = _timezoneService.ConvertToLocalTime(endDate) 
                 };
 
             var dailyTasks = await _context.DailyTasks
@@ -696,8 +716,8 @@ public class ReportService : IReportService
                 .Include(dt => dt.TaskAssignment)
                     .ThenInclude(ta => ta.Employee)
                 .Where(dt => dt.TaskItemId == taskId && 
-                             dt.TaskDate.Date >= startDate.Date && 
-                             dt.TaskDate.Date <= endDate.Date)
+                             dt.TaskDate >= startDate && 
+                             dt.TaskDate <= endDate)
                 .ToListAsync();
 
             var report = new TaskCompletionViewModel
@@ -706,8 +726,8 @@ public class ReportService : IReportService
                 TaskName = task.Name,
                 Deadline = task.Deadline,
                 IsSameDay = task.IsSameDay,
-                StartDate = startDate,
-                EndDate = endDate,
+                StartDate = _timezoneService.ConvertToLocalTime(startDate),
+                EndDate = _timezoneService.ConvertToLocalTime(endDate),
                 BranchStats = new Dictionary<string, BranchTaskStat>(),
                 EmployeeStats = new Dictionary<string, EmployeeTaskStat>(),
                 DailyCompletions = new Dictionary<string, int>()
@@ -826,11 +846,14 @@ public class ReportService : IReportService
 
     public async Task<List<Dictionary<string, object>>> ExecuteCustomReportAsync(CustomReportRequest request)
     {
+        var utcStartDate = _timezoneService.GetStartOfDayLocal(request.StartDate);
+        var utcEndDate = _timezoneService.GetEndOfDayLocal(request.EndDate);
+        
         var query = _context.DailyTasks
             .Include(dt => dt.TaskItem)
             .Include(dt => dt.Branch).ThenInclude(b => b.Department)
             .Include(dt => dt.TaskAssignment).ThenInclude(ta => ta.Employee)
-            .Where(dt => dt.TaskDate.Date >= request.StartDate.Date && dt.TaskDate.Date <= request.EndDate.Date);
+            .Where(dt => dt.TaskDate >= utcStartDate && dt.TaskDate <= utcEndDate);
 
         if (request.BranchIds?.Any() == true) query = query.Where(dt => request.BranchIds.Contains(dt.BranchId));
         if (request.TaskIds?.Any() == true) query = query.Where(dt => request.TaskIds.Contains(dt.TaskItemId));
@@ -842,12 +865,12 @@ public class ReportService : IReportService
         
         return data.Select(item => new Dictionary<string, object>
         {
-            ["Date"] = item.TaskDate.ToString("yyyy-MM-dd"),
+            ["Date"] = _timezoneService.ConvertToLocalTime(item.TaskDate).ToString("yyyy-MM-dd"),
             ["Branch"] = item.Branch?.Name ?? "Unknown",
             ["Department"] = item.Branch?.Department?.Name ?? "Unknown",
             ["Task"] = item.TaskItem?.Name ?? "Unknown",
             ["Status"] = item.IsCompleted ? "Completed" : "Pending",
-            ["CompletionTime"] = item.CompletedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "",
+            ["CompletionTime"] = item.CompletedAt.HasValue ? _timezoneService.ConvertToLocalTime(item.CompletedAt.Value).ToString("yyyy-MM-dd HH:mm:ss") : "",
             ["AssignedTo"] = item.TaskAssignment?.Employee?.Name ?? "Unassigned",
             ["Adjustment"] = item.AdjustmentMinutes ?? 0,
             ["AdjustmentReason"] = item.AdjustmentReason ?? "",
@@ -859,8 +882,11 @@ public class ReportService : IReportService
     {
         try
         {
-            var actualStartDate = startDate ?? DateTime.UtcNow.AddMonths(-1);
-            var actualEndDate = endDate ?? DateTime.UtcNow;
+            var actualStartDateLocal = startDate ?? _timezoneService.GetCurrentLocalTime().AddMonths(-1);
+            var actualEndDateLocal = endDate ?? _timezoneService.GetCurrentLocalTime();
+            
+            var utcStartDate = _timezoneService.GetStartOfDayLocal(actualStartDateLocal);
+            var utcEndDate = _timezoneService.GetEndOfDayLocal(actualEndDateLocal);
 
             var employees = await _context.Employees
                 .Include(e => e.Department)
@@ -871,7 +897,7 @@ public class ReportService : IReportService
 
             foreach (var emp in employees)
             {
-                var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(emp.Id, actualStartDate, actualEndDate);
+                var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(emp.Id, utcStartDate, utcEndDate);
 
                 rankingList.Add(new EmployeeRankingViewModel
                 {

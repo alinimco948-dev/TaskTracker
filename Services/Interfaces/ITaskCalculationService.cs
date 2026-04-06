@@ -6,14 +6,15 @@ public interface ITaskCalculationService
 {
     // ========== Core Calculations ==========
     DateTime CalculateDeadline(TaskItem task, DateTime taskDate);
+    DateTime GetLocalDeadline(TaskItem task, DateTime taskDate);
     bool IsTaskOnTime(DailyTask dailyTask);
     bool IsTaskOnTime(DateTime taskDate, DateTime? completedAt, TimeSpan deadlineTime, bool isSameDay, int? adjustmentMinutes);
-   Task<TaskDelayInfo> GetTaskDelayInfoAsync(DailyTask dailyTask);
+    Task<TaskDelayInfo> GetTaskDelayInfoAsync(DailyTask dailyTask);
     
     // ========== Holiday-Aware Calculations ==========
     Task<bool> IsHolidayAsync(DateTime date);
     Task<DateTime> GetNextWorkingDayAsync(DateTime date);
-    Task<DateTime> GetNextWorkingDayAsync(DateTime date, bool includeSameDay);  // NEW
+    Task<DateTime> GetNextWorkingDayAsync(DateTime date, bool includeSameDay);
     Task<DateTime> AdjustDeadlineForHolidaysAsync(DateTime deadline);
     Task<TaskDelayInfo> GetHolidayAdjustedDelayInfoAsync(DailyTask dailyTask);
     
@@ -30,9 +31,12 @@ public interface ITaskCalculationService
     // ========== Schedule Information ==========
     string GetTaskScheduleSummary(TaskItem task);
     DateTime? GetNextOccurrence(TaskItem task, DateTime fromDate);
+    
+    // ========== Utility ==========
+    DateTime GetCurrentUtcDate();
 }
-// ========== Result Classes ==========
 
+// ========== Result Classes ==========
 public class TaskStatistics
 {
     public int TotalTasks { get; set; }

@@ -12,17 +12,20 @@ public class EmployeeService : IEmployeeService
     private readonly ILogger<EmployeeService> _logger;
     private readonly IAuditService _auditService;
     private readonly ITaskCalculationService _taskCalculationService;
+    private readonly ITimezoneService _timezoneService;
 
     public EmployeeService(
         ApplicationDbContext context,
         ILogger<EmployeeService> logger,
         IAuditService auditService,
-        ITaskCalculationService taskCalculationService)
+        ITaskCalculationService taskCalculationService,
+        ITimezoneService timezoneService)
     {
         _context = context;
         _logger = logger;
         _auditService = auditService;
         _taskCalculationService = taskCalculationService;
+        _timezoneService = timezoneService;
     }
 
     public async Task<List<EmployeeListViewModel>> GetAllEmployeesAsync()
@@ -38,17 +41,19 @@ public class EmployeeService : IEmployeeService
 
             var allTasks = await _context.TaskItems.Where(t => t.IsActive).ToListAsync();
             var result = new List<EmployeeListViewModel>();
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            var todayUtc = _timezoneService.GetStartOfDayLocal(todayLocal);
 
             foreach (var emp in employees)
             {
                 var currentBranches = emp.BranchAssignments
-                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
                     .Select(ba => ba.Branch?.Name ?? string.Empty)
                     .Where(n => !string.IsNullOrEmpty(n))
                     .ToList();
 
                 var activeAssignments = emp.BranchAssignments
-                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
                     .ToList();
                 var assignedBranchIds = activeAssignments.Select(ba => ba.BranchId).ToList();
 
@@ -56,18 +61,31 @@ public class EmployeeService : IEmployeeService
                 {
                     result.Add(new EmployeeListViewModel
                     {
-                        Id = emp.Id, Name = emp.Name, EmployeeId = emp.EmployeeId, Email = emp.Email ?? string.Empty,
-                        Position = emp.Position ?? string.Empty, Department = emp.Department?.Name ?? "Unassigned",
-                        CurrentBranch = "Not Assigned", Branches = new List<string>(), PerformanceScore = 0,
-                        TotalTasks = 0, CompletedTasks = 0, IsActive = emp.IsActive, Initials = GetInitials(emp.Name)
+                        Id = emp.Id,
+                        Name = emp.Name,
+                        EmployeeId = emp.EmployeeId,
+                        Email = emp.Email ?? string.Empty,
+                        Position = emp.Position ?? string.Empty,
+                        Department = emp.Department?.Name ?? "Unassigned",
+                        CurrentBranch = "Not Assigned",
+                        Branches = new List<string>(),
+                        PerformanceScore = 0,
+                        TotalTasks = 0,
+                        CompletedTasks = 0,
+                        IsActive = emp.IsActive,
+                        Initials = GetInitials(emp.Name)
                     });
                     continue;
                 }
 
-                var completedDailyTasks = await _context.DailyTasks.Where(dt => assignedBranchIds.Contains(dt.BranchId) && dt.IsCompleted).ToListAsync();
+                var completedDailyTasks = await _context.DailyTasks
+                    .Where(dt => assignedBranchIds.Contains(dt.BranchId) && dt.IsCompleted)
+                    .ToListAsync();
+                    
                 var expectedTotalTasks = 0;
-                var today = DateTime.UtcNow.Date;
                 var lookAheadDays = 90;
+                var startDateUtc = todayUtc;
+                var endDateUtc = todayUtc.AddDays(lookAheadDays);
 
                 foreach (var assignment in activeAssignments)
                 {
@@ -75,13 +93,13 @@ public class EmployeeService : IEmployeeService
                     if (branch == null) continue;
 
                     var hiddenTaskNames = branch.HiddenTasks ?? new List<string>();
-                    var startDate = assignment.StartDate.Date;
-                    var endDate = assignment.EndDate?.Date ?? today.AddDays(lookAheadDays);
+                    var assignmentStartUtc = assignment.StartDate.Date >= startDateUtc ? assignment.StartDate : startDateUtc;
+                    var assignmentEndUtc = assignment.EndDate?.Date ?? endDateUtc;
 
                     foreach (var task in allTasks)
                     {
                         if (hiddenTaskNames.Contains(task.Name)) continue;
-                        expectedTotalTasks += _taskCalculationService.GetTaskCountInRange(task, startDate, endDate);
+                        expectedTotalTasks += _taskCalculationService.GetTaskCountInRange(task, assignmentStartUtc, assignmentEndUtc);
                     }
                 }
 
@@ -91,11 +109,19 @@ public class EmployeeService : IEmployeeService
 
                 result.Add(new EmployeeListViewModel
                 {
-                    Id = emp.Id, Name = emp.Name, EmployeeId = emp.EmployeeId, Email = emp.Email ?? string.Empty,
-                    Position = emp.Position ?? string.Empty, Department = emp.Department?.Name ?? "Unassigned",
+                    Id = emp.Id,
+                    Name = emp.Name,
+                    EmployeeId = emp.EmployeeId,
+                    Email = emp.Email ?? string.Empty,
+                    Position = emp.Position ?? string.Empty,
+                    Department = emp.Department?.Name ?? "Unassigned",
                     CurrentBranch = currentBranches.Any() ? string.Join(", ", currentBranches) : "Not Assigned",
-                    Branches = currentBranches, PerformanceScore = completionRate, TotalTasks = totalTasks,
-                    CompletedTasks = completedTasks, IsActive = emp.IsActive, Initials = GetInitials(emp.Name)
+                    Branches = currentBranches,
+                    PerformanceScore = completionRate,
+                    TotalTasks = totalTasks,
+                    CompletedTasks = completedTasks,
+                    IsActive = emp.IsActive,
+                    Initials = GetInitials(emp.Name)
                 });
             }
 
@@ -116,14 +142,18 @@ public class EmployeeService : IEmployeeService
             .FirstOrDefaultAsync(e => e.Id == id);
 
     public async Task<Employee?> GetEmployeeByEmployeeIdAsync(string employeeId)
-        => await _context.Employees.Include(e => e.BranchAssignments).FirstOrDefaultAsync(e => e.EmployeeId == employeeId);
+        => await _context.Employees
+            .Include(e => e.BranchAssignments)
+            .FirstOrDefaultAsync(e => e.EmployeeId == employeeId);
 
     public async Task<Employee> CreateEmployeeAsync(EmployeeViewModel model)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(model.Name)) throw new ArgumentException("Employee name is required");
-            if (string.IsNullOrWhiteSpace(model.EmployeeId)) throw new ArgumentException("Employee ID is required");
+            if (string.IsNullOrWhiteSpace(model.Name))
+                throw new ArgumentException("Employee name is required");
+            if (string.IsNullOrWhiteSpace(model.EmployeeId))
+                throw new ArgumentException("Employee ID is required");
 
             var employee = new Employee
             {
@@ -132,7 +162,7 @@ public class EmployeeService : IEmployeeService
                 Email = string.IsNullOrWhiteSpace(model.Email) ? null : model.Email.Trim(),
                 Phone = string.IsNullOrWhiteSpace(model.Phone) ? null : model.Phone.Trim(),
                 Address = string.IsNullOrWhiteSpace(model.Address) ? null : model.Address.Trim(),
-                HireDate = model.HireDate.HasValue ? DateTime.SpecifyKind(model.HireDate.Value, DateTimeKind.Utc) : null,
+                HireDate = model.HireDate.HasValue ? _timezoneService.GetStartOfDayLocal(model.HireDate.Value) : null,
                 Position = string.IsNullOrWhiteSpace(model.Position) ? null : model.Position.Trim(),
                 DepartmentId = model.DepartmentId,
                 ManagerId = model.ManagerId,
@@ -143,7 +173,13 @@ public class EmployeeService : IEmployeeService
             _context.Employees.Add(employee);
             await _context.SaveChangesAsync();
 
-            await _auditService.LogAsync("Create", "Employee", employee.Id, $"Created employee: {employee.Name} (ID: {employee.EmployeeId})");
+            await _auditService.LogAsync(
+                "Create",
+                "Employee",
+                employee.Id,
+                $"Created employee: {employee.Name} (ID: {employee.EmployeeId})"
+            );
+
             return employee;
         }
         catch (DbUpdateException ex)
@@ -161,7 +197,10 @@ public class EmployeeService : IEmployeeService
     {
         try
         {
-            var employee = await _context.Employees.Include(e => e.BranchAssignments).FirstOrDefaultAsync(e => e.Id == model.Id);
+            var employee = await _context.Employees
+                .Include(e => e.BranchAssignments)
+                .FirstOrDefaultAsync(e => e.Id == model.Id);
+                
             if (employee == null) return null;
 
             var oldValues = $"Name:{employee.Name}, Position:{employee.Position}, Dept:{employee.DepartmentId}";
@@ -171,7 +210,7 @@ public class EmployeeService : IEmployeeService
             employee.Email = model.Email;
             employee.Phone = model.Phone;
             employee.Address = model.Address;
-            employee.HireDate = model.HireDate.HasValue ? DateTime.SpecifyKind(model.HireDate.Value, DateTimeKind.Utc) : null;
+            employee.HireDate = model.HireDate.HasValue ? _timezoneService.GetStartOfDayLocal(model.HireDate.Value) : null;
             employee.Position = model.Position;
             employee.DepartmentId = model.DepartmentId;
             employee.ManagerId = model.ManagerId;
@@ -180,7 +219,16 @@ public class EmployeeService : IEmployeeService
 
             await _context.SaveChangesAsync();
 
-            await _auditService.LogAsync("Update", "Employee", employee.Id, $"Updated employee: {employee.Name}", null, oldValues, $"Name:{employee.Name}, Position:{employee.Position}, Dept:{employee.DepartmentId}");
+            await _auditService.LogAsync(
+                "Update",
+                "Employee",
+                employee.Id,
+                $"Updated employee: {employee.Name}",
+                null,
+                oldValues,
+                $"Name:{employee.Name}, Position:{employee.Position}, Dept:{employee.DepartmentId}"
+            );
+
             return employee;
         }
         catch (Exception ex)
@@ -204,15 +252,27 @@ public class EmployeeService : IEmployeeService
                 employee.IsActive = false;
                 employee.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
-                await _auditService.LogAsync("Deactivate", "Employee", employee.Id, $"Deactivated employee (has subordinates): {employee.Name}");
+                await _auditService.LogAsync(
+                    "Deactivate",
+                    "Employee",
+                    employee.Id,
+                    $"Deactivated employee (has subordinates): {employee.Name}"
+                );
             }
             else
             {
-                var assignments = await _context.BranchAssignments.Where(ba => ba.EmployeeId == id).ToListAsync();
+                var assignments = await _context.BranchAssignments
+                    .Where(ba => ba.EmployeeId == id)
+                    .ToListAsync();
                 _context.BranchAssignments.RemoveRange(assignments);
                 _context.Employees.Remove(employee);
                 await _context.SaveChangesAsync();
-                await _auditService.LogAsync("Delete", "Employee", employee.Id, $"Deleted employee: {employee.Name}");
+                await _auditService.LogAsync(
+                    "Delete",
+                    "Employee",
+                    employee.Id,
+                    $"Deleted employee: {employee.Name}"
+                );
             }
 
             return true;
@@ -228,8 +288,11 @@ public class EmployeeService : IEmployeeService
     {
         try
         {
-            var actualStartDate = startDate ?? DateTime.UtcNow.AddDays(-30);
-            var actualEndDate = endDate ?? DateTime.UtcNow;
+            var actualStartDateLocal = startDate ?? _timezoneService.GetCurrentLocalTime().AddDays(-30);
+            var actualEndDateLocal = endDate ?? _timezoneService.GetCurrentLocalTime();
+            
+            var utcStartDate = _timezoneService.GetStartOfDayLocal(actualStartDateLocal);
+            var utcEndDate = _timezoneService.GetEndOfDayLocal(actualEndDateLocal);
 
             var employee = await _context.Employees
                 .Include(e => e.Department)
@@ -237,12 +300,14 @@ public class EmployeeService : IEmployeeService
                 .Include(e => e.BranchAssignments).ThenInclude(ba => ba.Branch)
                 .FirstOrDefaultAsync(e => e.Id == id);
 
-            if (employee == null) throw new Exception($"Employee {id} not found");
+            if (employee == null)
+                throw new Exception($"Employee {id} not found");
 
-            var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(id, actualStartDate, actualEndDate);
+            var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(id, utcStartDate, utcEndDate);
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
 
             var currentBranches = employee.BranchAssignments
-                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
                 .Select(ba => ba.Branch?.Name ?? string.Empty)
                 .Where(n => !string.IsNullOrEmpty(n))
                 .ToList();
@@ -251,14 +316,17 @@ public class EmployeeService : IEmployeeService
                 .OrderByDescending(ba => ba.StartDate)
                 .Select(ba => new BranchHistoryItem
                 {
-                    Id = ba.Id, BranchId = ba.BranchId, BranchName = ba.Branch?.Name ?? "Unknown",
-                    StartDate = ba.StartDate, EndDate = ba.EndDate,
+                    Id = ba.Id,
+                    BranchId = ba.BranchId,
+                    BranchName = ba.Branch?.Name ?? "Unknown",
+                    StartDate = ba.StartDate,
+                    EndDate = ba.EndDate,
                     Duration = ba.EndDate.HasValue ? (ba.EndDate.Value - ba.StartDate).Days : (DateTime.UtcNow - ba.StartDate).Days,
-                    IsActive = !ba.EndDate.HasValue || ba.EndDate.Value.Date >= DateTime.UtcNow.Date
+                    IsActive = !ba.EndDate.HasValue || ba.EndDate.Value.Date >= todayLocal
                 }).ToList();
 
             var assignedBranchIds = employee.BranchAssignments
-                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
                 .Select(ba => ba.BranchId).ToList();
 
             var recentTasks = new List<TaskHistoryItem>();
@@ -266,43 +334,69 @@ public class EmployeeService : IEmployeeService
             {
                 var dailyTasks = await _context.DailyTasks
                     .Include(dt => dt.TaskItem).Include(dt => dt.Branch)
-                    .Where(dt => assignedBranchIds.Contains(dt.BranchId) && dt.TaskDate.Date >= actualStartDate.Date && dt.TaskDate.Date <= actualEndDate.Date)
+                    .Where(dt => assignedBranchIds.Contains(dt.BranchId) && 
+                                 dt.TaskDate >= utcStartDate && 
+                                 dt.TaskDate <= utcEndDate)
                     .OrderByDescending(dt => dt.TaskDate).Take(10).ToListAsync();
 
                 recentTasks = dailyTasks.Select(dt => new TaskHistoryItem
                 {
-                    Date = dt.TaskDate, BranchName = dt.Branch?.Name ?? "Unknown",
-                    TaskName = dt.TaskItem?.Name ?? "Unknown", IsCompleted = dt.IsCompleted,
+                    Date = dt.TaskDate,
+                    BranchName = dt.Branch?.Name ?? "Unknown",
+                    TaskName = dt.TaskItem?.Name ?? "Unknown",
+                    IsCompleted = dt.IsCompleted,
                     IsOnTime = _taskCalculationService.IsTaskOnTime(dt)
                 }).ToList();
             }
 
+            // Chart data using local dates for display
             var chartLabels = new List<string>();
             var chartData = new List<int>();
-            var daysInRange = (actualEndDate - actualStartDate).Days;
+            var daysInRange = (actualEndDateLocal - actualStartDateLocal).Days;
 
             for (int i = daysInRange; i >= 0; i--)
             {
-                var date = actualEndDate.AddDays(-i).Date;
+                var date = actualEndDateLocal.AddDays(-i).Date;
                 chartLabels.Add(date.ToString("MMM dd"));
+                
+                var dayUtcStart = _timezoneService.GetStartOfDayLocal(date);
+                var dayUtcEnd = _timezoneService.GetEndOfDayLocal(date);
 
                 var tasksOnDay = 0;
                 if (assignedBranchIds.Any())
-                    tasksOnDay = await _context.DailyTasks.CountAsync(dt => assignedBranchIds.Contains(dt.BranchId) && dt.TaskDate.Date == date && dt.IsCompleted);
+                    tasksOnDay = await _context.DailyTasks.CountAsync(dt => assignedBranchIds.Contains(dt.BranchId) && 
+                                                                          dt.TaskDate >= dayUtcStart && 
+                                                                          dt.TaskDate <= dayUtcEnd && 
+                                                                          dt.IsCompleted);
                 chartData.Add(tasksOnDay);
             }
 
             return new EmployeeDetailsViewModel
             {
-                Id = employee.Id, Name = employee.Name, EmployeeId = employee.EmployeeId,
-                Email = employee.Email ?? string.Empty, Phone = employee.Phone ?? string.Empty, Address = employee.Address ?? string.Empty,
-                HireDate = employee.HireDate, Position = employee.Position ?? string.Empty,
-                Department = employee.Department?.Name ?? "Unassigned", Manager = employee.Manager?.Name ?? "None",
-                IsActive = employee.IsActive, CreatedAt = employee.CreatedAt,
-                TotalTasks = stats.TotalTasks, CompletedTasks = stats.CompletedTasks, PendingTasks = stats.PendingTasks,
-                OnTimeTasks = stats.OnTimeTasks, PerformanceScore = (int)Math.Round(stats.WeightedScore),
-                CurrentBranches = currentBranches, BranchHistory = branchHistory, RecentTasks = recentTasks,
-                ChartLabels = chartLabels, ChartData = chartData, StartDate = actualStartDate, EndDate = actualEndDate
+                Id = employee.Id,
+                Name = employee.Name,
+                EmployeeId = employee.EmployeeId,
+                Email = employee.Email ?? string.Empty,
+                Phone = employee.Phone ?? string.Empty,
+                Address = employee.Address ?? string.Empty,
+                HireDate = employee.HireDate,
+                Position = employee.Position ?? string.Empty,
+                Department = employee.Department?.Name ?? "Unassigned",
+                Manager = employee.Manager?.Name ?? "None",
+                IsActive = employee.IsActive,
+                CreatedAt = employee.CreatedAt,
+                StartDate = actualStartDateLocal,
+                EndDate = actualEndDateLocal,
+                TotalTasks = stats.TotalTasks,
+                CompletedTasks = stats.CompletedTasks,
+                PendingTasks = stats.PendingTasks,
+                OnTimeTasks = stats.OnTimeTasks,
+                PerformanceScore = (int)Math.Round(stats.WeightedScore),
+                CurrentBranches = currentBranches,
+                BranchHistory = branchHistory,
+                RecentTasks = recentTasks,
+                ChartLabels = chartLabels,
+                ChartData = chartData
             };
         }
         catch (Exception ex)
@@ -314,9 +408,14 @@ public class EmployeeService : IEmployeeService
 
     public async Task<int> CalculateEmployeeScoreAsync(int employeeId, DateTime? startDate = null, DateTime? endDate = null)
     {
-        startDate ??= DateTime.UtcNow.AddMonths(-1);
-        endDate ??= DateTime.UtcNow;
-        var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(employeeId, startDate.Value, endDate.Value);
+        var actualStartDate = startDate.HasValue 
+            ? _timezoneService.GetStartOfDayLocal(startDate.Value) 
+            : _timezoneService.GetStartOfDayLocal(_timezoneService.GetCurrentLocalTime().AddMonths(-1));
+        var actualEndDate = endDate.HasValue 
+            ? _timezoneService.GetEndOfDayLocal(endDate.Value) 
+            : _timezoneService.GetEndOfDayLocal(_timezoneService.GetCurrentLocalTime());
+        
+        var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(employeeId, actualStartDate, actualEndDate);
         return (int)Math.Round(stats.WeightedScore);
     }
 
@@ -324,33 +423,47 @@ public class EmployeeService : IEmployeeService
         => (await GetCurrentBranchesAsync(employeeId)).FirstOrDefault();
 
     public async Task<List<string>> GetCurrentBranchesAsync(int employeeId)
-        => await _context.BranchAssignments
+    {
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+        return await _context.BranchAssignments
             .Include(ba => ba.Branch)
-            .Where(ba => ba.EmployeeId == employeeId && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
+            .Where(ba => ba.EmployeeId == employeeId && 
+                        (ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal))
             .Select(ba => ba.Branch != null ? ba.Branch.Name : string.Empty)
             .Where(n => !string.IsNullOrEmpty(n))
             .ToListAsync();
+    }
 
     public async Task<List<BranchHistoryItem>> GetBranchHistoryAsync(int employeeId)
-        => await _context.BranchAssignments
+    {
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+        return await _context.BranchAssignments
             .Include(ba => ba.Branch)
             .Where(ba => ba.EmployeeId == employeeId)
             .OrderByDescending(ba => ba.StartDate)
             .Select(ba => new BranchHistoryItem
             {
-                Id = ba.Id, BranchId = ba.BranchId, BranchName = ba.Branch != null ? ba.Branch.Name : "Unknown",
-                StartDate = ba.StartDate, EndDate = ba.EndDate,
+                Id = ba.Id,
+                BranchId = ba.BranchId,
+                BranchName = ba.Branch != null ? ba.Branch.Name : "Unknown",
+                StartDate = ba.StartDate,
+                EndDate = ba.EndDate,
                 Duration = ba.EndDate.HasValue ? (ba.EndDate.Value - ba.StartDate).Days : (DateTime.UtcNow - ba.StartDate).Days,
-                IsActive = !ba.EndDate.HasValue || ba.EndDate.Value.Date >= DateTime.UtcNow.Date
+                IsActive = !ba.EndDate.HasValue || ba.EndDate.Value.Date >= todayLocal
             }).ToListAsync();
+    }
 
     public async Task<List<TaskHistoryItem>> GetRecentTasksAsync(int employeeId, int count = 10)
     {
-        var employee = await _context.Employees.Include(e => e.BranchAssignments).FirstOrDefaultAsync(e => e.Id == employeeId);
+        var employee = await _context.Employees
+            .Include(e => e.BranchAssignments)
+            .FirstOrDefaultAsync(e => e.Id == employeeId);
+            
         if (employee == null) return new List<TaskHistoryItem>();
 
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
         var assignedBranchIds = employee.BranchAssignments
-            .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
+            .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
             .Select(ba => ba.BranchId).ToList();
 
         if (!assignedBranchIds.Any()) return new List<TaskHistoryItem>();
@@ -358,12 +471,16 @@ public class EmployeeService : IEmployeeService
         var dailyTasks = await _context.DailyTasks
             .Include(dt => dt.TaskItem).Include(dt => dt.Branch)
             .Where(dt => assignedBranchIds.Contains(dt.BranchId))
-            .OrderByDescending(dt => dt.TaskDate).Take(count).ToListAsync();
+            .OrderByDescending(dt => dt.TaskDate)
+            .Take(count)
+            .ToListAsync();
 
         return dailyTasks.Select(dt => new TaskHistoryItem
         {
-            Date = dt.TaskDate, BranchName = dt.Branch?.Name ?? "Unknown",
-            TaskName = dt.TaskItem?.Name ?? "Unknown", IsCompleted = dt.IsCompleted,
+            Date = dt.TaskDate,
+            BranchName = dt.Branch?.Name ?? "Unknown",
+            TaskName = dt.TaskItem?.Name ?? "Unknown",
+            IsCompleted = dt.IsCompleted,
             IsOnTime = _taskCalculationService.IsTaskOnTime(dt)
         }).ToList();
     }
@@ -372,8 +489,14 @@ public class EmployeeService : IEmployeeService
     {
         var scores = new Dictionary<int, int>();
         var employees = await _context.Employees.Where(e => e.IsActive).ToListAsync();
+        var endDateUtc = _timezoneService.GetEndOfDayLocal(_timezoneService.GetCurrentLocalTime());
+        var startDateUtc = _timezoneService.GetStartOfDayLocal(_timezoneService.GetCurrentLocalTime().AddDays(-30));
+        
         foreach (var emp in employees)
-            scores[emp.Id] = await CalculateEmployeeScoreAsync(emp.Id, DateTime.UtcNow.AddDays(-30), DateTime.UtcNow);
+        {
+            var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(emp.Id, startDateUtc, endDateUtc);
+            scores[emp.Id] = (int)Math.Round(stats.WeightedScore);
+        }
         return scores;
     }
 
@@ -385,21 +508,36 @@ public class EmployeeService : IEmployeeService
         {
             var employee = await _context.Employees.FindAsync(employeeId);
             var branch = await _context.Branches.FindAsync(branchId);
+            
             if (employee == null || branch == null) return false;
 
-            var existing = await _context.BranchAssignments.FirstOrDefaultAsync(ba => ba.EmployeeId == employeeId && ba.BranchId == branchId && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date));
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            var utcStartDate = _timezoneService.GetStartOfDayLocal(startDate);
+
+            var existing = await _context.BranchAssignments
+                .FirstOrDefaultAsync(ba => ba.EmployeeId == employeeId && 
+                                           ba.BranchId == branchId && 
+                                           (ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal));
+
             if (existing != null) return false;
 
             var assignment = new BranchAssignment
             {
                 EmployeeId = employeeId,
                 BranchId = branchId,
-                StartDate = startDate.Kind == DateTimeKind.Utc ? startDate.Date : DateTime.SpecifyKind(startDate.Date, DateTimeKind.Utc)
+                StartDate = utcStartDate
             };
 
             _context.BranchAssignments.Add(assignment);
             await _context.SaveChangesAsync();
-            await _auditService.LogAsync("Assign", "BranchAssignment", assignment.Id, $"Employee {employee.Name} assigned to branch {branch.Name}");
+            
+            await _auditService.LogAsync(
+                "Assign",
+                "BranchAssignment",
+                assignment.Id,
+                $"Employee {employee.Name} assigned to branch {branch.Name}"
+            );
+            
             return true;
         }
         catch (Exception ex)
@@ -413,12 +551,24 @@ public class EmployeeService : IEmployeeService
     {
         try
         {
-            var assignment = await _context.BranchAssignments.FirstOrDefaultAsync(ba => ba.EmployeeId == employeeId && ba.BranchId == branchId && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date));
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            var assignment = await _context.BranchAssignments
+                .FirstOrDefaultAsync(ba => ba.EmployeeId == employeeId && 
+                                           ba.BranchId == branchId && 
+                                           (ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal));
+                                           
             if (assignment == null) return false;
 
-            assignment.EndDate = DateTime.UtcNow.Date;
+            assignment.EndDate = _timezoneService.GetStartOfDayLocal(todayLocal);
             await _context.SaveChangesAsync();
-            await _auditService.LogAsync("Remove", "BranchAssignment", assignment.Id, $"Employee {employeeId} removed from branch {branchId}");
+            
+            await _auditService.LogAsync(
+                "Remove",
+                "BranchAssignment",
+                assignment.Id,
+                $"Employee {employeeId} removed from branch {branchId}"
+            );
+            
             return true;
         }
         catch (Exception ex)
@@ -432,12 +582,24 @@ public class EmployeeService : IEmployeeService
     {
         try
         {
-            var assignment = await _context.BranchAssignments.Include(ba => ba.Employee).Include(ba => ba.Branch).FirstOrDefaultAsync(ba => ba.Id == assignmentId);
+            var assignment = await _context.BranchAssignments
+                .Include(ba => ba.Employee)
+                .Include(ba => ba.Branch)
+                .FirstOrDefaultAsync(ba => ba.Id == assignmentId);
+                
             if (assignment == null) return false;
 
-            assignment.EndDate = DateTime.UtcNow.Date;
+            var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            assignment.EndDate = _timezoneService.GetStartOfDayLocal(todayLocal);
             await _context.SaveChangesAsync();
-            await _auditService.LogAsync("End", "BranchAssignment", assignmentId, $"Ended assignment for {assignment.Employee?.Name} at {assignment.Branch?.Name}");
+            
+            await _auditService.LogAsync(
+                "End",
+                "BranchAssignment",
+                assignmentId,
+                $"Ended assignment for {assignment.Employee?.Name} at {assignment.Branch?.Name}"
+            );
+            
             return true;
         }
         catch (Exception ex)
@@ -448,14 +610,26 @@ public class EmployeeService : IEmployeeService
     }
 
     public async Task<List<Branch>> GetEmployeeBranchesAsync(int employeeId)
-        => await _context.BranchAssignments
-            .Where(ba => ba.EmployeeId == employeeId && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
-            .Select(ba => ba.Branch!).Where(b => b != null && b.IsActive).ToListAsync();
+    {
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+        return await _context.BranchAssignments
+            .Where(ba => ba.EmployeeId == employeeId && 
+                        (ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal))
+            .Select(ba => ba.Branch!)
+            .Where(b => b != null && b.IsActive)
+            .ToListAsync();
+    }
 
     public async Task<List<Employee>> GetBranchEmployeesAsync(int branchId)
-        => await _context.BranchAssignments
-            .Where(ba => ba.BranchId == branchId && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
-            .Select(ba => ba.Employee!).Where(e => e != null && e.IsActive).ToListAsync();
+    {
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+        return await _context.BranchAssignments
+            .Where(ba => ba.BranchId == branchId && 
+                        (ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal))
+            .Select(ba => ba.Employee!)
+            .Where(e => e != null && e.IsActive)
+            .ToListAsync();
+    }
 
     #endregion
 
