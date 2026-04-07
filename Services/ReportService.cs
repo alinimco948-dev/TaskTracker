@@ -67,8 +67,314 @@ public class ReportService : IReportService
             throw;
         }
     }
+public async Task<EmployeeComparisonViewModel> ExecuteEmployeeComparisonReportAsync(int? branchId, List<int> selectedEmployeeIds, DateTime startDate, DateTime endDate, string comparisonMode = "branch")
+{
+    try
+    {
+        var utcStartDate = _timezoneService.GetStartOfDayLocal(startDate);
+        var utcEndDate = _timezoneService.GetEndOfDayLocal(endDate);
+        
+        List<Employee> employees;
+        string branchName = "All Branches";
+        
+        if (comparisonMode == "selected" && selectedEmployeeIds != null && selectedEmployeeIds.Any())
+        {
+            // Get selected employees only
+            employees = await _context.Employees
+                .Include(e => e.Department)
+                .Where(e => selectedEmployeeIds.Contains(e.Id) && e.IsActive)
+                .ToListAsync();
+            branchName = "Selected Employees";
+        }
+        else if (branchId.HasValue && branchId.Value > 0)
+        {
+            // Get employees by branch
+            var branch = await _context.Branches.FindAsync(branchId.Value);
+            branchName = branch?.Name ?? "Selected Branch";
+            
+            var employeeIds = await _context.BranchAssignments
+                .Where(ba => ba.BranchId == branchId.Value && 
+                            (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
+                .Select(ba => ba.EmployeeId)
+                .Distinct()
+                .ToListAsync();
+            
+            employees = await _context.Employees
+                .Include(e => e.Department)
+                .Where(e => employeeIds.Contains(e.Id) && e.IsActive)
+                .ToListAsync();
+        }
+        else
+        {
+            // Get all active employees
+            employees = await _context.Employees
+                .Include(e => e.Department)
+                .Where(e => e.IsActive)
+                .ToListAsync();
+            branchName = "All Employees";
+        }
+        
+        if (employees == null || !employees.Any())
+        {
+            return new EmployeeComparisonViewModel
+            {
+                BranchId = branchId,
+                BranchName = branchName,
+                SelectedEmployeeIds = selectedEmployeeIds ?? new List<int>(),
+                StartDate = startDate,
+                EndDate = endDate,
+                ComparisonMode = comparisonMode,
+                TotalEmployeesCompared = 0,
+                Employees = new List<EmployeeComparisonItem>(),
+                KeyInsights = new List<string> { "No employees found for the selected criteria" },
+                Recommendations = new List<string>()
+            };
+        }
+        
+        var employeeComparisons = new List<EmployeeComparisonItem>();
+        
+        foreach (var emp in employees)
+        {
+            // Get employee's branches
+            var employeeBranches = await _context.BranchAssignments
+                .Include(ba => ba.Branch)
+                .Where(ba => ba.EmployeeId == emp.Id && 
+                            (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
+                .Select(ba => ba.Branch != null ? ba.Branch.Name : string.Empty)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .ToListAsync();
+            
+            // Get task statistics
+            var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(emp.Id, utcStartDate, utcEndDate);
+            
+            // Get daily tasks for comparison
+            var dailyTasks = await GetEmployeeDailyTasksAsync(emp.Id, utcStartDate, utcEndDate);
+            
+            // Analyze strengths and weaknesses
+            var strengths = new List<string>();
+            var weaknesses = new List<string>();
+            
+            if (stats.CompletionRate >= 90)
+                strengths.Add("Excellent completion rate");
+            else if (stats.CompletionRate < 70 && stats.TotalTasks > 0)
+                weaknesses.Add($"Low completion rate ({stats.CompletionRate}%)");
+            
+            if (stats.OnTimeRate >= 90)
+                strengths.Add("Excellent punctuality");
+            else if (stats.OnTimeRate < 70 && stats.CompletedTasks > 0)
+                weaknesses.Add($"Frequent late submissions ({stats.OnTimeRate}% on time)");
+            
+            if (stats.TotalTasks > 50)
+                strengths.Add("High task volume handled");
+            
+            var performanceLevel = stats.WeightedScore switch
+            {
+                >= 90 => "Excellent",
+                >= 75 => "Good",
+                >= 60 => "Average",
+                _ => "Needs Improvement"
+            };
+            
+            var comparison = new EmployeeComparisonItem
+            {
+                Id = emp.Id,
+                Name = emp.Name,
+                EmployeeId = emp.EmployeeId,
+                Position = emp.Position ?? "N/A",
+                Department = emp.Department?.Name ?? "Unassigned",
+                Branches = employeeBranches,
+                PerformanceScore = stats.WeightedScore,
+                CompletionRate = stats.CompletionRate,
+                OnTimeRate = stats.OnTimeRate,
+                TotalTasks = stats.TotalTasks,
+                CompletedTasks = stats.CompletedTasks,
+                OnTimeTasks = stats.OnTimeTasks,
+                LateTasks = stats.LateTasks,
+                PendingTasks = stats.PendingTasks,
+                PerformanceLevel = performanceLevel,
+                Strengths = string.Join(", ", strengths),
+                Weaknesses = string.Join(", ", weaknesses),
+                DailyTasks = dailyTasks
+            };
+            
+            employeeComparisons.Add(comparison);
+        }
+        
+        // Sort employees by performance score
+        var sortedEmployees = employeeComparisons.OrderByDescending(e => e.PerformanceScore).ToList();
+        for (int i = 0; i < sortedEmployees.Count; i++)
+        {
+            sortedEmployees[i].Rank = i + 1;
+            var avgScore = employeeComparisons.Average(e => e.PerformanceScore);
+            sortedEmployees[i].VsAverage = Math.Round(sortedEmployees[i].PerformanceScore - avgScore, 1);
+        }
+        
+        var allScores = employeeComparisons.Select(e => e.PerformanceScore).ToList();
+        var averageScore = allScores.Any() ? allScores.Average() : 0;
+        var highestScore = allScores.Any() ? allScores.Max() : 0;
+        var lowestScore = allScores.Any() ? allScores.Min() : 0;
+        
+        // Comparison Analysis
+        var bestPerformer = sortedEmployees.FirstOrDefault() ?? new EmployeeComparisonItem();
+        var worstPerformer = sortedEmployees.LastOrDefault() ?? new EmployeeComparisonItem();
+        
+        var comparisonResult = new ComparisonAnalysis
+        {
+            BestPerformer = bestPerformer,
+            WorstPerformer = worstPerformer,
+            ScoreDifference = Math.Round(bestPerformer.PerformanceScore - worstPerformer.PerformanceScore, 1),
+            CompletionGap = Math.Round(bestPerformer.CompletionRate - worstPerformer.CompletionRate, 1),
+            OnTimeGap = Math.Round(bestPerformer.OnTimeRate - worstPerformer.OnTimeRate, 1),
+            TasksGap = bestPerformer.TotalTasks - worstPerformer.TotalTasks,
+            CommonStrengths = GetCommonItems(employeeComparisons.Select(e => e.Strengths).ToList(), 3),
+            CommonWeaknesses = GetCommonItems(employeeComparisons.Select(e => e.Weaknesses).ToList(), 3),
+            UniqueStrengths = GetUniqueItems(employeeComparisons.Select(e => e.Strengths).ToList(), bestPerformer.Name),
+            UniqueWeaknesses = GetUniqueItems(employeeComparisons.Select(e => e.Weaknesses).ToList(), worstPerformer.Name)
+        };
+        
+        // Generate insights
+        var insights = new List<string>();
+        insights.Add($"📊 Comparing {employeeComparisons.Count} employee(s)");
+        
+        if (comparisonMode == "selected" && selectedEmployeeIds != null && selectedEmployeeIds.Count == 2)
+        {
+            var emp1 = sortedEmployees.FirstOrDefault();
+            var emp2 = sortedEmployees.LastOrDefault();
+            if (emp1 != null && emp2 != null)
+            {
+                insights.Add($"🎯 {emp1.Name} is performing {comparisonResult.ScoreDifference}% better than {emp2.Name}");
+                if (comparisonResult.CompletionGap > 0)
+                    insights.Add($"✅ {emp1.Name} completes {comparisonResult.CompletionGap}% more tasks than {emp2.Name}");
+                if (comparisonResult.OnTimeGap > 0)
+                    insights.Add($"⏰ {emp1.Name} is {comparisonResult.OnTimeGap}% more punctual than {emp2.Name}");
+            }
+        }
+        else if (comparisonMode == "branch")
+        {
+            insights.Add($"🏆 Best Performer: {bestPerformer.Name} with {bestPerformer.PerformanceScore}%");
+            insights.Add($"⚠️ Needs Improvement: {worstPerformer.Name} with {worstPerformer.PerformanceScore}%");
+            insights.Add($"📈 Performance Gap: {comparisonResult.ScoreDifference}% difference between best and worst");
+        }
+        
+        insights.Add($"📋 Total Tasks Completed: {employeeComparisons.Sum(e => e.CompletedTasks)} out of {employeeComparisons.Sum(e => e.TotalTasks)}");
+        
+        // Generate recommendations
+        var recommendations = new List<string>();
+        if (comparisonResult.ScoreDifference > 20)
+        {
+            recommendations.Add($"🎯 Focus on improving {worstPerformer.Name}'s performance to match {bestPerformer.Name}");
+            recommendations.Add("👥 Consider pairing employees for knowledge sharing");
+        }
+        if (employeeComparisons.Any(e => e.OnTimeRate < 70))
+        {
+            recommendations.Add("⏰ Implement time management training for employees with low punctuality");
+        }
+        if (employeeComparisons.Any(e => e.CompletionRate < 70))
+        {
+            recommendations.Add("📋 Review workload distribution for employees with low completion rates");
+        }
+        
+        return new EmployeeComparisonViewModel
+        {
+            BranchId = branchId,
+            BranchName = branchName,
+            SelectedEmployeeIds = selectedEmployeeIds ?? new List<int>(),
+            StartDate = startDate,
+            EndDate = endDate,
+            ComparisonMode = comparisonMode,
+            TotalEmployeesCompared = employeeComparisons.Count,
+            AverageScore = Math.Round(averageScore, 1),
+            HighestScore = Math.Round(highestScore, 1),
+            LowestScore = Math.Round(lowestScore, 1),
+            Employees = sortedEmployees,
+            ComparisonResult = comparisonResult,
+            KeyInsights = insights,
+            Recommendations = recommendations
+        };
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error executing employee comparison report");
+        return new EmployeeComparisonViewModel
+        {
+            BranchId = branchId,
+            SelectedEmployeeIds = selectedEmployeeIds ?? new List<int>(),
+            StartDate = startDate,
+            EndDate = endDate,
+            ComparisonMode = comparisonMode,
+            TotalEmployeesCompared = 0,
+            Employees = new List<EmployeeComparisonItem>(),
+            KeyInsights = new List<string> { $"Error generating report: {ex.Message}" },
+            Recommendations = new List<string>()
+        };
+    }
+}
 
-    public async Task<Report?> UpdateReportAsync(Report report)
+private async Task<List<DailyTaskComparison>> GetEmployeeDailyTasksAsync(int employeeId, DateTime startDate, DateTime endDate)
+{
+    try
+    {
+        var assignments = await _context.BranchAssignments
+            .Where(ba => ba.EmployeeId == employeeId)
+            .Select(ba => ba.BranchId)
+            .ToListAsync();
+        
+        var dailyTasks = await _context.DailyTasks
+            .Include(dt => dt.TaskItem)
+            .Where(dt => assignments.Contains(dt.BranchId) && 
+                        dt.TaskDate >= startDate && 
+                        dt.TaskDate <= endDate)
+            .OrderByDescending(dt => dt.TaskDate)
+            .Take(20)
+            .ToListAsync();
+        
+        var result = new List<DailyTaskComparison>();
+        foreach (var dt in dailyTasks)
+        {
+            var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt);
+            result.Add(new DailyTaskComparison
+            {
+                Date = _timezoneService.ConvertToLocalTime(dt.TaskDate),
+                TaskName = dt.TaskItem?.Name ?? "Unknown",
+                IsCompleted = dt.IsCompleted,
+                IsOnTime = delayInfo.IsOnTime,
+                Status = dt.IsCompleted ? (delayInfo.IsOnTime ? "On Time" : "Late") : "Pending"
+            });
+        }
+        
+        return result;
+    }
+    catch
+    {
+        return new List<DailyTaskComparison>();
+    }
+}
+
+private List<string> GetCommonItems(List<string> itemsList, int topCount)
+{
+    var allItems = itemsList
+        .Where(s => !string.IsNullOrEmpty(s))
+        .SelectMany(s => s.Split(','))
+        .Select(s => s.Trim())
+        .Where(s => !string.IsNullOrEmpty(s))
+        .ToList();
+    
+    return allItems
+        .GroupBy(s => s)
+        .OrderByDescending(g => g.Count())
+        .Take(topCount)
+        .Select(g => g.Key)
+        .ToList();
+}
+
+private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
+{
+    // This is simplified - would need proper implementation
+    return new List<string>();
+}
+  
+  
+   public async Task<Report?> UpdateReportAsync(Report report)
     {
         try
         {

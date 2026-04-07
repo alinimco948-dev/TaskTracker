@@ -32,7 +32,15 @@ public class DailyTask
     [MaxLength(500)]
     public string AdjustmentReason { get; set; } = string.Empty;
 
-    // Navigation properties
+    // ========== SOFT DELETE PROPERTIES ==========
+    public bool IsDeleted { get; set; } = false;
+    
+    public DateTime? DeletedAt { get; set; }
+    
+    [MaxLength(500)]
+    public string? DeletionReason { get; set; }
+
+    // ========== NAVIGATION PROPERTIES ==========
     [ForeignKey(nameof(BranchId))]
     public virtual Branch? Branch { get; set; }
 

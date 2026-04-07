@@ -31,42 +31,33 @@ public class TaskCalculationService : ITaskCalculationService
 
     #region Core Calculations
 
-    /// <summary>
-    /// Calculate deadline in UTC - SIMPLIFIED
-    /// Assumes taskDate is already in UTC
-    /// </summary>
     public DateTime CalculateDeadline(TaskItem task, DateTime taskDate)
+{
+    // taskDate is already UTC from database
+    // Convert to local time to get the correct calendar day
+    var localTaskDate = _timezoneService.ConvertToLocalTime(taskDate);
+    var deadlineDate = localTaskDate.Date;
+    
+    DateTime localDeadline;
+    
+    if (task.IsSameDay)
     {
-        // Ensure taskDate is UTC
-        DateTime utcTaskDate;
-        if (taskDate.Kind == DateTimeKind.Unspecified)
-        {
-            utcTaskDate = DateTime.SpecifyKind(taskDate, DateTimeKind.Utc);
-        }
-        else if (taskDate.Kind == DateTimeKind.Local)
-        {
-            utcTaskDate = taskDate.ToUniversalTime();
-        }
-        else
-        {
-            utcTaskDate = taskDate;
-        }
-        
-        // Calculate deadline in UTC
-        var deadline = utcTaskDate.Date;
-        
-        if (task.IsSameDay)
-        {
-            deadline = deadline.Add(task.Deadline);
-        }
-        else
-        {
-            deadline = deadline.AddDays(1).Add(task.Deadline);
-        }
-        
-        return deadline;
+        // Same day: due at deadline time on the same day
+        localDeadline = deadlineDate.Add(task.Deadline);
     }
-
+    else
+    {
+        // Next day: due at deadline time on the NEXT day
+        localDeadline = deadlineDate.AddDays(1).Add(task.Deadline);
+    }
+    
+    // Convert back to UTC for storage
+    var utcDeadline = _timezoneService.ConvertToUtc(localDeadline);
+    
+    _logger.LogDebug($"CalculateDeadline: TaskDate UTC={taskDate:yyyy-MM-dd HH:mm:ss}, LocalTaskDate={localTaskDate:yyyy-MM-dd HH:mm:ss}, LocalDeadline={localDeadline:yyyy-MM-dd HH:mm:ss}, UTCDeadline={utcDeadline:yyyy-MM-dd HH:mm:ss}");
+    
+    return utcDeadline;
+}
     public DateTime GetLocalDeadline(TaskItem task, DateTime taskDate)
     {
         var utcDeadline = CalculateDeadline(task, taskDate);
@@ -86,7 +77,7 @@ public class TaskCalculationService : ITaskCalculationService
         }
 
         var diffSeconds = (dailyTask.CompletedAt.Value - deadline).TotalSeconds;
-        return diffSeconds <= 300; // 5 minute grace period
+        return diffSeconds <= 300;
     }
 
     public bool IsTaskOnTime(DateTime taskDate, DateTime? completedAt, TimeSpan deadlineTime, bool isSameDay, int? adjustmentMinutes)
@@ -128,7 +119,10 @@ public class TaskCalculationService : ITaskCalculationService
         {
             _cachedHolidays = await _context.Holidays.AsNoTracking().ToListAsync();
             _holidayCacheDate = DateTime.UtcNow;
-            _logger.LogInformation("Holidays cached: {Count} holidays loaded", _cachedHolidays.Count);
+            _logger.LogInformation("Holidays cached: {Count} holidays loaded ({Weekly} weekly, {Specific} specific)", 
+                _cachedHolidays.Count,
+                _cachedHolidays.Count(h => h.IsWeekly),
+                _cachedHolidays.Count(h => !h.IsWeekly));
         }
         return _cachedHolidays;
     }
@@ -138,20 +132,64 @@ public class TaskCalculationService : ITaskCalculationService
         try
         {
             var holidays = await GetCachedHolidaysAsync();
-            var dateOnly = date.Date;
+            var localDate = _timezoneService.ConvertToLocalTime(date);
+            var dateOnly = localDate.Date;
+            var dayOfWeek = (int)dateOnly.DayOfWeek;
 
-            var isSpecific = holidays.Any(h => !h.IsWeekly && h.HolidayDate.Date == dateOnly);
-            if (isSpecific) return true;
+            // Check specific holidays first
+            var isSpecificHoliday = holidays.Any(h => !h.IsWeekly && h.HolidayDate.Date == dateOnly);
+            if (isSpecificHoliday) return true;
 
-            var dayOfWeek = (int)date.DayOfWeek;
-            var isWeekly = holidays.Any(h => h.IsWeekly && h.WeekDay == dayOfWeek);
-
-            return isWeekly;
+            // Check weekly holidays
+            var isWeeklyHoliday = holidays.Any(h => h.IsWeekly && h.WeekDay == dayOfWeek);
+            return isWeeklyHoliday;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error checking if date is holiday");
             return false;
+        }
+    }
+
+    public async Task<List<DateTime>> GetHolidaysInRangeAsync(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            var holidays = await GetCachedHolidaysAsync();
+            var holidayDates = new List<DateTime>();
+            var start = startDate.Date;
+            var end = endDate.Date;
+
+            // Get specific holidays in range
+            var specificHolidays = holidays
+                .Where(h => !h.IsWeekly && h.HolidayDate.Date >= start && h.HolidayDate.Date <= end)
+                .Select(h => h.HolidayDate.Date)
+                .ToList();
+            holidayDates.AddRange(specificHolidays);
+
+            // Get weekly holidays
+            var weeklyHolidays = holidays.Where(h => h.IsWeekly && h.WeekDay.HasValue).ToList();
+            
+            var current = start;
+            while (current <= end)
+            {
+                var dayOfWeek = (int)current.DayOfWeek;
+                if (weeklyHolidays.Any(h => h.WeekDay == dayOfWeek))
+                {
+                    if (!holidayDates.Contains(current))
+                    {
+                        holidayDates.Add(current);
+                    }
+                }
+                current = current.AddDays(1);
+            }
+
+            return holidayDates.OrderBy(d => d).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting holidays in range");
+            return new List<DateTime>();
         }
     }
 
@@ -162,6 +200,7 @@ public class TaskCalculationService : ITaskCalculationService
 
     public async Task<DateTime> GetNextWorkingDayAsync(DateTime date, bool includeSameDay)
     {
+        var originalTime = date.TimeOfDay;
         var workingDay = includeSameDay ? date.Date : date.Date.AddDays(1);
         var maxAttempts = 30;
         
@@ -169,16 +208,17 @@ public class TaskCalculationService : ITaskCalculationService
         {
             if (!await IsHolidayAsync(workingDay))
             {
-                return workingDay;
+                return workingDay.Add(originalTime);
             }
             workingDay = workingDay.AddDays(1);
         }
         
-        return workingDay;
+        return workingDay.Add(originalTime);
     }
 
     public async Task<DateTime> AdjustDeadlineForHolidaysAsync(DateTime deadline)
     {
+        var originalTime = deadline.TimeOfDay;
         var adjustedDeadline = deadline;
         var maxAttempts = 30;
         var daysAdded = 0;
@@ -193,310 +233,265 @@ public class TaskCalculationService : ITaskCalculationService
                 }
                 return adjustedDeadline;
             }
-            adjustedDeadline = adjustedDeadline.AddDays(1);
+            adjustedDeadline = adjustedDeadline.Date.AddDays(1).Add(originalTime);
             daysAdded++;
         }
         
         return adjustedDeadline;
     }
 
-    public async Task<TaskDelayInfo> GetHolidayAdjustedDelayInfoAsync(DailyTask dailyTask)
+public async Task<TaskDelayInfo> GetHolidayAdjustedDelayInfoAsync(DailyTask dailyTask)
+{
+    if (dailyTask == null || !dailyTask.IsCompleted || !dailyTask.CompletedAt.HasValue)
     {
-        if (dailyTask == null || !dailyTask.IsCompleted || !dailyTask.CompletedAt.HasValue)
+        return new TaskDelayInfo
         {
-            return new TaskDelayInfo
-            {
-                IsOnTime = false,
-                DelayType = "pending",
-                DelayText = "Pending",
-                Deadline = null,
-                CompletedAt = null,
-                AdjustmentMinutes = dailyTask?.AdjustmentMinutes,
-                WasAdjustedForHoliday = false,
-                HolidayAdjustmentNote = string.Empty
-            };
-        }
+            IsOnTime = false,
+            DelayType = "pending",
+            DelayText = "Pending",
+            Deadline = null,
+            CompletedAt = null,
+            AdjustmentMinutes = dailyTask?.AdjustmentMinutes,
+            WasAdjustedForHoliday = false,
+            HolidayAdjustmentNote = string.Empty
+        };
+    }
 
-        if (dailyTask.TaskItem == null)
+    if (dailyTask.TaskItem == null)
+    {
+        return new TaskDelayInfo
         {
-            return new TaskDelayInfo
-            {
-                IsOnTime = false,
-                DelayType = "unknown",
-                DelayText = "Unknown",
-                Deadline = null,
-                CompletedAt = dailyTask.CompletedAt,
-                AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                WasAdjustedForHoliday = false,
-                HolidayAdjustmentNote = string.Empty
-            };
-        }
+            IsOnTime = false,
+            DelayType = "unknown",
+            DelayText = "Unknown",
+            Deadline = null,
+            CompletedAt = dailyTask.CompletedAt,
+            AdjustmentMinutes = dailyTask.AdjustmentMinutes,
+            WasAdjustedForHoliday = false,
+            HolidayAdjustmentNote = string.Empty
+        };
+    }
 
-        var utcDeadline = CalculateDeadline(dailyTask.TaskItem, dailyTask.TaskDate);
-        
-        if (dailyTask.AdjustmentMinutes.HasValue && dailyTask.AdjustmentMinutes.Value > 0)
+    // Calculate deadline
+    var utcDeadline = CalculateDeadline(dailyTask.TaskItem, dailyTask.TaskDate);
+    
+    if (dailyTask.AdjustmentMinutes.HasValue && dailyTask.AdjustmentMinutes.Value > 0)
+    {
+        utcDeadline = utcDeadline.AddMinutes(dailyTask.AdjustmentMinutes.Value);
+    }
+    
+    var localDeadline = _timezoneService.ConvertToLocalTime(utcDeadline);
+    var localCompleted = _timezoneService.ConvertToLocalTime(dailyTask.CompletedAt.Value);
+    
+    // Calculate raw difference
+    var rawDiffMinutes = (localCompleted - localDeadline).TotalMinutes;
+    
+    // Calculate holiday minutes to subtract
+    var holidayMinutes = 0;
+    var holidayDates = new List<string>();
+    
+    var allHolidays = await GetCachedHolidaysAsync();
+    var weeklyHolidays = allHolidays.Where(h => h.IsWeekly).Select(h => h.WeekDay).ToList();
+    var specificHolidays = allHolidays.Where(h => !h.IsWeekly).Select(h => h.HolidayDate.Date).ToList();
+    
+    var startDate = localDeadline.Date;
+    var endDate = localCompleted.Date;
+    
+    for (var date = startDate; date <= endDate; date = date.AddDays(1))
+    {
+        // Skip the deadline day if completed on the same day
+        if (date == localDeadline.Date && localCompleted.Date == localDeadline.Date)
         {
-            utcDeadline = utcDeadline.AddMinutes(dailyTask.AdjustmentMinutes.Value);
+            continue;
         }
         
-        var diffSeconds = (dailyTask.CompletedAt.Value - utcDeadline).TotalSeconds;
-        const int graceSeconds = 300;
+        var dayOfWeek = (int)date.DayOfWeek;
+        var isWeeklyHoliday = weeklyHolidays.Contains(dayOfWeek);
+        var isSpecificHoliday = specificHolidays.Contains(date);
         
-        var isDeadlineHoliday = await IsHolidayAsync(utcDeadline);
-        var holidayNote = string.Empty;
-        var wasAdjustedForHoliday = false;
-        var finalDeadlineForDisplay = utcDeadline;
-        
-        if (isDeadlineHoliday)
+        if (isWeeklyHoliday || isSpecificHoliday)
         {
-            var adjustedUtcDeadline = await GetNextWorkingDayAsync(utcDeadline);
-            var adjustedDiffSeconds = (dailyTask.CompletedAt.Value - adjustedUtcDeadline).TotalSeconds;
-            wasAdjustedForHoliday = true;
-            finalDeadlineForDisplay = adjustedUtcDeadline;
-            var localDeadline = _timezoneService.ConvertToLocalTime(utcDeadline);
-            var localAdjustedDeadline = _timezoneService.ConvertToLocalTime(adjustedUtcDeadline);
-            holidayNote = $"Deadline moved from {localDeadline:MMM dd, yyyy HH:mm} to {localAdjustedDeadline:MMM dd, yyyy HH:mm} due to holiday";
-            diffSeconds = adjustedDiffSeconds;
+            holidayMinutes += 1440;
+            var holidayType = isWeeklyHoliday ? "Weekly" : "Specific";
+            var holidayDesc = isWeeklyHoliday ? $"{date.DayOfWeek}" : date.ToString("MMM dd");
+            holidayDates.Add($"{date:yyyy-MM-dd} ({holidayType}: {holidayDesc})");
         }
-        
-        var localCompletedAt = _timezoneService.ConvertToLocalTime(dailyTask.CompletedAt.Value);
-        var localDeadlineForDisplay = _timezoneService.ConvertToLocalTime(finalDeadlineForDisplay);
-        
-        if (Math.Abs(diffSeconds) <= graceSeconds)
+    }
+    
+    var effectiveDiffMinutes = rawDiffMinutes - holidayMinutes;
+    
+    // FIXED: Early is NOT on time - separate condition
+    // On time is only within 5 minutes of deadline (including slightly early OR late)
+    bool isOnTime = effectiveDiffMinutes >= -5 && effectiveDiffMinutes <= 5;
+    
+    string delayType;
+    string delayText;
+    bool wasAdjusted = holidayMinutes > 0;
+    string holidayNote = wasAdjusted ? $"{holidayMinutes / 1440} holiday(s) excluded: {string.Join(", ", holidayDates)}" : "";
+    
+    // Format based on effective difference
+    if (effectiveDiffMinutes < -5)  // More than 5 minutes EARLY
+    {
+        var earlyMinutes = (int)Math.Round(Math.Abs(effectiveDiffMinutes));
+        var earlyHours = earlyMinutes / 60;
+        if (earlyHours > 0)
         {
-            return new TaskDelayInfo
-            {
-                IsOnTime = true,
-                DelayType = "on-time",
-                DelayText = "On Time",
-                Deadline = localDeadlineForDisplay,
-                CompletedAt = localCompletedAt,
-                AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                WasAdjustedForHoliday = wasAdjustedForHoliday,
-                HolidayAdjustmentNote = holidayNote
-            };
-        }
-        
-        if (diffSeconds < 0)
-        {
-            var earlyMinutes = (int)Math.Round(Math.Abs(diffSeconds) / 60);
-            var earlyHours = earlyMinutes / 60;
-            var earlyDays = earlyMinutes / 1440;
-            
-            if (earlyMinutes < 60)
-            {
-                return new TaskDelayInfo
-                {
-                    IsOnTime = true,
-                    DelayType = "early",
-                    DelayText = $"{earlyMinutes}m early",
-                    Deadline = localDeadlineForDisplay,
-                    CompletedAt = localCompletedAt,
-                    AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                    WasAdjustedForHoliday = wasAdjustedForHoliday,
-                    HolidayAdjustmentNote = holidayNote
-                };
-            }
-            else if (earlyMinutes < 1440)
-            {
-                var remainingMinutes = earlyMinutes % 60;
-                if (remainingMinutes > 0)
-                    return new TaskDelayInfo
-                    {
-                        IsOnTime = true,
-                        DelayType = "early",
-                        DelayText = $"{earlyHours}h {remainingMinutes}m early",
-                        Deadline = localDeadlineForDisplay,
-                        CompletedAt = localCompletedAt,
-                        AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                        WasAdjustedForHoliday = wasAdjustedForHoliday,
-                        HolidayAdjustmentNote = holidayNote
-                    };
-                else
-                    return new TaskDelayInfo
-                    {
-                        IsOnTime = true,
-                        DelayType = "early",
-                        DelayText = $"{earlyHours}h early",
-                        Deadline = localDeadlineForDisplay,
-                        CompletedAt = localCompletedAt,
-                        AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                        WasAdjustedForHoliday = wasAdjustedForHoliday,
-                        HolidayAdjustmentNote = holidayNote
-                    };
-            }
-            else
-            {
-                var remainingHours = (earlyMinutes % 1440) / 60;
-                if (remainingHours > 0)
-                    return new TaskDelayInfo
-                    {
-                        IsOnTime = true,
-                        DelayType = "early",
-                        DelayText = $"{earlyDays}d {remainingHours}h early",
-                        Deadline = localDeadlineForDisplay,
-                        CompletedAt = localCompletedAt,
-                        AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                        WasAdjustedForHoliday = wasAdjustedForHoliday,
-                        HolidayAdjustmentNote = holidayNote
-                    };
-                else
-                    return new TaskDelayInfo
-                    {
-                        IsOnTime = true,
-                        DelayType = "early",
-                        DelayText = $"{earlyDays}d early",
-                        Deadline = localDeadlineForDisplay,
-                        CompletedAt = localCompletedAt,
-                        AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                        WasAdjustedForHoliday = wasAdjustedForHoliday,
-                        HolidayAdjustmentNote = holidayNote
-                    };
-            }
-        }
-        
-        var lateMinutes = (int)Math.Round(diffSeconds / 60);
-        var lateHours = lateMinutes / 60;
-        var lateDays = lateMinutes / 1440;
-        
-        if (lateMinutes < 60)
-        {
-            return new TaskDelayInfo
-            {
-                IsOnTime = false,
-                DelayType = "minutes",
-                DelayText = $"{lateMinutes}m late",
-                Deadline = localDeadlineForDisplay,
-                CompletedAt = localCompletedAt,
-                AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                WasAdjustedForHoliday = wasAdjustedForHoliday,
-                HolidayAdjustmentNote = holidayNote
-            };
-        }
-        else if (lateMinutes < 1440)
-        {
-            var remainingMinutes = lateMinutes % 60;
+            var remainingMinutes = earlyMinutes % 60;
             if (remainingMinutes > 0)
-                return new TaskDelayInfo
-                {
-                    IsOnTime = false,
-                    DelayType = "hours",
-                    DelayText = $"{lateHours}h {remainingMinutes}m late",
-                    Deadline = localDeadlineForDisplay,
-                    CompletedAt = localCompletedAt,
-                    AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                    WasAdjustedForHoliday = wasAdjustedForHoliday,
-                    HolidayAdjustmentNote = holidayNote
-                };
+            {
+                delayType = "early";
+                delayText = $"{earlyHours}h {remainingMinutes}m early";
+            }
             else
-                return new TaskDelayInfo
-                {
-                    IsOnTime = false,
-                    DelayType = "hours",
-                    DelayText = $"{lateHours}h late",
-                    Deadline = localDeadlineForDisplay,
-                    CompletedAt = localCompletedAt,
-                    AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                    WasAdjustedForHoliday = wasAdjustedForHoliday,
-                    HolidayAdjustmentNote = holidayNote
-                };
+            {
+                delayType = "early";
+                delayText = $"{earlyHours}h early";
+            }
         }
         else
         {
-            var remainingHours = (lateMinutes % 1440) / 60;
-            if (remainingHours > 0)
-                return new TaskDelayInfo
-                {
-                    IsOnTime = false,
-                    DelayType = "days",
-                    DelayText = $"{lateDays}d {remainingHours}h late",
-                    Deadline = localDeadlineForDisplay,
-                    CompletedAt = localCompletedAt,
-                    AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                    WasAdjustedForHoliday = wasAdjustedForHoliday,
-                    HolidayAdjustmentNote = holidayNote
-                };
-            else
-                return new TaskDelayInfo
-                {
-                    IsOnTime = false,
-                    DelayType = "days",
-                    DelayText = $"{lateDays}d late",
-                    Deadline = localDeadlineForDisplay,
-                    CompletedAt = localCompletedAt,
-                    AdjustmentMinutes = dailyTask.AdjustmentMinutes,
-                    WasAdjustedForHoliday = wasAdjustedForHoliday,
-                    HolidayAdjustmentNote = holidayNote
-                };
+            delayType = "early";
+            delayText = $"{earlyMinutes}m early";
         }
     }
-
+    else if (effectiveDiffMinutes >= -5 && effectiveDiffMinutes <= 5)  // Within 5 minutes of deadline (ON TIME)
+    {
+        delayType = "on-time";
+        delayText = "On Time";
+    }
+    else  // More than 5 minutes LATE
+    {
+        var lateMinutes = (int)Math.Round(effectiveDiffMinutes);
+        var lateHours = lateMinutes / 60;
+        var lateDays = lateHours / 24;
+        var remainingHours = lateHours % 24;
+        var remainingMinutes = lateMinutes % 60;
+        
+        if (lateDays > 0)
+        {
+            delayType = "days";
+            if (remainingHours > 0 && remainingMinutes > 0)
+            {
+                delayText = $"{lateDays}d {remainingHours}h {remainingMinutes}m late";
+            }
+            else if (remainingHours > 0)
+            {
+                delayText = $"{lateDays}d {remainingHours}h late";
+            }
+            else if (remainingMinutes > 0)
+            {
+                delayText = $"{lateDays}d {remainingMinutes}m late";
+            }
+            else
+            {
+                delayText = $"{lateDays}d late";
+            }
+        }
+        else if (lateHours > 0)
+        {
+            delayType = "hours";
+            if (remainingMinutes > 0)
+            {
+                delayText = $"{lateHours}h {remainingMinutes}m late";
+            }
+            else
+            {
+                delayText = $"{lateHours}h late";
+            }
+        }
+        else
+        {
+            delayType = "minutes";
+            delayText = $"{lateMinutes}m late";
+        }
+    }
+    
+    return new TaskDelayInfo
+    {
+        IsOnTime = isOnTime,
+        DelayType = delayType,
+        DelayText = delayText,
+        Deadline = localDeadline,
+        CompletedAt = localCompleted,
+        AdjustmentMinutes = dailyTask.AdjustmentMinutes,
+        WasAdjustedForHoliday = wasAdjusted,
+        HolidayAdjustmentNote = holidayNote
+    };
+}
     #endregion
 
     #region Task Visibility
 
     public bool IsTaskVisibleOnDate(TaskItem task, DateTime date)
     {
-        if (!task.IsActive) return false;
-        
-        var compareDate = date.Date;
-        
-        if (task.AvailableFrom.HasValue && compareDate < task.AvailableFrom.Value.Date)
-            return false;
-        if (task.AvailableTo.HasValue && compareDate > task.AvailableTo.Value.Date)
-            return false;
-        
-        if (task.StartDate.HasValue && compareDate < task.StartDate.Value.Date)
-            return false;
-        if (task.EndDate.HasValue && compareDate > task.EndDate.Value.Date)
-            return false;
-        
-        switch (task.ExecutionType)
+        try
         {
-            case TaskExecutionType.RecurringDaily:
-                return true;
-                
-            case TaskExecutionType.RecurringWeekly:
-                if (string.IsNullOrEmpty(task.WeeklyDays)) return false;
-                var weeklyDays = task.WeeklyDays.Split(',').Select(int.Parse).ToList();
-                return weeklyDays.Contains((int)date.DayOfWeek);
-                
-            case TaskExecutionType.RecurringMonthly:
-                if (string.IsNullOrEmpty(task.MonthlyPattern)) return false;
-                var pattern = task.MonthlyPattern.ToLower();
-                
-                if (pattern == "first4days")
-                {
-                    return date.Day >= 1 && date.Day <= 4;
-                }
-                
-                if (pattern == "last")
-                    return date.Day == DateTime.DaysInMonth(date.Year, date.Month);
-                if (int.TryParse(pattern, out int dayOfMonth))
-                    return date.Day == dayOfMonth;
-                
-                var parts = pattern.Split('-');
-                if (parts.Length == 2)
-                {
-                    var ordinal = parts[0];
-                    var weekday = parts[1];
-                    var targetWeekday = GetWeekdayNumber(weekday);
-                    if (targetWeekday == -1) return false;
-                    return IsNthWeekdayOfMonth(date, ordinal, targetWeekday);
-                }
+            if (task == null || !task.IsActive) return false;
+            
+            var compareDate = date.Date;
+            
+            if (task.AvailableFrom.HasValue && compareDate < task.AvailableFrom.Value.Date)
                 return false;
-                
-            case TaskExecutionType.MultiDay:
-                if (!task.StartDate.HasValue) return false;
-                var multiDayEndDate = task.EndDate.HasValue ? task.EndDate.Value :
-                                     (task.DurationDays.HasValue ? task.StartDate.Value.AddDays(task.DurationDays.Value - 1) : task.StartDate.Value);
-                return date >= task.StartDate.Value && date <= multiDayEndDate;
-                
-            case TaskExecutionType.OneTime:
-                return task.StartDate.HasValue && date.Date == task.StartDate.Value.Date;
-                
-            default:
-                return true;
+            if (task.AvailableTo.HasValue && compareDate > task.AvailableTo.Value.Date)
+                return false;
+            
+            if (task.StartDate.HasValue && compareDate < task.StartDate.Value.Date)
+                return false;
+            if (task.EndDate.HasValue && compareDate > task.EndDate.Value.Date)
+                return false;
+            
+            switch (task.ExecutionType)
+            {
+                case TaskExecutionType.RecurringDaily:
+                    return true;
+                    
+                case TaskExecutionType.RecurringWeekly:
+                    if (string.IsNullOrEmpty(task.WeeklyDays)) return false;
+                    var weeklyDays = task.WeeklyDays.Split(',').Select(int.Parse).ToList();
+                    return weeklyDays.Contains((int)date.DayOfWeek);
+                    
+                case TaskExecutionType.RecurringMonthly:
+                    if (string.IsNullOrEmpty(task.MonthlyPattern)) return false;
+                    var pattern = task.MonthlyPattern.ToLower();
+                    
+                    if (pattern == "first4days")
+                    {
+                        return date.Day >= 1 && date.Day <= 4;
+                    }
+                    
+                    if (pattern == "last")
+                        return date.Day == DateTime.DaysInMonth(date.Year, date.Month);
+                    if (int.TryParse(pattern, out int dayOfMonth))
+                        return date.Day == dayOfMonth;
+                    
+                    var parts = pattern.Split('-');
+                    if (parts.Length == 2)
+                    {
+                        var ordinal = parts[0];
+                        var weekday = parts[1];
+                        var targetWeekday = GetWeekdayNumber(weekday);
+                        if (targetWeekday == -1) return false;
+                        return IsNthWeekdayOfMonth(date, ordinal, targetWeekday);
+                    }
+                    return false;
+                    
+                case TaskExecutionType.MultiDay:
+                    if (!task.StartDate.HasValue) return false;
+                    var multiDayEndDate = task.EndDate.HasValue ? task.EndDate.Value :
+                                         (task.DurationDays.HasValue ? task.StartDate.Value.AddDays(task.DurationDays.Value - 1) : task.StartDate.Value);
+                    return date >= task.StartDate.Value && date <= multiDayEndDate;
+                    
+                case TaskExecutionType.OneTime:
+                    return task.StartDate.HasValue && date.Date == task.StartDate.Value.Date;
+                    
+                default:
+                    return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error in IsTaskVisibleOnDate for task {task?.Name}");
+            return false;
         }
     }
 
@@ -544,20 +539,37 @@ public class TaskCalculationService : ITaskCalculationService
     public List<DateTime> GetTaskDatesInRange(TaskItem task, DateTime startDate, DateTime endDate)
     {
         var dates = new List<DateTime>();
-        var currentDate = startDate.Date;
-        var maxDate = endDate.Date;
         
-        if (maxDate > startDate.AddYears(1))
+        try
         {
-            maxDate = startDate.AddYears(1);
-        }
-        
-        for (var date = currentDate; date <= maxDate; date = date.AddDays(1))
-        {
-            if (IsTaskVisibleOnDate(task, date))
+            var currentDate = startDate.Date;
+            var maxDate = endDate.Date;
+            
+            if (maxDate > startDate.AddYears(1))
             {
-                dates.Add(date);
+                maxDate = startDate.AddYears(1);
+                _logger.LogWarning($"Date range too large, limiting to 1 year for task {task?.Name}");
             }
+            
+            for (var date = currentDate; date <= maxDate; date = date.AddDays(1))
+            {
+                try
+                {
+                    var localDate = _timezoneService.ConvertToLocalTime(date);
+                    if (IsTaskVisibleOnDate(task, localDate))
+                    {
+                        dates.Add(date);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, $"Error checking visibility for task {task?.Name} on date {date}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error in GetTaskDatesInRange for task {task?.Name}");
         }
         
         return dates;
@@ -565,7 +577,16 @@ public class TaskCalculationService : ITaskCalculationService
 
     public int GetTaskCountInRange(TaskItem task, DateTime startDate, DateTime endDate)
     {
-        return GetTaskDatesInRange(task, startDate, endDate).Count;
+        try
+        {
+            var dates = GetTaskDatesInRange(task, startDate, endDate);
+            return dates.Count;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error calculating task count for task {task?.Name ?? "null"}");
+            return 0;
+        }
     }
 
     #endregion

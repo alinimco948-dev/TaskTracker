@@ -29,11 +29,11 @@
                 <div id="reports-dropdown" class="hidden mt-1 ml-8 space-y-1">
                     <a href="@Url.Action("EmployeePerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Performance</a>
                     <a href="@Url.Action("EmployeeRanking", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Ranking</a>
+                    <a href="@Url.Action("EmployeeComparison", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Comparison</a>
                     <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Branch Performance</a>
                     <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Department Performance</a>
                     <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Task Completion</a>
                     <a href="@Url.Action("AuditLog", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Audit Log</a>
-                    <a href="@Url.Action("Custom", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Custom Report</a>
                 </div>
             </li>
             <li><a href="@Url.Action("Index", "Holiday")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Holiday" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-calendar-alt w-5"></i><span class="sidebar-text">Holidays</span></a></li>
@@ -69,14 +69,11 @@
                     <div id="mobileReportsDropdown" class="hidden mt-1 ml-8 space-y-1">
                         <a href="@Url.Action("EmployeePerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Performance</a>
                         <a href="@Url.Action("EmployeeRanking", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Ranking</a>
+                        <a href="@Url.Action("EmployeeComparison", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Comparison</a>
                         <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Branch Performance</a>
                         <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Department Performance</a>
                         <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Task Completion</a>
-                         <a href="@Url.Action("UnifiedTaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Task Completion</a>
                         <a href="@Url.Action("AuditLog", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Audit Log</a>
-                        <a href="@Url.Action("Custom", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Custom Report</a>
-
-                        
                     </div>
                 </li>
                 <li><a href="@Url.Action("Index", "Holiday")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Holiday" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-calendar-alt w-5"></i><span>Holidays</span></a></li>
@@ -100,7 +97,12 @@
     }
     function openMobileSidebar() { $('#mobileSidebar').addClass('open'); $('#mobileSidebarOverlay').removeClass('hidden'); $('body').addClass('overflow-hidden'); }
     function closeMobileSidebar() { $('#mobileSidebar').removeClass('open'); $('#mobileSidebarOverlay').addClass('hidden'); $('body').removeClass('overflow-hidden'); }
-    $(document).ready(function() { if (localStorage.getItem('sidebarCollapsed') === 'true') { $('#sidebar').addClass('collapsed'); $('#sidebar-toggle-icon').removeClass('fa-chevron-left').addClass('fa-chevron-right'); } });
+    $(document).ready(function() { 
+        if (localStorage.getItem('sidebarCollapsed') === 'true') { 
+            $('#sidebar').addClass('collapsed'); 
+            $('#sidebar-toggle-icon').removeClass('fa-chevron-left').addClass('fa-chevron-right'); 
+        } 
+    });
 </script>
 
 <style>

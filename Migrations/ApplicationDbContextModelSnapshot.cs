@@ -81,13 +81,36 @@ namespace TaskTracker.Migrations
 
                     b.HasIndex("Action");
 
+                    b.HasIndex("Changes")
+                        .HasDatabaseName("IX_AuditLogs_Changes_GIN");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Changes"), "gin");
+
                     b.HasIndex("EntityId");
 
                     b.HasIndex("EntityType");
 
+                    b.HasIndex("NewValues")
+                        .HasDatabaseName("IX_AuditLogs_NewValues_GIN");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("NewValues"), "gin");
+
+                    b.HasIndex("OldValues")
+                        .HasDatabaseName("IX_AuditLogs_OldValues_GIN");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("OldValues"), "gin");
+
                     b.HasIndex("Timestamp");
 
                     b.HasIndex("UserName");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.HasIndex("Timestamp", "Action");
+
+                    b.HasIndex("Timestamp", "EntityType");
+
+                    b.HasIndex("UserName", "Timestamp");
 
                     b.ToTable("AuditLogs");
                 });
@@ -155,9 +178,16 @@ namespace TaskTracker.Migrations
 
                     b.HasIndex("DepartmentId");
 
+                    b.HasIndex("HiddenTasksJson")
+                        .HasDatabaseName("IX_Branches_HiddenTasksJson_GIN");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("HiddenTasksJson"), "gin");
+
                     b.HasIndex("IsActive");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("IsActive", "DepartmentId");
 
                     b.ToTable("Branches");
 
@@ -544,6 +574,15 @@ namespace TaskTracker.Migrations
 
                     b.HasIndex("StartDate");
 
+                    b.HasIndex("BranchId", "EndDate");
+
+                    b.HasIndex("EmployeeId", "EndDate");
+
+                    b.HasIndex("BranchId", "EmployeeId", "EndDate")
+                        .HasFilter("\"EndDate\" IS NULL");
+
+                    b.HasIndex("BranchId", "StartDate", "EndDate");
+
                     b.HasIndex("EmployeeId", "BranchId", "StartDate")
                         .IsUnique();
 
@@ -575,10 +614,20 @@ namespace TaskTracker.Migrations
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<bool>("IsBulkUpdated")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("TaskDate")
@@ -597,8 +646,18 @@ namespace TaskTracker.Migrations
 
                     b.HasIndex("TaskItemId");
 
+                    b.HasIndex("BranchId", "IsCompleted");
+
+                    b.HasIndex("BranchId", "TaskDate");
+
+                    b.HasIndex("TaskDate", "IsCompleted");
+
+                    b.HasIndex("BranchId", "TaskDate", "IsCompleted");
+
                     b.HasIndex("BranchId", "TaskItemId", "TaskDate")
                         .IsUnique();
+
+                    b.HasIndex("TaskDate", "IsCompleted", "BranchId");
 
                     b.ToTable("DailyTasks");
                 });
@@ -728,6 +787,8 @@ namespace TaskTracker.Migrations
 
                     b.HasIndex("ManagerId");
 
+                    b.HasIndex("IsActive", "DepartmentId");
+
                     b.ToTable("Employees");
                 });
 
@@ -756,6 +817,8 @@ namespace TaskTracker.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("HolidayDate");
+
+                    b.HasIndex("IsWeekly", "HolidayDate");
 
                     b.HasIndex("IsWeekly", "WeekDay");
 
@@ -872,6 +935,11 @@ namespace TaskTracker.Migrations
 
                     b.HasIndex("Category");
 
+                    b.HasIndex("Configuration")
+                        .HasDatabaseName("IX_Reports_Configuration_GIN");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Configuration"), "gin");
+
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("IsActive");
@@ -881,6 +949,17 @@ namespace TaskTracker.Migrations
                     b.HasIndex("IsScheduled");
 
                     b.HasIndex("ReportType");
+
+                    b.HasIndex("Tags")
+                        .HasDatabaseName("IX_Reports_Tags_GIN");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Tags"), "gin");
+
+                    b.HasIndex("Category", "IsPublic");
+
+                    b.HasIndex("IsScheduled", "NextRunDate");
+
+                    b.HasIndex("ReportType", "IsActive");
 
                     b.ToTable("Reports");
                 });
@@ -910,6 +989,8 @@ namespace TaskTracker.Migrations
                         .IsUnique();
 
                     b.HasIndex("EmployeeId");
+
+                    b.HasIndex("EmployeeId", "AssignedAt");
 
                     b.HasIndex("EmployeeId", "DailyTaskId")
                         .IsUnique();
@@ -994,6 +1075,10 @@ namespace TaskTracker.Migrations
 
                     b.HasIndex("Name")
                         .IsUnique();
+
+                    b.HasIndex("IsActive", "ExecutionType");
+
+                    b.HasIndex("StartDate", "EndDate");
 
                     b.ToTable("TaskItems");
 

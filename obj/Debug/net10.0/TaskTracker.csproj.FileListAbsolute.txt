@@ -342,7 +342,6 @@ C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\scopedcss\Views\Shared\_Layout.cshtml.rz.scp.css
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\scopedcss\bundle\TaskTracker.styles.css
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\scopedcss\projectbundle\TaskTracker.bundle.scp.css
-C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\r2kr2md7s5-{0}-b9sayid5wm-b9sayid5wm.gz
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\3w3525igm7-{0}-61n19gt1b8-61n19gt1b8.gz
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\5wfxfhyhg2-{0}-xtxxf3hu2r-xtxxf3hu2r.gz
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\9q95f6cjnh-{0}-bqjiyaj88i-bqjiyaj88i.gz
@@ -417,7 +416,6 @@ C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\TaskTracker.pdb
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\TaskTracker.genruntimeconfig.cache
 C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\ref\TaskTracker.dll
-C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
 C:\Users\M\source\repos\full working ap\New folder (3)\TaskTracker\TaskTracker\bin\Debug\net10.0\appsettings.Development.json
 C:\Users\M\source\repos\full working ap\New folder (3)\TaskTracker\TaskTracker\bin\Debug\net10.0\appsettings.json
 C:\Users\M\source\repos\full working ap\New folder (3)\TaskTracker\TaskTracker\bin\Debug\net10.0\TaskTracker.staticwebassets.endpoints.json
@@ -609,3 +607,7 @@ C:\Users\M\source\repos\full working ap\New folder (3)\TaskTracker\TaskTracker\o
 C:\Users\M\source\repos\full working ap\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\r2kr2md7s5-{0}-j3ypqkp4ro-j3ypqkp4ro.gz
 C:\Users\M\source\repos\full working ap\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\wy2n1iqywi-{0}-3jgt363rto-3jgt363rto.gz
 C:\Users\M\source\repos\full working ap\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\pcwqho65v5-{0}-3jgt363rto-3jgt363rto.gz
+C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\TaskTracker.sourcelink.json
+C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\r2kr2md7s5-{0}-ktkj6bz9j4-ktkj6bz9j4.gz
+C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\usb65l14hu-{0}-89j5jx8wd6-89j5jx8wd6.gz
+C:\Users\M\source\repos\New folder (3)\TaskTracker\TaskTracker\obj\Debug\net10.0\compressed\s80i00rxpx-{0}-t9l971n0dw-t9l971n0dw.gz

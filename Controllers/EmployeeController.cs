@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using TaskTracker.Data;
 using TaskTracker.Models.Entities;
@@ -14,19 +15,25 @@ public class EmployeeController : Controller
     private readonly IDepartmentService _departmentService;
     private readonly ILogger<EmployeeController> _logger;
     private readonly ApplicationDbContext _context;
+    private readonly ITaskCalculationService _taskCalculationService;
+    private readonly ITimezoneService _timezoneService;
 
     public EmployeeController(
         IEmployeeService employeeService,
         IBranchService branchService,
         IDepartmentService departmentService,
         ILogger<EmployeeController> logger,
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        ITaskCalculationService taskCalculationService,
+        ITimezoneService timezoneService)
     {
         _employeeService = employeeService;
         _branchService = branchService;
         _departmentService = departmentService;
         _logger = logger;
         _context = context;
+        _taskCalculationService = taskCalculationService;
+        _timezoneService = timezoneService;
     }
 
     // GET: Employee
@@ -49,6 +56,7 @@ public class EmployeeController : Controller
                     Code = b.Code ?? string.Empty,
                     IsActive = b.IsActive
                 })
+                .AsNoTracking()
                 .ToListAsync();
             ViewBag.Branches = branches;
 
@@ -68,27 +76,7 @@ public class EmployeeController : Controller
     {
         try
         {
-            var departments = await _departmentService.GetAllDepartmentsAsync();
-            var employees = await _employeeService.GetAllEmployeesAsync();
-            
-            var allBranches = await _context.Branches
-                .Where(b => b.IsActive)
-                .OrderBy(b => b.Name)
-                .Select(b => new BranchListViewModel 
-                { 
-                    Id = b.Id, 
-                    Name = b.Name, 
-                    Code = b.Code ?? string.Empty,
-                    IsActive = b.IsActive
-                })
-                .ToListAsync();
-
-            ViewBag.Departments = departments ?? new List<DepartmentListViewModel>();
-            ViewBag.Managers = employees?.Where(e => e.IsActive).ToList() ?? new List<EmployeeListViewModel>();
-            ViewBag.Branches = allBranches;
-
-            _logger.LogInformation($"Create form loaded with {allBranches?.Count ?? 0} branches available");
-
+            await LoadViewBagData();
             return View(new EmployeeViewModel());
         }
         catch (Exception ex)
@@ -124,6 +112,7 @@ public class EmployeeController : Controller
             if (!string.IsNullOrWhiteSpace(model.Email))
             {
                 var existingEmail = await _context.Employees
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.Email == model.Email.Trim());
                 
                 if (existingEmail != null)
@@ -135,6 +124,7 @@ public class EmployeeController : Controller
             if (!string.IsNullOrWhiteSpace(model.EmployeeId))
             {
                 var existingEmployeeId = await _context.Employees
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.EmployeeId == model.EmployeeId.Trim());
                 
                 if (existingEmployeeId != null)
@@ -223,15 +213,12 @@ public class EmployeeController : Controller
         try
         {
             var employee = await _context.Employees
-                .Include(e => e.BranchAssignments)
                 .FirstOrDefaultAsync(e => e.Id == id);
                 
             if (employee == null) return NotFound();
 
-            var currentBranchIds = employee.BranchAssignments?
-                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)
-                .Select(ba => ba.BranchId)
-                .ToList() ?? new List<int>();
+            // Get current active branch IDs
+            var currentBranchIds = await GetCurrentBranchIdsAsync(id);
 
             var model = new EmployeeViewModel
             {
@@ -259,113 +246,174 @@ public class EmployeeController : Controller
         }
     }
 
-    // POST: Employee/Edit/5
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(EmployeeViewModel model)
+    // POST: Employee/Edit/5 - FIXED VERSION
+// POST: Employee/Edit/5
+[HttpPost]
+[ValidateAntiForgeryToken]
+public async Task<IActionResult> Edit(EmployeeViewModel model)
+{
+    if (!ModelState.IsValid)
     {
-        if (ModelState.IsValid)
-        {
-            try
-            {
-                _logger.LogInformation($"Editing employee {model.Id}, Branches: {string.Join(", ", model.BranchIds ?? new List<int>())}");
-                
-                if (!string.IsNullOrWhiteSpace(model.EmployeeId))
-                {
-                    var existingEmployee = await _context.Employees
-                        .FirstOrDefaultAsync(e => e.EmployeeId == model.EmployeeId && e.Id != model.Id);
-                    if (existingEmployee != null)
-                    {
-                        ModelState.AddModelError("EmployeeId", "Employee ID already exists");
-                        await LoadViewBagData();
-                        return View(model);
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(model.Email))
-                {
-                    var existingEmail = await _context.Employees
-                        .FirstOrDefaultAsync(e => e.Email == model.Email.Trim() && e.Id != model.Id);
-                    
-                    if (existingEmail != null)
-                    {
-                        ModelState.AddModelError("Email", $"Email '{model.Email}' is already in use.");
-                        await LoadViewBagData();
-                        return View(model);
-                    }
-                }
-
-                var employee = await _context.Employees.FindAsync(model.Id);
-                if (employee == null)
-                {
-                    return NotFound();
-                }
-
-                employee.Name = model.Name;
-                employee.EmployeeId = model.EmployeeId;
-                employee.Email = model.Email;
-                employee.Phone = model.Phone;
-                employee.Address = model.Address;
-                employee.HireDate = model.HireDate.HasValue ? DateTime.SpecifyKind(model.HireDate.Value, DateTimeKind.Utc) : null;
-                employee.Position = model.Position;
-                employee.DepartmentId = model.DepartmentId;
-                employee.ManagerId = model.ManagerId;
-                employee.IsActive = model.IsActive;
-                employee.UpdatedAt = DateTime.UtcNow;
-
-                await _context.SaveChangesAsync();
-
-                var newBranchIds = model.BranchIds ?? new List<int>();
-                
-                var currentAssignments = await _context.BranchAssignments
-                    .Where(ba => ba.EmployeeId == model.Id && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
-                    .ToListAsync();
-
-                foreach (var assignment in currentAssignments)
-                {
-                    if (!newBranchIds.Contains(assignment.BranchId))
-                    {
-                        assignment.EndDate = DateTime.UtcNow.Date;
-                    }
-                }
-
-                var currentBranchIds = currentAssignments.Select(a => a.BranchId).ToHashSet();
-                foreach (var branchId in newBranchIds)
-                {
-                    if (!currentBranchIds.Contains(branchId))
-                    {
-                        var assignment = new BranchAssignment
-                        {
-                            EmployeeId = model.Id,
-                            BranchId = branchId,
-                            StartDate = DateTime.UtcNow.Date
-                        };
-                        _context.BranchAssignments.Add(assignment);
-                    }
-                }
-
-                await _context.SaveChangesAsync();
-
-                TempData["SuccessMessage"] = "Employee updated successfully!";
-                return RedirectToAction(nameof(Index));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating employee");
-                ModelState.AddModelError("", "Unable to update employee. Please try again.");
-            }
-        }
-
         await LoadViewBagData();
         return View(model);
     }
 
+    try
+    {
+        _logger.LogInformation($"Editing employee {model.Id}");
+        _logger.LogInformation($"New branch IDs from form: {string.Join(", ", model.BranchIds ?? new List<int>())}");
+        
+        // FIX: Check for duplicate Employee ID - EXCLUDE current employee
+        if (!string.IsNullOrWhiteSpace(model.EmployeeId))
+        {
+            var existingEmployee = await _context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.EmployeeId == model.EmployeeId && e.Id != model.Id);
+            if (existingEmployee != null)
+            {
+                ModelState.AddModelError("EmployeeId", $"Employee ID '{model.EmployeeId}' is already in use by another employee.");
+                await LoadViewBagData();
+                return View(model);
+            }
+        }
+
+        // FIX: Check for duplicate Email - EXCLUDE current employee
+        if (!string.IsNullOrWhiteSpace(model.Email))
+        {
+            var existingEmail = await _context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Email == model.Email.Trim() && e.Id != model.Id);
+            
+            if (existingEmail != null)
+            {
+                ModelState.AddModelError("Email", $"Email '{model.Email}' is already in use by another employee.");
+                await LoadViewBagData();
+                return View(model);
+            }
+        }
+
+        var employee = await _context.Employees
+            .FirstOrDefaultAsync(e => e.Id == model.Id);
+            
+        if (employee == null)
+        {
+            return NotFound();
+        }
+
+        // Update basic employee info (but DON'T change EmployeeId if it's the same)
+        // Only update EmployeeId if it has actually changed and is unique
+        if (employee.EmployeeId != model.EmployeeId)
+        {
+            // Double-check the new EmployeeId is unique
+            var duplicateCheck = await _context.Employees
+                .AnyAsync(e => e.EmployeeId == model.EmployeeId && e.Id != model.Id);
+            
+            if (duplicateCheck)
+            {
+                ModelState.AddModelError("EmployeeId", $"Employee ID '{model.EmployeeId}' is already in use.");
+                await LoadViewBagData();
+                return View(model);
+            }
+            employee.EmployeeId = model.EmployeeId;
+        }
+        
+        employee.Name = model.Name;
+        employee.Email = model.Email;
+        employee.Phone = model.Phone;
+        employee.Address = model.Address;
+        // Don't update HireDate - keep original
+        employee.Position = model.Position;
+        employee.DepartmentId = model.DepartmentId;
+        employee.ManagerId = model.ManagerId;
+        employee.IsActive = model.IsActive;
+        employee.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        // ===== Branch Assignment Update Logic =====
+        var newBranchIds = model.BranchIds ?? new List<int>();
+        var todayUtc = DateTime.UtcNow.Date;
+        
+        // Get current active assignments (not ended)
+        var currentAssignments = await _context.BranchAssignments
+            .Where(ba => ba.EmployeeId == model.Id && (ba.EndDate == null || ba.EndDate.Value.Date >= todayUtc))
+            .ToListAsync();
+
+        // Track current branch IDs from active assignments
+        var currentBranchIds = currentAssignments.Select(a => a.BranchId).ToHashSet();
+        
+        _logger.LogInformation($"Current active branches: {string.Join(", ", currentBranchIds)}");
+        _logger.LogInformation($"New branches from form: {string.Join(", ", newBranchIds)}");
+
+        // 1. Remove branches that are unchecked (in current but not in new)
+        foreach (var assignment in currentAssignments)
+        {
+            if (!newBranchIds.Contains(assignment.BranchId))
+            {
+                assignment.EndDate = todayUtc;
+                _logger.LogInformation($"Ending assignment for branch {assignment.BranchId}");
+            }
+        }
+
+        // 2. Add new branches that are checked (in new but not in current)
+        foreach (var branchId in newBranchIds)
+        {
+            if (!currentBranchIds.Contains(branchId))
+            {
+                var assignment = new BranchAssignment
+                {
+                    EmployeeId = model.Id,
+                    BranchId = branchId,
+                    StartDate = todayUtc
+                };
+                _context.BranchAssignments.Add(assignment);
+                _logger.LogInformation($"Adding new assignment for branch {branchId}");
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Verify the update
+        var verifyAssignments = await _context.BranchAssignments
+            .Where(ba => ba.EmployeeId == model.Id && (ba.EndDate == null || ba.EndDate.Value.Date >= todayUtc))
+            .Select(ba => ba.BranchId)
+            .ToListAsync();
+        
+        _logger.LogInformation($"After update - Active branches for employee: {string.Join(", ", verifyAssignments)}");
+
+        TempData["SuccessMessage"] = $"Employee '{employee.Name}' updated successfully!";
+        return RedirectToAction(nameof(Index));
+    }
+    catch (DbUpdateException ex)
+    {
+        _logger.LogError(ex, "Database error updating employee");
+        if (ex.InnerException?.Message?.Contains("IX_Employees_Email") == true)
+        {
+            ModelState.AddModelError("Email", "This email address is already in use.");
+        }
+        else if (ex.InnerException?.Message?.Contains("IX_Employees_EmployeeId") == true)
+        {
+            ModelState.AddModelError("EmployeeId", "This Employee ID is already in use.");
+        }
+        else
+        {
+            ModelState.AddModelError("", $"Database error: {ex.InnerException?.Message ?? ex.Message}");
+        }
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error updating employee: {Message}", ex.Message);
+        ModelState.AddModelError("", "Unable to update employee. Please try again.");
+    }
+
+    await LoadViewBagData();
+    return View(model);
+}
     // GET: Employee/Details/5
     public async Task<IActionResult> Details(int id, DateTime? startDate = null, DateTime? endDate = null)
     {
         try
         {
-            // Set default date range (last 30 days if not specified)
             if (!startDate.HasValue)
                 startDate = DateTime.UtcNow.AddDays(-30);
             if (!endDate.HasValue)
@@ -374,7 +422,6 @@ public class EmployeeController : Controller
             var employee = await _employeeService.GetEmployeeDetailsAsync(id, startDate.Value, endDate.Value);
             if (employee == null) return NotFound();
             
-            // Load branches for the assign branch modal
             var branches = await _context.Branches
                 .Where(b => b.IsActive)
                 .OrderBy(b => b.Name)
@@ -385,6 +432,7 @@ public class EmployeeController : Controller
                     Code = b.Code ?? string.Empty,
                     IsActive = b.IsActive
                 })
+                .AsNoTracking()
                 .ToListAsync();
             ViewBag.Branches = branches;
 
@@ -393,44 +441,6 @@ public class EmployeeController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting employee details for {Id}", id);
-            return NotFound();
-        }
-    }
-
-    // POST: Employee/Details - For date range filter
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Details(int id, DateTime startDate, DateTime endDate)
-    {
-        try
-        {
-            // Ensure end date is at least start date
-            if (endDate < startDate)
-            {
-                endDate = startDate;
-            }
-
-            var employee = await _employeeService.GetEmployeeDetailsAsync(id, startDate, endDate);
-            if (employee == null) return NotFound();
-            
-            var branches = await _context.Branches
-                .Where(b => b.IsActive)
-                .OrderBy(b => b.Name)
-                .Select(b => new BranchListViewModel 
-                { 
-                    Id = b.Id, 
-                    Name = b.Name, 
-                    Code = b.Code ?? string.Empty,
-                    IsActive = b.IsActive
-                })
-                .ToListAsync();
-            ViewBag.Branches = branches;
-
-            return View(employee);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting employee details for {Id} with date range", id);
             return NotFound();
         }
     }
@@ -478,15 +488,17 @@ public class EmployeeController : Controller
     {
         try
         {
+            var todayUtc = DateTime.UtcNow.Date;
             var branches = await _context.BranchAssignments
                 .Include(ba => ba.Branch)
-                .Where(ba => ba.EmployeeId == id && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
+                .Where(ba => ba.EmployeeId == id && (ba.EndDate == null || ba.EndDate.Value.Date >= todayUtc))
                 .Select(ba => new { 
                     ba.BranchId, 
                     BranchName = ba.Branch != null ? ba.Branch.Name : "Unknown", 
                     ba.StartDate, 
                     ba.EndDate 
                 })
+                .AsNoTracking()
                 .ToListAsync();
 
             return Json(branches);
@@ -498,192 +510,15 @@ public class EmployeeController : Controller
         }
     }
 
-    // POST: Employee/AssignBranch
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AssignBranch(int employeeId, int branchId, DateTime startDate)
+    // Helper method to get current branch IDs for an employee
+    private async Task<List<int>> GetCurrentBranchIdsAsync(int employeeId)
     {
-        try
-        {
-            var employee = await _context.Employees.FindAsync(employeeId);
-            var branch = await _context.Branches.FindAsync(branchId);
-            
-            if (employee == null)
-            {
-                return Json(new { success = false, message = "Employee not found" });
-            }
-            
-            if (branch == null)
-            {
-                return Json(new { success = false, message = "Branch not found" });
-            }
-
-            var existingAssignment = await _context.BranchAssignments
-                .FirstOrDefaultAsync(ba => ba.EmployeeId == employeeId && 
-                                           ba.BranchId == branchId && 
-                                           (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date));
-
-            if (existingAssignment != null)
-            {
-                return Json(new { success = false, message = $"{employee.Name} is already assigned to {branch.Name}" });
-            }
-
-            var assignment = new BranchAssignment
-            {
-                EmployeeId = employeeId,
-                BranchId = branchId,
-                StartDate = startDate.Kind == DateTimeKind.Utc ? startDate.Date : DateTime.SpecifyKind(startDate.Date, DateTimeKind.Utc)
-            };
-
-            _context.BranchAssignments.Add(assignment);
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true, message = $"Successfully assigned {employee.Name} to {branch.Name}" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error assigning branch");
-            return Json(new { success = false, message = $"Error: {ex.Message}" });
-        }
-    }
-
-    // POST: Employee/RemoveBranch
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RemoveBranch(int assignmentId)
-    {
-        try
-        {
-            var assignment = await _context.BranchAssignments
-                .Include(ba => ba.Employee)
-                .Include(ba => ba.Branch)
-                .FirstOrDefaultAsync(ba => ba.Id == assignmentId);
-                
-            if (assignment == null)
-            {
-                return Json(new { success = false, message = "Assignment not found" });
-            }
-
-            assignment.EndDate = DateTime.UtcNow.Date;
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true, message = "Branch assignment ended successfully" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error removing branch assignment");
-            return Json(new { success = false, message = "Error removing branch assignment" });
-        }
-    }
-
-    // GET: Employee/GetAvailableBranches
-    [HttpGet]
-    public async Task<IActionResult> GetAvailableBranches(int? employeeId = null)
-    {
-        try
-        {
-            var branches = await _context.Branches
-                .Where(b => b.IsActive)
-                .OrderBy(b => b.Name)
-                .Select(b => new { b.Id, b.Name, b.Code })
-                .ToListAsync();
-            
-            if (employeeId.HasValue)
-            {
-                var assignedBranchIds = await _context.BranchAssignments
-                    .Where(ba => ba.EmployeeId == employeeId.Value && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
-                    .Select(ba => ba.BranchId)
-                    .ToListAsync();
-                    
-                branches = branches.Where(b => !assignedBranchIds.Contains(b.Id)).ToList();
-            }
-
-            return Json(branches);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting available branches");
-            return Json(new List<object>());
-        }
-    }
-
-    // GET: Employee/VerifyAssignments/{id}
-    [HttpGet]
-    public async Task<IActionResult> VerifyAssignments(int id)
-    {
-        try
-        {
-            var employee = await _context.Employees.FindAsync(id);
-            if (employee == null)
-            {
-                return Json(new { success = false, message = "Employee not found" });
-            }
-            
-            var assignments = await _context.BranchAssignments
-                .Include(ba => ba.Branch)
-                .Where(ba => ba.EmployeeId == id)
-                .Select(ba => new
-                {
-                    ba.Id,
-                    ba.BranchId,
-                    BranchName = ba.Branch != null ? ba.Branch.Name : "Unknown",
-                    ba.StartDate,
-                    ba.EndDate,
-                    IsActive = ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date
-                })
-                .ToListAsync();
-            
-            return Json(new
-            {
-                success = true,
-                employeeId = id,
-                employeeName = employee.Name,
-                assignmentCount = assignments.Count,
-                assignments = assignments
-            });
-        }
-        catch (Exception ex)
-        {
-            return Json(new { success = false, error = ex.Message });
-        }
-    }
-
-    // GET: Employee/TestBranches
-    [HttpGet]
-    public async Task<IActionResult> TestBranches(int? employeeId = null)
-    {
-        try
-        {
-            var branches = await _context.Branches
-                .Where(b => b.IsActive)
-                .Select(b => new { b.Id, b.Name, b.Code, b.IsActive })
-                .ToListAsync();
-            
-            var result = new { success = true, count = branches.Count, branches = branches };
-            
-            if (employeeId.HasValue)
-            {
-                var assignments = await _context.BranchAssignments
-                    .Include(ba => ba.Branch)
-                    .Where(ba => ba.EmployeeId == employeeId.Value && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
-                    .ToListAsync();
-                
-                var employeeResult = new
-                {
-                    employeeId = employeeId.Value,
-                    assignmentCount = assignments.Count,
-                    assignments = assignments.Select(a => new { a.BranchId, BranchName = a.Branch?.Name, a.StartDate, a.EndDate })
-                };
-                
-                return Json(new { success = true, branches = branches, employeeAssignments = employeeResult });
-            }
-            
-            return Json(result);
-        }
-        catch (Exception ex)
-        {
-            return Json(new { success = false, error = ex.Message });
-        }
+        var todayUtc = DateTime.UtcNow.Date;
+        return await _context.BranchAssignments
+            .Where(ba => ba.EmployeeId == employeeId && 
+                        (ba.EndDate == null || ba.EndDate.Value.Date >= todayUtc))
+            .Select(ba => ba.BranchId)
+            .ToListAsync();
     }
 
     // Helper method to get current branch assignments
@@ -733,6 +568,7 @@ public class EmployeeController : Controller
                     Code = b.Code ?? string.Empty,
                     IsActive = b.IsActive
                 })
+                .AsNoTracking()
                 .ToListAsync();
             
             ViewBag.Branches = allBranches;

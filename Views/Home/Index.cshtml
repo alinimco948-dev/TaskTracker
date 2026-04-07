@@ -45,19 +45,125 @@
     
     var notesDict = Model.NotesData ?? new Dictionary<string, string>();
     
-    // Calculate completed tasks count only (on-time rate will be calculated client-side)
     var completedTasks = Model.TaskData.Count(kvp => kvp.Value?.IsCompleted == true);
 }
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>@ViewData["Title"] - TaskTracker</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS for Excel export (FIX #3) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <style>
+        /* Mobile responsive styles (FIX #59) */
+        @@media (max-width: 768px) {
+            .container { padding: 0.5rem; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 0.5rem !important; }
+            .filter-bar { flex-direction: column; align-items: stretch !important; }
+            .filter-bar > div, .filter-bar > select, .filter-bar > button { width: 100%; margin-bottom: 0.5rem; }
+            .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .task-header span { font-size: 0.7rem; }
+            .task-button { font-size: 0.7rem !important; padding: 0.25rem !important; }
+            .branch-name { font-size: 0.7rem; }
+            .progress-percent { font-size: 0.7rem; }
+            .legend { flex-wrap: wrap; gap: 0.5rem; }
+        }
+        
+        @@media (max-width: 480px) {
+            .stats-card { padding: 0.5rem !important; }
+            .stats-card .text-base { font-size: 0.875rem !important; }
+            .stats-card .text-[9px] { font-size: 0.65rem !important; }
+            .task-header .text-xs { font-size: 0.6rem; }
+            .task-header button { font-size: 0.55rem !important; padding: 0.15rem 0.3rem !important; }
+        }
+        
+        /* Dark mode styles (FIX #63) */
+        @@media (prefers-color-scheme: dark) {
+            body { background-color: #1a1a2e; }
+            .bg-white { background-color: #16213e !important; }
+            .text-gray-800, .text-gray-700, .text-gray-600 { color: #e2e8f0 !important; }
+            .text-gray-500, .text-gray-400 { color: #94a3b8 !important; }
+            .border-gray-200, .border-gray-300 { border-color: #334155 !important; }
+            .bg-gray-50, .bg-gray-100 { background-color: #0f172a !important; }
+            .hover\\:bg-gray-50:hover { background-color: #1e293b !important; }
+            .divide-gray-200 > * { border-color: #334155 !important; }
+            .bg-gradient-to-r.from-gray-900 { background: linear-gradient(to right, #0f172a, #1e293b) !important; }
+            input, select, textarea { background-color: #0f172a !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+            input:focus, select:focus, textarea:focus { border-color: #3b82f6 !important; }
+        }
+        
+        /* Animations */
+        .animate-slide-in { animation: slideIn 0.2s ease-out; }
+        @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0%); opacity: 1; } }
+        
+        /* Table styles */
+        .sticky.left-0 { position: sticky; left: 0; z-index: 10; background-color: inherit; }
+        .table-fixed { table-layout: fixed; }
+        .group:hover .group-hover\\:flex { display: flex !important; }
+        td, th { vertical-align: middle; }
+        .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        
+        /* Button styles */
+        .task-button { transition: all 0.2s ease; cursor: pointer; }
+        .task-button:disabled { opacity: 0.7; cursor: not-allowed; }
+        .task-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        
+        /* Filter styles */
+        .branch-row.hidden-row { display: none; }
+        .task-cell.filtered-out { opacity: 0.3; background-color: #f3f4f6; }
+        
+        /* Tooltip styles (FIX #64) */
+        [data-tooltip] {
+            position: relative;
+            cursor: help;
+        }
+        [data-tooltip]:before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.25rem 0.5rem;
+            background-color: #1f2937;
+            color: white;
+            font-size: 0.7rem;
+            border-radius: 0.25rem;
+            white-space: nowrap;
+            z-index: 50;
+            display: none;
+            pointer-events: none;
+        }
+        [data-tooltip]:hover:before {
+            display: block;
+        }
+        
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @@keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Print styles */
+        @@media print {
+            .no-print, .bg-gradient-to-r, .shadow-sm, .border, button, .modal-backdrop { display: none !important; }
+            body { background-color: white !important; }
+            .bg-white { background-color: white !important; }
+            .text-gray-800 { color: black !important; }
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     <div class="container mx-auto px-4 py-4 max-w-7xl">
@@ -71,8 +177,8 @@
             var branchNotes = @Html.Raw(Json.Serialize(notesDict));
         </script>
 
-        <!-- Header with Holiday Warning -->
-        <div class="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-xl shadow-xl mb-4 overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-xl shadow-xl mb-4 overflow-hidden no-print">
             <div class="px-6 py-5">
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
@@ -96,15 +202,13 @@
 
                     <div class="flex items-center gap-3">
                         <div class="flex items-center bg-white/5 border border-gray-700 rounded-lg">
-                            <button type="button" onclick="changeDate(-1)" 
-                                    class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-l-lg transition">
+                            <button type="button" onclick="changeDate(-1)" class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-l-lg transition" title="Previous day (Ctrl+A)">
                                 <i class="fas fa-chevron-left text-xs"></i>
                             </button>
                             <div class="px-2 py-1 text-xs font-medium text-gray-300 border-x border-gray-700">
                                 @safeCurrentDate.ToString("MMM dd")
                             </div>
-                            <button type="button" onclick="changeDate(1)" 
-                                    class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-r-lg transition">
+                            <button type="button" onclick="changeDate(1)" class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-r-lg transition" title="Next day (Ctrl+D)">
                                 <i class="fas fa-chevron-right text-xs"></i>
                             </button>
                         </div>
@@ -114,8 +218,7 @@
 
                         @if (!Model.IsHoliday)
                         {
-                            <button type="button" onclick="openBulkUpdateModal()" 
-                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition shadow-sm flex items-center gap-2">
+                            <button type="button" onclick="openBulkUpdateModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition shadow-sm flex items-center gap-2" title="Bulk update (Ctrl+B)">
                                 <i class="fas fa-layer-group text-[10px]"></i> Bulk
                             </button>
                         }
@@ -124,68 +227,24 @@
             </div>
         </div>
         
-        <!-- Export Buttons -->
-        <div class="flex justify-end gap-2 mb-3">
-            <button onclick="exportDashboardToExcel()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg flex items-center transition">
+        <!-- Action Buttons -->
+        <div class="flex justify-end gap-2 mb-3 no-print">
+            <button onclick="exportDashboardToExcel()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg flex items-center transition" title="Export to Excel">
                 <i class="fas fa-file-excel mr-1"></i> Excel
             </button>
-            
-            <button onclick="window.print()" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded-lg flex items-center transition">
+            <button onclick="window.print()" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded-lg flex items-center transition" title="Print dashboard">
                 <i class="fas fa-print mr-1"></i> Print
             </button>
-            <button onclick="showKeyboardShortcuts()" class="px-3 py-1.5 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded-lg flex items-center transition" title="Keyboard Shortcuts">
+            <button onclick="showKeyboardShortcuts()" class="px-3 py-1.5 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded-lg flex items-center transition" title="Keyboard Shortcuts (Ctrl+H)">
                 <i class="fas fa-keyboard mr-1"></i> Shortcuts
             </button>
         </div>
 
-        <!-- Filter Bar -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-4">
-            <div class="flex flex-wrap gap-3 items-center">
-                <div class="flex-1 min-w-[200px]">
-                    <div class="relative">
-                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
-                        <input type="text" id="branchSearch" placeholder="Search branch..." 
-                               class="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-                <div>
-                    <select id="statusFilter" class="px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="all">All Tasks</option>
-                        <option value="completed">Completed Only</option>
-                        <option value="pending">Pending Only</option>
-                        <option value="late">Late Only</option>
-                    </select>
-                </div>
-                <div>
-                    <select id="taskFilter" class="px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="all">All Tasks</option>
-                        @foreach (var task in Model.Tasks.OrderBy(t => t.DisplayOrder))
-                        {
-                            <option value="@task.Id">@task.Name</option>
-                        }
-                    </select>
-                </div>
-                <div>
-                    <label class="flex items-center gap-2 text-xs">
-                        <input type="checkbox" id="myTasksOnly" class="rounded">
-                        <span>My assigned tasks only</span>
-                    </label>
-                </div>
-                <button onclick="resetFilters()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-lg transition">
-                    <i class="fas fa-undo-alt mr-1"></i> Reset
-                </button>
-                <button onclick="clearAllFilters()" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs rounded-lg transition">
-                    <i class="fas fa-trash-alt mr-1"></i> Clear All
-                </button>
-            </div>
-            <div class="text-xs text-gray-500 mt-2" id="filterStats">
-                Showing <span id="visibleBranchesCount">0</span> branches, <span id="visibleTasksCount">0</span> tasks
-            </div>
-        </div>
+   
 
-        <!-- Stats Cards with Trend Indicators -->
-        <div class="grid grid-cols-4 gap-2 mb-4">
-            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-blue-500">
+        <!-- Stats Cards (Mobile responsive - FIX #59) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4 stats-grid">
+            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-blue-500 stats-card">
                 <div class="flex items-center justify-between">
                     <div>
                         <div class="text-[9px] text-gray-500 uppercase tracking-wider">Branches</div>
@@ -197,7 +256,7 @@
                 </div>
             </div>
 
-            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-green-500">
+            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-green-500 stats-card">
                 <div class="flex items-center justify-between">
                     <div>
                         <div class="text-[9px] text-gray-500 uppercase tracking-wider">Tasks</div>
@@ -209,13 +268,11 @@
                 </div>
             </div>
 
-            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-green-500">
+            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-green-500 stats-card">
                 <div class="flex items-center justify-between">
                     <div>
                         <div class="text-[9px] text-gray-500 uppercase tracking-wider">Completed</div>
-                        <p class="text-base font-bold text-green-600" id="completedCount">
-                            @completedTasks
-                        </p>
+                        <p class="text-base font-bold text-green-600" id="completedCount">@completedTasks</p>
                         <div class="text-[8px] text-green-500" id="completedTrend">
                             <i class="fas fa-chart-line"></i> <span id="completedTrendValue">--</span>
                         </div>
@@ -226,7 +283,7 @@
                 </div>
             </div>
 
-            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-yellow-500">
+            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-yellow-500 stats-card">
                 <div class="flex items-center justify-between">
                     <div>
                         <div class="text-[9px] text-gray-500 uppercase tracking-wider">Pending</div>
@@ -256,9 +313,9 @@
             </div>
         </div>
 
-        <!-- Completion Rate Card with Trend -->
+        <!-- Completion Rate Card -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-4">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-3">
                     <div>
                         <div class="text-[10px] text-gray-500">Overall Completion Rate</div>
@@ -279,11 +336,11 @@
             </div>
         </div>
 
-        <!-- Skeleton Loader -->
+        <!-- Skeleton Loader (FIX #65 - Fixed size to match content) -->
         <div id="skeletonLoader" class="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden mb-6">
             <div class="animate-pulse">
-                <div class="h-10 bg-gray-200 mb-2"></div>
-                <div class="space-y-2 p-4">
+                <div class="h-10 bg-gray-200 rounded-t-lg"></div>
+                <div class="p-4 space-y-3">
                     @for (int i = 0; i < 5; i++)
                     {
                         <div class="flex gap-2">
@@ -299,9 +356,9 @@
             </div>
         </div>
 
-        <!-- Main Dashboard Table -->
+        <!-- Main Dashboard Table (FIX #65 - Hidden until loaded) -->
         <div id="dashboardContainer" class="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden mb-6" style="display: none;">
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-container">
                 <table class="w-full text-xs table-fixed" id="dashboardTable">
                     <thead class="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
                         <tr>
@@ -310,17 +367,19 @@
                             {
                                 <th class="px-1 py-3 text-center font-semibold text-gray-700 task-header" data-task-id="@task.Id" style="min-width: 80px;">
                                     <div class="flex flex-col items-center">
-                                        <span class="text-xs">@task.Name</span>
+                                        <span class="text-xs" data-tooltip="@task.Name">@task.Name</span>
                                         <span class="text-[9px] text-gray-500 mt-0.5">@task.Deadline.ToString(@"hh\:mm")</span>
                                         @if (!Model.IsHoliday)
                                         {
                                             <div class="flex gap-1 mt-1 w-full">
                                                 <button type="button" onclick="completeAllForTask(@task.Id, '@task.Name', event)"
-                                                        class="text-[8px] bg-green-500 text-white px-2 py-0.5 rounded-full hover:bg-green-600 transition flex-1">
+                                                        class="text-[8px] bg-green-500 text-white px-2 py-0.5 rounded-full hover:bg-green-600 transition flex-1"
+                                                        title="Complete all @task.Name tasks for all branches">
                                                     All
                                                 </button>
                                                 <button type="button" onclick="resetAllForTask(@task.Id, '@task.Name', event)"
-                                                        class="text-[8px] bg-red-500 text-white px-2 py-0.5 rounded-full hover:bg-red-600 transition flex-1">
+                                                        class="text-[8px] bg-red-500 text-white px-2 py-0.5 rounded-full hover:bg-red-600 transition flex-1"
+                                                        title="Reset all @task.Name tasks for all branches">
                                                     Reset
                                                 </button>
                                             </div>
@@ -334,10 +393,12 @@
                     <tbody class="divide-y divide-gray-200" id="dashboardTableBody">
                         @foreach (var branch in Model.Branches.OrderBy(b => b.Name))
                         {
-                            var hiddenTaskNames = hiddenTasksDict.ContainsKey(branch.Id)
-                            ? hiddenTasksDict[branch.Id]
-                            : new List<string>();
-                            var branchNotes = Model.NotesData.ContainsKey(branch.Id.ToString()) ? Model.NotesData[branch.Id.ToString()] : "";
+                           var hiddenTaskNames = hiddenTasksDict.ContainsKey(branch.Id)
+        ? hiddenTasksDict[branch.Id]
+        : new List<string>();
+                           var branchNotes = (Model.NotesData != null && Model.NotesData.ContainsKey(branch.Id.ToString())) 
+    ? (Model.NotesData[branch.Id.ToString()] ?? "") 
+    : "";
                             var visibleTasksCount = Model.Tasks.Count(t => !hiddenTaskNames.Contains(t.Name));
                             var completedCountLocal = 0;
                             foreach (var task in Model.Tasks.Where(t => !hiddenTaskNames.Contains(t.Name)))
@@ -354,12 +415,12 @@
                                 <td class="px-3 py-2 font-medium sticky left-0 bg-white border-r group-hover:bg-gray-50">
                                     <div class="flex items-center">
                                         <span class="w-2 h-2 rounded-full @(branch.IsActive ? "bg-green-500" : "bg-red-500") mr-2"></span>
-                                        <span class="text-xs truncate" style="max-width: 90px;" title="@branch.Name">@branch.Name</span>
+                                        <span class="text-xs truncate branch-name" style="max-width: 90px;" data-tooltip="@branch.Name">@branch.Name</span>
                                     </div>
                                     <div class="text-[8px] text-gray-400 mt-0.5" id="assignedTo-@branch.Id">
                                         @if (Model.BranchAssignments != null && Model.BranchAssignments.ContainsKey(branch.Id))
                                         {
-                                            <i class="fas fa-user mr-0.5"></i>@Model.BranchAssignments[branch.Id]
+                                            <i class="fas fa-user mr-0.5"></i><span data-tooltip="Assigned employee">@Model.BranchAssignments[branch.Id]</span>
                                         }
                                     </div>
                                 </td>
@@ -371,7 +432,7 @@
                                     if (isHidden)
                                     {
                                         <td class="px-1 py-2 text-center bg-gray-50">
-                                            <span class="text-gray-400 text-[9px]">—</span>
+                                            <span class="text-gray-400 text-[9px]" data-tooltip="Task hidden for this branch">—</span>
                                         </td>
                                     }
                                     else
@@ -437,19 +498,22 @@
                                             <div class="bg-blue-500 h-2 rounded-full" style="width: @progress%"></div>
                                         </div>
                                         <span class="text-[10px] font-medium text-gray-600 progress-percent">@progress%</span>
-                                        <button type="button" 
-                                                onclick="openNotesModal(@branch.Id, '@branch.Name', '@Html.Raw(Json.Serialize(branchNotes).ToString().Replace("\"", "&quot;"))')"
-                                                class="w-6 h-6 flex items-center justify-center rounded-full transition notes-btn-@branch.Id hover:scale-110"
-                                                title="View/Edit notes">
-                                            @if (!string.IsNullOrEmpty(branchNotes))
-                                            {
-                                                <i class="fas fa-sticky-note text-sm text-blue-500"></i>
-                                            }
-                                            else
-                                            {
-                                                <i class="fas fa-plus-circle text-sm text-gray-400 hover:text-blue-500"></i>
-                                            }
-                                        </button>
+<button type="button" 
+    data-branch-id="@branch.Id"
+    data-branch-name="@branch.Name"
+    data-branch-notes="@branchNotes"
+    onclick="openNotesModalFromData(this)"
+    class="w-6 h-6 flex items-center justify-center rounded-full transition notes-btn-@branch.Id hover:scale-110"
+    title="View/Edit notes">
+    @if (!string.IsNullOrEmpty(branchNotes))
+    {
+        <i class="fas fa-sticky-note text-sm text-blue-500"></i>
+    }
+    else
+    {
+        <i class="fas fa-plus-circle text-sm text-gray-400 hover:text-blue-500"></i>
+    }
+</button>
                                     </div>
                                 </td>
                             </tr>
@@ -460,7 +524,7 @@
         </div>
 
         <!-- Legend -->
-        <div class="bg-white rounded-lg shadow-md p-3 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-3 mb-6 legend no-print">
             <div class="flex flex-wrap items-center gap-3 text-[9px]">
                 @if (Model.IsHoliday)
                 {
@@ -484,10 +548,11 @@
             <div class="text-[8px] text-gray-400 mt-2 text-center">
                 <i class="fas fa-sync-alt text-green-500 mr-1"></i> All updates happen instantly - No refresh needed
                 <span class="mx-2">|</span>
-                <i class="fas fa-keyboard text-gray-400 mr-1"></i> Ctrl+D: Next day | Ctrl+A: Prev day | Ctrl+T: Today | Ctrl+F: Search | Ctrl+B: Bulk
+                <i class="fas fa-keyboard text-gray-400 mr-1"></i> <strong>Keyboard Shortcuts:</strong> Ctrl+D: Next | Ctrl+A: Prev | Ctrl+T: Today | Ctrl+F: Search | Ctrl+B: Bulk | Ctrl+R: Reset | Ctrl+H: Help
             </div>
         </div>
 
+        <!-- Modals (Time Picker, Adjustment, Notes, Bulk Update) - Same as before -->
         <!-- Time Picker Modal -->
         <div id="timePickerModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
             <div class="bg-white rounded-xl shadow-2xl w-80 transform transition-all">
@@ -626,914 +691,14 @@
         </div>
     </div>
 
-    <style>
-        .animate-slide-in { animation: slideIn 0.2s ease-out; }
-        @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0%); opacity: 1; } }
-        .sticky.left-0 { position: sticky; left: 0; z-index: 10; }
-        .table-fixed { table-layout: fixed; }
-        .group:hover .group-hover\\:flex { display: flex !important; }
-        .hidden { display: none; }
-        .flex { display: flex; }
-        td, th { vertical-align: middle; }
-        .flex-1 { flex: 1 1 0%; }
-        .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .task-button:disabled { opacity: 0.7; cursor: not-allowed; }
-        .task-button:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .branch-row.hidden-row { display: none; }
-        .task-cell.filtered-out { opacity: 0.3; background-color: #f3f4f6; }
-        @@media print { .bg-gradient-to-r, .shadow-sm, .border, button, .modal-backdrop, #skeletonLoader { display: none; } }
-    </style>
-
+@section Scripts {
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="~/js/dashboard.js"></script>
     <script>
-        // ========== API SERVICE ==========
-        const token = $('#requestVerificationToken').val();
-        
-        async function apiRequest(url, method, data) {
-            return new Promise((resolve, reject) => {
-                const options = {
-                    url: url,
-                    type: method,
-                    headers: { 'RequestVerificationToken': token },
-                    success: resolve,
-                    error: (xhr, status, error) => reject({ error, response: xhr.responseText, status: xhr.status })
-                };
-                if (data) options.data = data;
-                $.ajax(options);
-            });
-        }
-        
-        // ========== CURRENT USER NAME ==========
-        var currentUserName = "@(User.Identity?.Name ?? "Admin User")";
-        
-        // ========== TREND DATA ==========
-        var previousStats = { completed: 0, pending: 0, completionRate: 0 };
-        
-        async function loadTrendData() {
-            const previousDate = $('#previousDate').val();
-            if (!previousDate) return;
-            try {
-                const response = await fetch(`/Home/GetDashboardStats?date=${previousDate}`);
-                const data = await response.json();
-                if (data) {
-                    previousStats.completed = data.completed || 0;
-                    previousStats.pending = data.pending || 0;
-                    previousStats.completionRate = data.completionRate || 0;
-                    updateTrendIndicators();
-                }
-            } catch (e) { console.log('Could not load trend data'); }
-        }
-        
-        function updateTrendIndicators() {
-            const currentCompleted = parseInt($('#completedCount').text()) || 0;
-            const currentPending = parseInt($('#pendingCount').text()) || 0;
-            const currentRate = currentCompleted + currentPending > 0 ? Math.round((currentCompleted / (currentCompleted + currentPending)) * 100) : 0;
-            
-            const completedDiff = currentCompleted - previousStats.completed;
-            const completedTrendIcon = completedDiff >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
-            const completedTrendColor = completedDiff >= 0 ? 'text-green-500' : 'text-red-500';
-            $('#completedTrendValue').html(`${completedDiff >= 0 ? '+' : ''}${completedDiff}`);
-            $('#completedTrend').html(`<i class="fas ${completedTrendIcon} ${completedTrendColor} text-[8px] mr-1"></i><span class="${completedTrendColor}">${completedDiff >= 0 ? '+' : ''}${completedDiff}</span>`);
-            
-            const pendingDiff = currentPending - previousStats.pending;
-            const pendingTrendIcon = pendingDiff <= 0 ? 'fa-arrow-down' : 'fa-arrow-up';
-            const pendingTrendColor = pendingDiff <= 0 ? 'text-green-500' : 'text-red-500';
-            $('#pendingTrendValue').html(`${pendingDiff >= 0 ? '+' : ''}${pendingDiff}`);
-            $('#pendingTrend').html(`<i class="fas ${pendingTrendIcon} ${pendingTrendColor} text-[8px] mr-1"></i><span class="${pendingTrendColor}">${pendingDiff >= 0 ? '+' : ''}${pendingDiff}</span>`);
-            
-            const rateDiff = currentRate - previousStats.completionRate;
-            const rateTrendIcon = rateDiff >= 0 ? '↑' : '↓';
-            const rateTrendColor = rateDiff >= 0 ? 'text-green-500' : 'text-red-500';
-            $('#trendText').html(`<span class="${rateTrendColor}">${rateTrendIcon} ${Math.abs(rateDiff)}% vs yesterday</span>`);
-            
-            $('#overallCompletionRate').text(`${currentRate}%`);
-            $('#completionBar').css('width', `${currentRate}%`);
-        }
-        
-        // ========== UI FUNCTIONS ==========
-        function showNotification(message, type) {
-            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500', warning: 'bg-yellow-500' };
-            $('.custom-notification').remove();
-            const notification = $(`<div class="custom-notification fixed top-4 right-4 z-50 px-3 py-1.5 rounded shadow-lg text-xs text-white ${colors[type]} animate-slide-in">${message}</div>`);
-            $('body').append(notification);
-            setTimeout(() => notification.fadeOut(300, function() { $(this).remove(); }), 3000);
-        }
-        
-        function formatTime12(date) {
-            let hours = date.getHours();
-            const minutes = date.getMinutes();
-            const ampm = hours >= 12 ? 'PM' : 'AM';
-            hours = hours % 12 || 12;
-            return `${hours}:${String(minutes).padStart(2, '0')} ${ampm}`;
-        }
-        
-        function updateTaskCell(cell, data) {
-            const button = cell.find('.task-button');
-            if (!button.length) return;
-            
-            let bgColor = "bg-gray-50", textColor = "text-gray-600", timeDisplay = "--:--", statusDisplay = "Pending", titleText = "Click to complete";
-            
-            if (data.isCompleted && data.completedAt) {
-                const completedTime = new Date(data.completedAt);
-                if (!isNaN(completedTime.getTime())) {
-                    timeDisplay = formatTime12(completedTime);
-                    
-                    // Color coding based on delay type
-                    if (data.delayType === 'early') { 
-                        bgColor = "bg-blue-100"; textColor = "text-blue-700"; 
-                        statusDisplay = data.delayText || "Early"; 
-                        titleText = data.delayText || "Completed early";
-                    } else if (data.delayType === 'on-time') { 
-                        bgColor = "bg-green-100"; textColor = "text-green-700"; 
-                        statusDisplay = "On Time"; 
-                        titleText = "Completed on time";
-                    } else if (data.delayType === 'minutes') { 
-                        bgColor = "bg-yellow-100"; textColor = "text-yellow-700"; 
-                        statusDisplay = data.delayText || "Late"; 
-                        titleText = data.delayText || "Late";
-                    } else if (data.delayType === 'hours') { 
-                        bgColor = "bg-orange-100"; textColor = "text-orange-700"; 
-                        statusDisplay = data.delayText || "Late"; 
-                        titleText = data.delayText || "Late";
-                    } else if (data.delayType === 'days') { 
-                        bgColor = "bg-red-100"; textColor = "text-red-700"; 
-                        statusDisplay = data.delayText || "Late"; 
-                        titleText = data.delayText || "Late";
-                    }
-                }
-            }
-            
-            const buttonClasses = `w-full px-1 py-2 rounded text-[9px] font-medium ${bgColor} ${textColor} hover:opacity-90 transition-all flex items-center justify-between gap-0.5 border border-gray-200 task-button`;
-            button.removeClass().addClass(buttonClasses).attr('title', titleText);
-            
-            let newHtml = `<span class="font-mono font-bold flex-1 time-display">${timeDisplay}</span><span class="flex-1 text-[8px] truncate px-0.5 status-display">${statusDisplay}</span>`;
-            if (data.assignedTo) {
-                const initial = data.assignedTo.charAt(0).toUpperCase();
-                newHtml += `<span class="inline-flex items-center justify-center w-3.5 h-3.5 bg-gray-200 text-gray-700 rounded-full text-[6px] font-bold flex-shrink-0 employee-initial" title="${data.assignedTo}">${initial}</span>`;
-            }
-            
-            button.html(newHtml).prop('disabled', false);
-            updateAdjustmentIndicator(cell, data.adjustmentMinutes);
-        }
-        
-        function updateAdjustmentIndicator(cell, minutes) {
-            const existing = cell.find('.adjustment-indicator');
-            if (minutes > 0) {
-                if (existing.length) {
-                    existing.attr('title', `+${minutes} min adjustment`);
-                } else {
-                    cell.find('.relative').append(`<span class="absolute -top-1 -left-2 w-3.5 h-3.5 bg-amber-400 text-white rounded-full text-[5px] flex items-center justify-center shadow-sm z-10 adjustment-indicator" title="+${minutes} min adjustment"><i class="fas fa-clock"></i></span>`);
-                }
-            } else {
-                existing.remove();
-            }
-        }
-        
-        function updateBranchProgress(row) {
-            const progressCell = row.find('td:last-child');
-            const visibleTasks = row.find('.task-button').length;
-            const completedTasks = row.find('.task-button.bg-green-100, .task-button.bg-blue-100, .task-button.bg-yellow-100, .task-button.bg-orange-100, .task-button.bg-red-100').length;
-            const progress = visibleTasks > 0 ? Math.round((completedTasks * 100) / visibleTasks) : 0;
-            progressCell.find('.bg-blue-500').css('width', progress + '%');
-            progressCell.find('.progress-percent').text(progress + '%');
-        }
-        
-        function updateStats() {
-            let completed = 0, total = 0;
-            $('.task-button').each(function() {
-                total++;
-                if ($(this).hasClass('bg-green-100') || $(this).hasClass('bg-blue-100') || 
-                    $(this).hasClass('bg-yellow-100') || $(this).hasClass('bg-orange-100') || 
-                    $(this).hasClass('bg-red-100')) {
-                    completed++;
-                }
-            });
-            $('#completedCount').text(completed);
-            $('#pendingCount').text(total - completed);
-            
-            // Calculate and update on-time rate
-            let onTimeCount = 0;
-            $('.task-button').each(function() {
-                if ($(this).hasClass('bg-green-100')) {
-                    onTimeCount++;
-                }
-            });
-            const onTimeRate = total > 0 ? Math.round((onTimeCount / total) * 100) : 0;
-            $('#onTimeRate').text(onTimeRate + '%');
-        }
-        
-        function updateNotesIcon(branchId, notes) {
-            const icon = $(`.notes-btn-${branchId}`);
-            const hasNotes = notes && notes.trim() !== '';
-            if (hasNotes) {
-                icon.html('<i class="fas fa-sticky-note text-sm text-blue-500"></i>').attr('title', 'View/Edit notes');
-            } else {
-                icon.html('<i class="fas fa-plus-circle text-sm text-gray-400"></i>').attr('title', 'Add notes');
-            }
-        }
-        
-        // ========== FILTER FUNCTIONS ==========
-        let filterTimeout;
-        
-        function applyFilters() {
-            clearTimeout(filterTimeout);
-            
-            // Show loading indicator
-            $('#filterLoadingIndicator').remove();
-            $('.filter-bar').append('<span id="filterLoadingIndicator" class="ml-2"><i class="fas fa-spinner fa-spin text-blue-500 text-xs"></i></span>');
-            
-            filterTimeout = setTimeout(() => {
-                const searchTerm = $('#branchSearch').val().toLowerCase();
-                const statusFilter = $('#statusFilter').val();
-                const taskFilter = $('#taskFilter').val();
-                const myTasksOnly = $('#myTasksOnly').is(':checked');
-                
-                let visibleBranches = 0;
-                let totalCompleted = 0;
-                let totalTasks = 0;
-                
-                $('#dashboardTableBody tr').each(function() {
-                    const $row = $(this);
-                    const branchName = $row.data('branch-name') || '';
-                    const matchesSearch = searchTerm === '' || branchName.includes(searchTerm);
-                    
-                    let rowHasVisibleTasks = false;
-                    let rowCompletedCount = 0;
-                    let rowTotalCount = 0;
-                    
-                    $row.find('.task-cell').each(function() {
-                        const $cell = $(this);
-                        const taskId = $cell.data('task');
-                        const $button = $cell.find('.task-button');
-                        const isCompleted = $button.hasClass('bg-green-100') || $button.hasClass('bg-blue-100') || 
-                                           $button.hasClass('bg-yellow-100') || $button.hasClass('bg-orange-100') || 
-                                           $button.hasClass('bg-red-100');
-                        const isLate = $button.hasClass('bg-yellow-100') || $button.hasClass('bg-orange-100') || $button.hasClass('bg-red-100');
-                        const isPending = !isCompleted;
-                        const assignedTo = $button.find('.employee-initial').attr('title') || '';
-                        
-                        let showCell = true;
-                        
-                        if (taskFilter !== 'all' && taskId.toString() !== taskFilter) showCell = false;
-                        if (statusFilter === 'completed' && !isCompleted) showCell = false;
-                        if (statusFilter === 'pending' && !isPending) showCell = false;
-                        if (statusFilter === 'late' && !isLate) showCell = false;
-                        if (myTasksOnly && assignedTo !== currentUserName && assignedTo !== '') showCell = false;
-                        
-                        if (showCell) {
-                            rowHasVisibleTasks = true;
-                            rowTotalCount++;
-                            if (isCompleted) rowCompletedCount++;
-                        }
-                        
-                        $cell.toggleClass('filtered-out', !showCell);
-                    });
-                    
-                    const shouldShowRow = matchesSearch && rowHasVisibleTasks;
-                    $row.toggleClass('hidden-row', !shouldShowRow);
-                    if (shouldShowRow) {
-                        visibleBranches++;
-                        totalCompleted += rowCompletedCount;
-                        totalTasks += rowTotalCount;
-                    }
-                });
-                
-                $('#totalBranches').text(visibleBranches);
-                $('#completedCount').text(totalCompleted);
-                $('#pendingCount').text(totalTasks - totalCompleted);
-                $('#visibleBranchesCount').text(visibleBranches);
-                $('#visibleTasksCount').text(totalTasks);
-                
-                const completionRate = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
-                $('#overallCompletionRate').text(`${completionRate}%`);
-                $('#completionBar').css('width', `${completionRate}%`);
-                
-                // Update on-time rate based on visible tasks
-                let visibleOnTimeCount = 0;
-                let visibleTotalCount = 0;
-                $('.task-cell:not(.filtered-out) .task-button').each(function() {
-                    visibleTotalCount++;
-                    if ($(this).hasClass('bg-green-100')) {
-                        visibleOnTimeCount++;
-                    }
-                });
-                const visibleOnTimeRate = visibleTotalCount > 0 ? Math.round((visibleOnTimeCount / visibleTotalCount) * 100) : 0;
-                $('#onTimeRate').text(visibleOnTimeRate + '%');
-                
-                updateTrendIndicators();
-                $('#filterLoadingIndicator').remove();
-                
-                // Save filter preferences
-                saveFilterPreferences();
-            }, 300);
-        }
-        
-        function saveFilterPreferences() {
-            const preferences = {
-                branchSearch: $('#branchSearch').val(),
-                statusFilter: $('#statusFilter').val(),
-                taskFilter: $('#taskFilter').val(),
-                myTasksOnly: $('#myTasksOnly').is(':checked')
-            };
-            localStorage.setItem('dashboardFilters', JSON.stringify(preferences));
-        }
-        
-        function loadFilterPreferences() {
-            const saved = localStorage.getItem('dashboardFilters');
-            if (saved) {
-                const prefs = JSON.parse(saved);
-                $('#branchSearch').val(prefs.branchSearch || '');
-                $('#statusFilter').val(prefs.statusFilter || 'all');
-                $('#taskFilter').val(prefs.taskFilter || 'all');
-                $('#myTasksOnly').prop('checked', prefs.myTasksOnly || false);
-                applyFilters();
-            }
-        }
-        
-        function resetFilters() {
-            $('#branchSearch').val('');
-            $('#statusFilter').val('all');
-            $('#taskFilter').val('all');
-            $('#myTasksOnly').prop('checked', false);
-            applyFilters();
-            showNotification('Filters reset', 'info');
-        }
-        
-        function clearAllFilters() {
-            $('#branchSearch').val('');
-            $('#statusFilter').val('all');
-            $('#taskFilter').val('all');
-            $('#myTasksOnly').prop('checked', false);
-            saveFilterPreferences();
-            applyFilters();
-            showNotification('All filters cleared', 'info');
-        }
-        
-        // ========== EXPORT FUNCTIONS ==========
-        function exportDashboardToExcel() {
-            const data = [];
-            const headers = ['Branch'];
-            
-            $('.task-header').each(function() {
-                headers.push($(this).find('span:first').text().trim());
-            });
-            headers.push('Completion %', 'Assigned To', 'Notes');
-            
-            $('#dashboardTableBody tr:visible').each(function() {
-                const $row = $(this);
-                const row = {};
-                row['Branch'] = $row.find('td:first .text-xs').text().trim();
-                
-                let taskIndex = 0;
-                $row.find('.task-cell:not(.filtered-out)').each(function() {
-                    const taskName = headers[taskIndex + 1];
-                    if (taskName) {
-                        row[taskName] = $(this).find('.status-display').text();
-                    }
-                    taskIndex++;
-                });
-                
-                row['Completion %'] = $row.find('.progress-percent').text();
-                row['Assigned To'] = $row.find('[id^="assignedTo-"]').text().trim() || 'Unassigned';
-                row['Notes'] = $row.find('.notes-btn-' + $row.data('branch-id') + ' i').hasClass('fa-sticky-note') ? 'Has notes' : '';
-                data.push(row);
-            });
-            
-            // Use TaskTracker.exportToExcel if available, otherwise use simple export
-            if (typeof TaskTracker !== 'undefined' && TaskTracker.exportToExcel) {
-                TaskTracker.exportToExcel(data, 'Dashboard_' + $('#currentDate').val());
-            } else {
-                const ws = XLSX.utils.json_to_sheet(data);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'Dashboard');
-                XLSX.writeFile(wb, 'Dashboard_' + $('#currentDate').val() + '.xlsx');
-            }
-        }
-     
-        // ========== KEYBOARD SHORTCUTS ==========
-        function showKeyboardShortcuts() {
-            alert('🎹 Keyboard Shortcuts:\n\n' +
-                  'Ctrl + D: Next day\n' +
-                  'Ctrl + A: Previous day\n' +
-                  'Ctrl + T: Today\n' +
-                  'Ctrl + F: Focus search box\n' +
-                  'Ctrl + B: Open bulk update\n' +
-                  'Ctrl + R: Reset filters\n' +
-                  'Ctrl + H: This help\n\n' +
-                  'Tip: Hover over any task button for additional actions');
-        }
-        
-        $(document).keydown(function(e) {
-            if (e.ctrlKey && e.key === 'd') { e.preventDefault(); changeDate(1); }
-            if (e.ctrlKey && e.key === 'a') { e.preventDefault(); changeDate(-1); }
-            if (e.ctrlKey && e.key === 't') { e.preventDefault(); window.location.href = '/Home/Index'; }
-            if (e.ctrlKey && e.key === 'f') { e.preventDefault(); $('#branchSearch').focus(); }
-            if (e.ctrlKey && e.key === 'b') { e.preventDefault(); if (typeof openBulkUpdateModal === 'function') openBulkUpdateModal(); }
-            if (e.ctrlKey && e.key === 'r') { e.preventDefault(); resetFilters(); }
-            if (e.ctrlKey && e.key === 'h') { e.preventDefault(); showKeyboardShortcuts(); }
-        });
-        
-        // ========== LOAD ALL TASK STATUSES ==========
-        async function loadAllTaskStatuses() {
-            const cells = $('td[id^="cell-"]');
-            let loaded = 0;
-            
-            for (const cell of cells) {
-                const $cell = $(cell);
-                const branchId = $cell.data('branch');
-                const taskId = $cell.data('task');
-                const date = $cell.data('date');
-                
-                if (branchId && taskId && date) {
-                    try {
-                        const res = await apiRequest(`/Home/GetTaskStatus?branchId=${branchId}&taskItemId=${taskId}&date=${date}`, 'GET');
-                        if (res.exists) {
-                            updateTaskCell($cell, res);
-                            loaded++;
-                        }
-                    } catch (e) {
-                        console.error('Failed to load task status:', branchId, taskId, e);
-                    }
-                }
-            }
-            
-            updateStats();
-            console.log(`Loaded ${loaded} task statuses`);
-        }
-        
-        // ========== TASK ACTIONS ==========
-        async function quickComplete(branchId, taskId, date, button) {
-            const cell = $(button).closest('td');
-            const row = cell.closest('tr');
-            const originalHtml = button.innerHTML;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
-            button.disabled = true;
-            
-            try {
-                const now = new Date();
-                const res = await apiRequest('/Home/UpdateTaskTime', 'POST', {
-                    branchId: branchId, 
-                    taskItemId: taskId, 
-                    date: date, 
-                    completionTime: now.toISOString()
-                });
-                if (res.success && res.taskData) {
-                    updateTaskCell(cell, res.taskData);
-                    updateBranchProgress(row);
-                    updateStats();
-                    showNotification('Task completed successfully', 'success');
-                } else {
-                    throw new Error(res.message || 'Failed to complete task');
-                }
-            } catch (e) {
-                button.innerHTML = originalHtml;
-                button.disabled = false;
-                showNotification(e.message || 'Error completing task', 'error');
-                console.error('Quick complete error:', e);
-            }
-        }
-        
-        async function resetSingle(branchId, taskId, date, event, button) {
-            event.stopPropagation();
-            if (!confirm('Reset this specific task for this branch?')) return;
-            
-            const cell = $(button).closest('td');
-            const row = cell.closest('tr');
-            const originalHtml = $(button).html();
-            $(button).html('<i class="fas fa-spinner fa-spin text-xs"></i>').prop('disabled', true);
-            
-            try {
-                const res = await apiRequest('/Home/ResetTask', 'POST', {
-                    branchId: branchId, 
-                    taskItemId: taskId, 
-                    date: date
-                });
-                if (res.success) {
-                    const fresh = await apiRequest(`/Home/GetTaskStatus?branchId=${branchId}&taskItemId=${taskId}&date=${date}`, 'GET');
-                    if (fresh.exists) {
-                        updateTaskCell(cell, fresh);
-                        updateBranchProgress(row);
-                        updateStats();
-                    }
-                    showNotification('Task reset successfully', 'success');
-                } else {
-                    throw new Error(res.message || 'Failed to reset task');
-                }
-            } catch (e) {
-                $(button).html(originalHtml).prop('disabled', false);
-                showNotification(e.message || 'Error resetting task', 'error');
-                console.error('Reset single error:', e);
-            }
-        }
-        
-        async function resetAllForTask(taskId, taskName, event) {
-            if (event) event.stopPropagation();
-            if (!confirm(`Reset ALL "${taskName}" tasks for all branches?`)) return;
-            
-            const btn = event ? event.currentTarget : null;
-            const originalHtml = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
-                btn.disabled = true;
-            }
-            
-            try {
-                const date = $('#currentDate').val();
-                const res = await apiRequest('/Home/ResetAllForTask', 'POST', {
-                    taskItemId: taskId, 
-                    date: date
-                });
-                if (res.success) {
-                    showNotification(`${res.count} tasks reset successfully`, 'success');
-                    await loadAllTaskStatuses();
-                } else {
-                    throw new Error(res.message || 'Failed to reset tasks');
-                }
-            } catch (e) {
-                showNotification(e.message || 'Error resetting tasks', 'error');
-                console.error('Reset all for task error:', e);
-            } finally {
-                if (btn) {
-                    btn.innerHTML = originalHtml;
-                    btn.disabled = false;
-                }
-            }
-        }
-        
-        async function completeAllForTask(taskId, taskName, event) {
-            if (event) event.stopPropagation();
-            if (!confirm(`Complete ALL "${taskName}" tasks for all branches?`)) return;
-            
-            const btn = event ? event.currentTarget : null;
-            const originalHtml = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
-                btn.disabled = true;
-            }
-            
-            try {
-                const date = $('#currentDate').val();
-                const res = await apiRequest('/Home/CompleteAllForTask', 'POST', {
-                    taskItemId: taskId, 
-                    date: date
-                });
-                if (res.success) {
-                    showNotification(`${res.count} tasks completed successfully`, 'success');
-                    await loadAllTaskStatuses();
-                } else {
-                    throw new Error(res.message || 'Failed to complete tasks');
-                }
-            } catch (e) {
-                showNotification(e.message || 'Error completing tasks', 'error');
-                console.error('Complete all for task error:', e);
-            } finally {
-                if (btn) {
-                    btn.innerHTML = originalHtml;
-                    btn.disabled = false;
-                }
-            }
-        }
-        
-        // ========== TIME PICKER FUNCTIONS ==========
-        function openTimePicker(branchId, taskId, date, button) {
-            $('#timePickerBranchId').val(branchId);
-            $('#timePickerTaskId').val(taskId);
-            $('#timePickerDate').val(date);
-            $('#timePickerTaskInfo').text('Editing completion time');
-            
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            $('#timePickerDateTime').val(`${year}-${month}-${day}T${hours}:${minutes}`);
-            
-            $('#timePickerModal').removeClass('hidden').addClass('flex');
-            updateTimePreview();
-        }
-        
-        function closeTimePicker() { 
-            $('#timePickerModal').removeClass('flex').addClass('hidden'); 
-        }
-        
-        function setTimePreset(preset) {
-            const date = new Date();
-            switch(preset) {
-                case 'now': break;
-                case 'morning': date.setHours(8, 0, 0, 0); break;
-                case 'noon': date.setHours(12, 0, 0, 0); break;
-                case 'afternoon': date.setHours(16, 0, 0, 0); break;
-                case 'evening': date.setHours(20, 0, 0, 0); break;
-                case 'night': date.setHours(23, 0, 0, 0); break;
-            }
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            $('#timePickerDateTime').val(`${year}-${month}-${day}T${hours}:${minutes}`);
-            updateTimePreview();
-        }
-        
-        function updateTimePreview() {
-            const dateTimeStr = $('#timePickerDateTime').val();
-            if (!dateTimeStr) return;
-            try {
-                const date = new Date(dateTimeStr);
-                if (isNaN(date.getTime())) return;
-                const hours = date.getHours();
-                const minutes = date.getMinutes();
-                const ampm = hours >= 12 ? 'PM' : 'AM';
-                const displayHours = hours % 12 || 12;
-                const timeStr = `${displayHours}:${String(minutes).padStart(2, '0')} ${ampm}`;
-                $('#timePickerPreview').html(`<i class="fas fa-info-circle mr-1"></i> Selected: ${timeStr} on ${date.toLocaleDateString()}`);
-            } catch (e) {}
-        }
-        
-        async function saveTaskTime() {
-            const branchId = $('#timePickerBranchId').val();
-            const taskId = $('#timePickerTaskId').val();
-            const date = $('#timePickerDate').val();
-            const dateTimeStr = $('#timePickerDateTime').val();
-            const cell = $('#cell-' + branchId + '-' + taskId);
-            const row = cell.closest('tr');
-            
-            if (!dateTimeStr) {
-                showNotification('Please select a time', 'error');
-                return;
-            }
-            
-            try {
-                const selectedDate = new Date(dateTimeStr);
-                if (isNaN(selectedDate.getTime())) throw new Error('Invalid date');
-                
-                const res = await apiRequest('/Home/UpdateTaskTime', 'POST', {
-                    branchId: branchId, 
-                    taskItemId: taskId, 
-                    date: date, 
-                    completionTime: selectedDate.toISOString()
-                });
-                if (res.success && res.taskData) {
-                    updateTaskCell(cell, res.taskData);
-                    updateBranchProgress(row);
-                    updateStats();
-                    showNotification('Time updated successfully', 'success');
-                    closeTimePicker();
-                } else {
-                    throw new Error(res.message || 'Failed to update time');
-                }
-            } catch (e) {
-                showNotification(e.message || 'Error updating time', 'error');
-                console.error('Save task time error:', e);
-            }
-        }
-        
-        // ========== ADJUSTMENT FUNCTIONS ==========
-        function openAdjustmentModal(branchId, taskId, taskName, date, button) {
-            $('#adjustmentBranchId').val(branchId);
-            $('#adjustmentTaskId').val(taskId);
-            $('#adjustmentDate').val(date);
-            $('#adjustmentModalTitle').text('Adjust: ' + taskName);
-            
-            // Load existing adjustment if any
-            apiRequest(`/Home/GetTaskStatus?branchId=${branchId}&taskItemId=${taskId}&date=${date}`, 'GET')
-                .then(res => {
-                    if (res.exists && res.adjustmentMinutes > 0) {
-                        $('#adjustmentMinutes').val(res.adjustmentMinutes);
-                        $('#adjustmentReason').val(res.adjustmentReason || '');
-                        $('#currentAdjustmentDisplay').text(res.adjustmentMinutes);
-                    } else {
-                        $('#adjustmentMinutes').val(0);
-                        $('#adjustmentReason').val('');
-                        $('#currentAdjustmentDisplay').text('0');
-                    }
-                })
-                .catch(() => {
-                    $('#adjustmentMinutes').val(0);
-                    $('#adjustmentReason').val('');
-                    $('#currentAdjustmentDisplay').text('0');
-                });
-            
-            $('#adjustmentModal').removeClass('hidden').addClass('flex');
-        }
-        
-        function closeAdjustmentModal() { 
-            $('#adjustmentModal').removeClass('flex').addClass('hidden'); 
-        }
-        
-        function addAdjustment(min) {
-            const current = parseInt($('#adjustmentMinutes').val()) || 0;
-            $('#adjustmentMinutes').val(current + min);
-            $('#currentAdjustmentDisplay').text(current + min);
-        }
-        
-        function clearAdjustment() { 
-            $('#adjustmentMinutes').val(0); 
-            $('#adjustmentReason').val(''); 
-            $('#currentAdjustmentDisplay').text('0'); 
-        }
-        
-        async function saveAdjustment() {
-            const branchId = $('#adjustmentBranchId').val();
-            const taskId = $('#adjustmentTaskId').val();
-            const date = $('#adjustmentDate').val();
-            const minutes = parseInt($('#adjustmentMinutes').val()) || 0;
-            const reason = $('#adjustmentReason').val();
-            const cell = $('#cell-' + branchId + '-' + taskId);
-            const row = cell.closest('tr');
-            
-            const btn = $('#adjustmentModal .bg-amber-500');
-            const originalText = btn.text();
-            btn.text('Saving...').prop('disabled', true);
-            
-            try {
-                const res = await apiRequest('/Home/SaveAdjustment', 'POST', {
-                    branchId: branchId, 
-                    taskItemId: taskId, 
-                    date: date, 
-                    adjustmentMinutes: minutes, 
-                    adjustmentReason: reason
-                });
-                if (res.success) {
-                    const fresh = await apiRequest(`/Home/GetTaskStatus?branchId=${branchId}&taskItemId=${taskId}&date=${date}`, 'GET');
-                    if (fresh.exists) {
-                        updateTaskCell(cell, fresh);
-                        updateBranchProgress(row);
-                        updateStats();
-                    }
-                    showNotification(minutes === 0 ? 'Adjustment removed' : 'Adjustment saved', 'success');
-                    closeAdjustmentModal();
-                } else {
-                    throw new Error(res.message || 'Failed to save adjustment');
-                }
-            } catch (e) {
-                showNotification(e.message || 'Error saving adjustment', 'error');
-                console.error('Save adjustment error:', e);
-            } finally {
-                btn.text(originalText).prop('disabled', false);
-            }
-        }
-        
-        // ========== NOTES FUNCTIONS ==========
-        function openNotesModal(branchId, branchName, currentNotes) {
-            $('#notesBranchId').val(branchId);
-            $('#notesBranchName').text(branchName);
-            $('#notesContent').val(currentNotes || '');
-            $('#notesModal').removeClass('hidden').addClass('flex');
-        }
-        
-        function closeNotesModal() { 
-            $('#notesModal').removeClass('flex').addClass('hidden'); 
-        }
-        
-        async function saveNotes() {
-            const branchId = $('#notesBranchId').val();
-            const notes = $('#notesContent').val();
-            
-            try {
-                const res = await apiRequest('/Home/SaveNotes', 'POST', {
-                    branchId: branchId, 
-                    notes: notes
-                });
-                if (res.success) {
-                    showNotification(notes ? 'Notes saved successfully' : 'Notes removed', 'success');
-                    closeNotesModal();
-                    updateNotesIcon(branchId, notes);
-                } else {
-                    throw new Error(res.message || 'Failed to save notes');
-                }
-            } catch (e) {
-                showNotification(e.message || 'Error saving notes', 'error');
-                console.error('Save notes error:', e);
-            }
-        }
-        
-        // ========== BULK UPDATE FUNCTIONS ==========
-        function openBulkUpdateModal() {
-            $('#bulkUpdateModal').removeClass('hidden').addClass('flex');
-            setBulkTime('now');
-        }
-        
-        function closeBulkUpdateModal() { 
-            $('#bulkUpdateModal').removeClass('flex').addClass('hidden'); 
-        }
-        
-        function setBulkTime(preset) {
-            const d = new Date();
-            if (preset === 'morning') d.setHours(8, 0);
-            else if (preset === 'noon') d.setHours(12, 0);
-            else if (preset === 'afternoon') d.setHours(16, 0);
-            else if (preset === 'evening') d.setHours(20, 0);
-            else if (preset === 'night') d.setHours(23, 0);
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const h = String(d.getHours()).padStart(2, '0');
-            const min = String(d.getMinutes()).padStart(2, '0');
-            $('#bulkCompletionTime').val(`${y}-${m}-${day}T${h}:${min}`);
-        }
-        
-        async function executeBulkUpdate() {
-            const taskId = $('#bulkTaskId').val();
-            const time = $('#bulkCompletionTime').val();
-            
-            if (!taskId || !time) {
-                showNotification('Select a task and time', 'error');
-                return;
-            }
-            
-            try {
-                const selectedDate = new Date(time);
-                if (isNaN(selectedDate.getTime())) throw new Error('Invalid date');
-                
-                const branchIds = [];
-                $('tr[data-branch-id]').each(function() {
-                    branchIds.push($(this).data('branch-id'));
-                });
-                
-                const res = await apiRequest('/Home/BulkUpdate', 'POST', {
-                    taskItemId: taskId, 
-                    completionDateTime: selectedDate.toISOString(), 
-                    branchIds: branchIds
-                });
-                if (res.success) {
-                    showNotification(`${res.count} tasks updated successfully`, 'success');
-                    closeBulkUpdateModal();
-                    await loadAllTaskStatuses();
-                } else {
-                    throw new Error(res.message || 'Failed to update tasks');
-                }
-            } catch (e) {
-                showNotification(e.message || 'Error during bulk update', 'error');
-                console.error('Bulk update error:', e);
-            }
-        }
-        
-        // ========== DATE NAVIGATION ==========
-        function changeDate(days) {
-            const datePicker = $('#datePicker');
-            const currentDate = datePicker.val();
-            if (currentDate) {
-                const date = new Date(currentDate);
-                date.setDate(date.getDate() + days);
-                const newDate = date.toISOString().split('T')[0];
-                window.location.href = '/Home/Index?date=' + newDate;
-            }
-        }
-        
-        // ========== INITIALIZATION ==========
-        $(document).ready(function() {
-            console.log('Dashboard initializing...');
-            
-            // Show skeleton loader first
-            $('#skeletonLoader').show();
-            $('#dashboardContainer').hide();
-            
-            // Setup event listeners for filters
-            $('#branchSearch').on('keyup', applyFilters);
-            $('#statusFilter').on('change', applyFilters);
-            $('#taskFilter').on('change', applyFilters);
-            $('#myTasksOnly').on('change', applyFilters);
-            
-            // Load filter preferences
-            loadFilterPreferences();
-            
-            // Load trend data
-            setTimeout(function() {
-                loadTrendData();
-                
-                // Hide skeleton, show dashboard
-                $('#skeletonLoader').fadeOut(300, function() {
-                    $('#dashboardContainer').fadeIn(300);
-                });
-            }, 500);
-            
-            // Date picker change
-            $('#datePicker').on('change', function() {
-                const selectedDate = $(this).val();
-                if (selectedDate) {
-                    window.location.href = '/Home/Index?date=' + selectedDate;
-                }
-            });
-            
-            // Time picker preview
-            $('#timePickerDateTime').on('change', updateTimePreview);
-            
-            // Close modals on escape
-            $(document).keydown(function(e) {
-                if (e.key === 'Escape') {
-                    closeTimePicker();
-                    closeAdjustmentModal();
-                    closeNotesModal();
-                    closeBulkUpdateModal();
-                }
-            });
-            
-            // Load all task statuses
-            loadAllTaskStatuses();
-            
-            console.log('Dashboard initialized');
-        });
+        // Pass server-side data to JavaScript
+        window.branchNotes = @Html.Raw(Json.Serialize(notesDict));
+        window.currentUserName = @Html.Raw(Json.Serialize(User.Identity?.Name ?? "Admin User"));
     </script>
+}
 </body>
 </html>

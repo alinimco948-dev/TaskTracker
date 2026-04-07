@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using TaskTracker.Data;
 using TaskTracker.Models.Entities;
@@ -6,6 +7,7 @@ using TaskTracker.Models.ViewModels;
 using TaskTracker.Services.Interfaces;
 
 namespace TaskTracker.Controllers;
+
 
 public class DepartmentController : Controller
 {

@@ -1,10 +1,12 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using TaskTracker.Data;
 using TaskTracker.Models.Entities;
 using TaskTracker.Services.Interfaces;
 
 namespace TaskTracker.Controllers;
+
 
 public class HolidayController : Controller
 {
@@ -29,6 +31,7 @@ public class HolidayController : Controller
             .OrderBy(h => h.IsWeekly)
             .ThenBy(h => h.WeekDay)
             .ThenBy(h => h.HolidayDate)
+            .AsNoTracking()
             .ToListAsync();
 
         return View(holidays);
@@ -36,6 +39,7 @@ public class HolidayController : Controller
 
     // POST: Holiday/ToggleWeekly
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> ToggleWeekly(int weekDay)
     {
         try
@@ -72,6 +76,7 @@ public class HolidayController : Controller
 
     // POST: Holiday/AddWeeklyWithDescription
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddWeeklyWithDescription(int weekDay, string description)
     {
         try
@@ -108,6 +113,7 @@ public class HolidayController : Controller
 
     // POST: Holiday/AddSpecific (AJAX compatible)
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddSpecific(DateTime date, string description = "")
     {
         try
@@ -141,6 +147,7 @@ public class HolidayController : Controller
 
     // POST: Holiday/UpdateSpecificDescription
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateSpecificDescription(DateTime date, string description)
     {
         try
@@ -167,6 +174,7 @@ public class HolidayController : Controller
 
     // POST: Holiday/RemoveSpecific
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveSpecific(DateTime date)
     {
         try
@@ -192,6 +200,7 @@ public class HolidayController : Controller
 
     // POST: Holiday/RemoveWeekly
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveWeekly(int weekDay)
     {
         try
@@ -217,6 +226,7 @@ public class HolidayController : Controller
 
     // POST: Holiday/Delete/5
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {
         try

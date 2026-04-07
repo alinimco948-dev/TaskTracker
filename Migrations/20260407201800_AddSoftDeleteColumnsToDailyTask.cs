@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace TaskTracker.Migrations
 {
     /// <inheritdoc />
-    public partial class AddTasksv : Migration
+    public partial class AddSoftDeleteColumnsToDailyTask : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -217,7 +217,10 @@ namespace TaskTracker.Migrations
                     IsBulkUpdated = table.Column<bool>(type: "boolean", nullable: false),
                     BulkUpdateTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     AdjustmentMinutes = table.Column<int>(type: "integer", nullable: true),
-                    AdjustmentReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false)
+                    AdjustmentReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletionReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -346,6 +349,12 @@ namespace TaskTracker.Migrations
                 column: "Action");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AuditLogs_Changes_GIN",
+                table: "AuditLogs",
+                column: "Changes")
+                .Annotation("Npgsql:IndexMethod", "gin");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AuditLogs_EntityId",
                 table: "AuditLogs",
                 column: "EntityId");
@@ -356,9 +365,36 @@ namespace TaskTracker.Migrations
                 column: "EntityType");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AuditLogs_EntityType_EntityId",
+                table: "AuditLogs",
+                columns: new[] { "EntityType", "EntityId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AuditLogs_NewValues_GIN",
+                table: "AuditLogs",
+                column: "NewValues")
+                .Annotation("Npgsql:IndexMethod", "gin");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AuditLogs_OldValues_GIN",
+                table: "AuditLogs",
+                column: "OldValues")
+                .Annotation("Npgsql:IndexMethod", "gin");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AuditLogs_Timestamp",
                 table: "AuditLogs",
                 column: "Timestamp");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AuditLogs_Timestamp_Action",
+                table: "AuditLogs",
+                columns: new[] { "Timestamp", "Action" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AuditLogs_Timestamp_EntityType",
+                table: "AuditLogs",
+                columns: new[] { "Timestamp", "EntityType" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AuditLogs_UserName",
@@ -366,9 +402,30 @@ namespace TaskTracker.Migrations
                 column: "UserName");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AuditLogs_UserName_Timestamp",
+                table: "AuditLogs",
+                columns: new[] { "UserName", "Timestamp" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_BranchAssignments_BranchId",
                 table: "BranchAssignments",
                 column: "BranchId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BranchAssignments_BranchId_EmployeeId_EndDate",
+                table: "BranchAssignments",
+                columns: new[] { "BranchId", "EmployeeId", "EndDate" },
+                filter: "\"EndDate\" IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BranchAssignments_BranchId_EndDate",
+                table: "BranchAssignments",
+                columns: new[] { "BranchId", "EndDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BranchAssignments_BranchId_StartDate_EndDate",
+                table: "BranchAssignments",
+                columns: new[] { "BranchId", "StartDate", "EndDate" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_BranchAssignments_EmployeeId",
@@ -380,6 +437,11 @@ namespace TaskTracker.Migrations
                 table: "BranchAssignments",
                 columns: new[] { "EmployeeId", "BranchId", "StartDate" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BranchAssignments_EmployeeId_EndDate",
+                table: "BranchAssignments",
+                columns: new[] { "EmployeeId", "EndDate" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_BranchAssignments_EndDate",
@@ -402,9 +464,20 @@ namespace TaskTracker.Migrations
                 column: "DepartmentId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Branches_HiddenTasksJson_GIN",
+                table: "Branches",
+                column: "HiddenTasksJson")
+                .Annotation("Npgsql:IndexMethod", "gin");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Branches_IsActive",
                 table: "Branches",
                 column: "IsActive");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Branches_IsActive_DepartmentId",
+                table: "Branches",
+                columns: new[] { "IsActive", "DepartmentId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Branches_Name",
@@ -415,6 +488,21 @@ namespace TaskTracker.Migrations
                 name: "IX_DailyTasks_BranchId",
                 table: "DailyTasks",
                 column: "BranchId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DailyTasks_BranchId_IsCompleted",
+                table: "DailyTasks",
+                columns: new[] { "BranchId", "IsCompleted" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DailyTasks_BranchId_TaskDate",
+                table: "DailyTasks",
+                columns: new[] { "BranchId", "TaskDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DailyTasks_BranchId_TaskDate_IsCompleted",
+                table: "DailyTasks",
+                columns: new[] { "BranchId", "TaskDate", "IsCompleted" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_DailyTasks_BranchId_TaskItemId_TaskDate",
@@ -431,6 +519,16 @@ namespace TaskTracker.Migrations
                 name: "IX_DailyTasks_TaskDate",
                 table: "DailyTasks",
                 column: "TaskDate");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DailyTasks_TaskDate_IsCompleted",
+                table: "DailyTasks",
+                columns: new[] { "TaskDate", "IsCompleted" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DailyTasks_TaskDate_IsCompleted_BranchId",
+                table: "DailyTasks",
+                columns: new[] { "TaskDate", "IsCompleted", "BranchId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_DailyTasks_TaskItemId",
@@ -476,6 +574,11 @@ namespace TaskTracker.Migrations
                 column: "IsActive");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Employees_IsActive_DepartmentId",
+                table: "Employees",
+                columns: new[] { "IsActive", "DepartmentId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Employees_ManagerId",
                 table: "Employees",
                 column: "ManagerId");
@@ -486,6 +589,11 @@ namespace TaskTracker.Migrations
                 column: "HolidayDate");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Holidays_IsWeekly_HolidayDate",
+                table: "Holidays",
+                columns: new[] { "IsWeekly", "HolidayDate" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Holidays_IsWeekly_WeekDay",
                 table: "Holidays",
                 columns: new[] { "IsWeekly", "WeekDay" });
@@ -494,6 +602,17 @@ namespace TaskTracker.Migrations
                 name: "IX_Reports_Category",
                 table: "Reports",
                 column: "Category");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reports_Category_IsPublic",
+                table: "Reports",
+                columns: new[] { "Category", "IsPublic" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reports_Configuration_GIN",
+                table: "Reports",
+                column: "Configuration")
+                .Annotation("Npgsql:IndexMethod", "gin");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Reports_CreatedBy",
@@ -516,9 +635,25 @@ namespace TaskTracker.Migrations
                 column: "IsScheduled");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Reports_IsScheduled_NextRunDate",
+                table: "Reports",
+                columns: new[] { "IsScheduled", "NextRunDate" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Reports_ReportType",
                 table: "Reports",
                 column: "ReportType");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reports_ReportType_IsActive",
+                table: "Reports",
+                columns: new[] { "ReportType", "IsActive" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reports_Tags_GIN",
+                table: "Reports",
+                column: "Tags")
+                .Annotation("Npgsql:IndexMethod", "gin");
 
             migrationBuilder.CreateIndex(
                 name: "IX_TaskAssignments_DailyTaskId",
@@ -530,6 +665,11 @@ namespace TaskTracker.Migrations
                 name: "IX_TaskAssignments_EmployeeId",
                 table: "TaskAssignments",
                 column: "EmployeeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TaskAssignments_EmployeeId_AssignedAt",
+                table: "TaskAssignments",
+                columns: new[] { "EmployeeId", "AssignedAt" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_TaskAssignments_EmployeeId_DailyTaskId",
@@ -553,10 +693,20 @@ namespace TaskTracker.Migrations
                 column: "IsActive");
 
             migrationBuilder.CreateIndex(
+                name: "IX_TaskItems_IsActive_ExecutionType",
+                table: "TaskItems",
+                columns: new[] { "IsActive", "ExecutionType" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TaskItems_Name",
                 table: "TaskItems",
                 column: "Name",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TaskItems_StartDate_EndDate",
+                table: "TaskItems",
+                columns: new[] { "StartDate", "EndDate" });
         }
 
         /// <inheritdoc />

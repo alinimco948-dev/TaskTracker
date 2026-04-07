@@ -61,70 +61,150 @@ public class TaskService : ITaskService
     public async Task<TaskItem?> GetTaskByIdAsync(int id) 
         => await _context.TaskItems.FindAsync(id);
 
-    public async Task<TaskItem> CreateTaskAsync(TaskItemViewModel model)
+ 
+ // Update CreateTaskAsync to also create assignments
+public async Task<TaskItem> CreateTaskAsync(TaskItemViewModel model)
+{
+    try
     {
-        try
+        if (await _context.TaskItems.AnyAsync(t => t.Name == model.Name))
+            throw new InvalidOperationException($"Task with name '{model.Name}' already exists");
+
+        int displayOrder = model.DisplayOrder > 0 
+            ? model.DisplayOrder 
+            : (await _context.TaskItems.MaxAsync(t => (int?)t.DisplayOrder) ?? 0) + 1;
+
+        DateTime? startDateUtc = model.StartDate.HasValue
+            ? _timezoneService.GetStartOfDayLocal(model.StartDate.Value)
+            : null;
+        DateTime? endDateUtc = model.EndDate.HasValue
+            ? _timezoneService.GetEndOfDayLocal(model.EndDate.Value)
+            : null;
+        DateTime? availableFromUtc = model.AvailableFrom.HasValue
+            ? _timezoneService.GetStartOfDayLocal(model.AvailableFrom.Value)
+            : null;
+        DateTime? availableToUtc = model.AvailableTo.HasValue
+            ? _timezoneService.GetEndOfDayLocal(model.AvailableTo.Value)
+            : null;
+
+        if (model.ExecutionType == TaskExecutionType.MultiDay && model.DurationDays.HasValue && startDateUtc.HasValue)
         {
-            if (await _context.TaskItems.AnyAsync(t => t.Name == model.Name))
-                throw new InvalidOperationException($"Task with name '{model.Name}' already exists");
-
-            int displayOrder = model.DisplayOrder > 0 
-                ? model.DisplayOrder 
-                : (await _context.TaskItems.MaxAsync(t => (int?)t.DisplayOrder) ?? 0) + 1;
-
-            // Convert dates to UTC
-            DateTime? startDateUtc = model.StartDate.HasValue
-                ? _timezoneService.GetStartOfDayLocal(model.StartDate.Value)
-                : null;
-            DateTime? endDateUtc = model.EndDate.HasValue
-                ? _timezoneService.GetEndOfDayLocal(model.EndDate.Value)
-                : null;
-            DateTime? availableFromUtc = model.AvailableFrom.HasValue
-                ? _timezoneService.GetStartOfDayLocal(model.AvailableFrom.Value)
-                : null;
-            DateTime? availableToUtc = model.AvailableTo.HasValue
-                ? _timezoneService.GetEndOfDayLocal(model.AvailableTo.Value)
-                : null;
-
-            // Calculate EndDate for Multi-Day tasks
-            if (model.ExecutionType == TaskExecutionType.MultiDay && model.DurationDays.HasValue && startDateUtc.HasValue)
-            {
-                endDateUtc = startDateUtc.Value.AddDays(model.DurationDays.Value - 1);
-            }
-
-            var task = new TaskItem
-            {
-                Name = model.Name,
-                Deadline = model.Deadline,
-                IsSameDay = model.IsSameDay,
-                DisplayOrder = displayOrder,
-                Description = model.Description,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                ExecutionType = model.ExecutionType,
-                WeeklyDays = model.WeeklyDays.Any() ? string.Join(",", model.WeeklyDays) : null,
-                MonthlyPattern = model.MonthlyPattern,
-                DurationDays = model.DurationDays,
-                StartDate = startDateUtc,
-                EndDate = endDateUtc,
-                MaxOccurrences = model.MaxOccurrences,
-                AvailableFrom = availableFromUtc,
-                AvailableTo = availableToUtc
-            };
-
-            _context.TaskItems.Add(task);
-            await _context.SaveChangesAsync();
-            await _auditService.LogAsync("Create", "TaskItem", task.Id, $"Created task: {task.Name} (Type: {task.ExecutionType})");
-            return task;
+            endDateUtc = startDateUtc.Value.AddDays(model.DurationDays.Value - 1);
         }
-        catch (Exception ex)
+
+        var task = new TaskItem
         {
-            _logger.LogError(ex, "Error creating task");
-            throw;
-        }
+            Name = model.Name,
+            Deadline = model.Deadline,
+            IsSameDay = model.IsSameDay,
+            DisplayOrder = displayOrder,
+            Description = model.Description,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            ExecutionType = model.ExecutionType,
+            WeeklyDays = model.WeeklyDays.Any() ? string.Join(",", model.WeeklyDays) : null,
+            MonthlyPattern = model.MonthlyPattern,
+            DurationDays = model.DurationDays,
+            StartDate = startDateUtc,
+            EndDate = endDateUtc,
+            MaxOccurrences = model.MaxOccurrences,
+            AvailableFrom = availableFromUtc,
+            AvailableTo = availableToUtc
+        };
+
+        _context.TaskItems.Add(task);
+        await _context.SaveChangesAsync();
+        
+        // FIX #16: Create TaskAssignments for all employees
+        await AutoAssignTaskToAllEmployees(task);
+        
+        await _auditService.LogAsync("Create", "TaskItem", task.Id, $"Created task: {task.Name} (Type: {task.ExecutionType})");
+        return task;
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error creating task");
+        throw;
+    }
+}
 
-    public async Task<TaskItem?> UpdateTaskAsync(TaskItemViewModel model)
+private async Task AutoAssignTaskToAllEmployees(TaskItem task)
+{
+    try
+    {
+        _logger.LogInformation($"Auto-assigning task '{task.Name}' to employees...");
+
+        var employees = await _context.Employees
+            .Where(e => e.IsActive)
+            .Include(e => e.BranchAssignments)
+            .ThenInclude(ba => ba.Branch)
+            .ToListAsync();
+
+        var startDate = task.StartDate.HasValue
+            ? task.StartDate.Value
+            : _timezoneService.GetStartOfDayLocal(_timezoneService.GetCurrentLocalTime());
+        var endDate = task.EndDate.HasValue
+            ? task.EndDate.Value
+            : _timezoneService.GetEndOfDayLocal(_timezoneService.GetCurrentLocalTime().AddYears(1));
+
+        var taskDates = _taskCalculationService.GetTaskDatesInRange(task, startDate, endDate);
+        var createdCount = 0;
+
+        foreach (var employee in employees)
+        {
+            var activeAssignments = employee.BranchAssignments
+                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= _timezoneService.GetCurrentLocalTime().Date)
+                .ToList();
+
+            foreach (var assignment in activeAssignments)
+            {
+                foreach (var taskDate in taskDates)
+                {
+                    if (taskDate.Date < assignment.StartDate.Date) continue;
+                    if (assignment.EndDate.HasValue && taskDate.Date > assignment.EndDate.Value.Date) continue;
+
+                    var existingDailyTask = await _context.DailyTasks
+                        .FirstOrDefaultAsync(dt => dt.BranchId == assignment.BranchId &&
+                                                   dt.TaskItemId == task.Id &&
+                                                   dt.TaskDate.Date == taskDate.Date);
+
+                    if (existingDailyTask == null)
+                    {
+                        var dailyTask = new DailyTask
+                        {
+                            BranchId = assignment.BranchId,
+                            TaskItemId = task.Id,
+                            TaskDate = taskDate.Date,
+                            IsCompleted = false,
+                            CompletedAt = null
+                        };
+                        _context.DailyTasks.Add(dailyTask);
+                        await _context.SaveChangesAsync();
+
+                        var taskAssignment = new TaskAssignment
+                        {
+                            EmployeeId = employee.Id,
+                            DailyTaskId = dailyTask.Id,
+                            AssignedAt = DateTime.UtcNow
+                        };
+                        _context.TaskAssignments.Add(taskAssignment);
+                        createdCount++;
+                    }
+                }
+            }
+        }
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation($"Auto-assigned task '{task.Name}' to {createdCount} employee-task combinations");
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error auto-assigning task {TaskName}", task.Name);
+    }
+}
+
+ 
+     public async Task<TaskItem?> UpdateTaskAsync(TaskItemViewModel model)
     {
         try
         {

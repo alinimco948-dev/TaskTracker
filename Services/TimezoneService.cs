@@ -27,7 +27,6 @@ public class TimezoneService : ITimezoneService
         {
             _logger.LogWarning("TimeZone {TimeZoneId} not found as Windows ID, trying IANA...", timeZoneId);
             
-            // Try to find by IANA ID (for Linux)
             var ianaMapping = new Dictionary<string, string>
             {
                 { "E. Africa Standard Time", "Africa/Nairobi" },
@@ -69,18 +68,15 @@ public class TimezoneService : ITimezoneService
 
     public DateTime ConvertToLocalTime(DateTime utcDate)
     {
-        // Ensure the date has UTC kind
         DateTime utcDateTime;
         
         if (utcDate.Kind == DateTimeKind.Unspecified)
         {
-            // Assume unspecified means UTC
             utcDateTime = DateTime.SpecifyKind(utcDate, DateTimeKind.Utc);
             _logger.LogDebug("Converted Unspecified DateTime to UTC: {Date}", utcDateTime);
         }
         else if (utcDate.Kind == DateTimeKind.Local)
         {
-            // Convert local to UTC first
             utcDateTime = utcDate.ToUniversalTime();
             _logger.LogDebug("Converted Local DateTime to UTC: {Date}", utcDateTime);
         }
@@ -97,54 +93,60 @@ public class TimezoneService : ITimezoneService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error converting UTC to local time for date {Date}", utcDateTime);
-            // Fallback to UTC
             return utcDateTime;
         }
     }
 
-    public DateTime ConvertToUtc(DateTime localDate)
+  public DateTime ConvertToUtc(DateTime localDate)
+{
+    // Debug log
+    _logger.LogInformation($"ConvertToUtc called with: {localDate}, Kind: {localDate.Kind}");
+    
+    // If the date already has UTC kind, return as is
+    if (localDate.Kind == DateTimeKind.Utc)
     {
-        // Ensure the date has appropriate kind
-        DateTime localDateTime;
-        
-        if (localDate.Kind == DateTimeKind.Unspecified)
-        {
-            // Assume unspecified means local time in the configured timezone
-            localDateTime = DateTime.SpecifyKind(localDate, DateTimeKind.Unspecified);
-            _logger.LogDebug("Converting Unspecified DateTime to UTC using configured timezone: {Date}", localDateTime);
-        }
-        else if (localDate.Kind == DateTimeKind.Utc)
-        {
-            // Already UTC
-            return localDate;
-        }
-        else
-        {
-            localDateTime = localDate;
-        }
-        
-        try
-        {
-            // Convert from the configured timezone to UTC
-            var result = TimeZoneInfo.ConvertTimeToUtc(localDateTime, _timeZoneInfo);
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error converting local to UTC for date {Date}", localDateTime);
-            // Fallback to assuming it's already UTC
-            return DateTime.SpecifyKind(localDateTime, DateTimeKind.Utc);
-        }
+        _logger.LogInformation("Date already UTC, returning as is");
+        return localDate;
     }
-
-    public DateTime GetCurrentLocalTime()
+    
+    // For dates coming from JavaScript datetime-local (string parsed to DateTime)
+    // They come as Unspecified but are actually LOCAL time
+    if (localDate.Kind == DateTimeKind.Unspecified)
+    {
+        // Get the offset for the configured timezone (for UTC+3, offset is +3 hours)
+        var offset = _timeZoneInfo.GetUtcOffset(localDate);
+        // Subtract offset to get UTC (10 PM local - 3 hours = 7 PM UTC)
+        var result = localDate.Subtract(offset);
+        _logger.LogInformation("Local time: {Local}, Offset: {Offset}, UTC: {Result}", localDate, offset, result);
+        return DateTime.SpecifyKind(result, DateTimeKind.Utc);
+    }
+    
+    // Otherwise convert from local to UTC using configured timezone
+    try
+    {
+        var result = TimeZoneInfo.ConvertTimeToUtc(localDate, _timeZoneInfo);
+        _logger.LogInformation("Converted from local {Local} to UTC {Utc}", localDate, result);
+        return result;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error converting local to UTC for date {Date}", localDate);
+        // Fallback: subtract offset
+        var offset = _timeZoneInfo.GetUtcOffset(localDate);
+        return DateTime.SpecifyKind(localDate.Subtract(offset), DateTimeKind.Utc);
+    }
+}
+  
+  
+  
+  
+      public DateTime GetCurrentLocalTime()
     {
         return ConvertToLocalTime(DateTime.UtcNow);
     }
 
     public DateTime GetStartOfDayLocal(DateTime localDate)
     {
-        // First ensure we have a local date
         DateTime localDateTime;
         
         if (localDate.Kind == DateTimeKind.Unspecified)
@@ -166,7 +168,6 @@ public class TimezoneService : ITimezoneService
 
     public DateTime GetEndOfDayLocal(DateTime localDate)
     {
-        // First ensure we have a local date
         DateTime localDateTime;
         
         if (localDate.Kind == DateTimeKind.Unspecified)

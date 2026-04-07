@@ -5,40 +5,38 @@ namespace TaskTracker.Models.ViewModels;
 public class EmployeeViewModel
 {
     public int Id { get; set; }
-
+    
     [Required(ErrorMessage = "Name is required")]
     [StringLength(100)]
     public string Name { get; set; } = string.Empty;
-
+    
     [Required(ErrorMessage = "Employee ID is required")]
-    [StringLength(20)]
+    [StringLength(50)]
     public string EmployeeId { get; set; } = string.Empty;
-
+    
     [EmailAddress]
     [StringLength(100)]
     public string Email { get; set; } = string.Empty;
-
+    
     [StringLength(20)]
     public string Phone { get; set; } = string.Empty;
-
+    
     [StringLength(200)]
     public string Address { get; set; } = string.Empty;
-
+    
     public DateTime? HireDate { get; set; }
-
-    [StringLength(50)]
+    
+    [StringLength(100)]
     public string Position { get; set; } = string.Empty;
-
+    
     public int? DepartmentId { get; set; }
-
+    
     public int? ManagerId { get; set; }
-
+    
     public bool IsActive { get; set; } = true;
     
-    // Multiple branch assignments
-    public List<int> BranchIds { get; set; } = new();
+    public List<int> BranchIds { get; set; } = new List<int>();
 }
-
 public class EmployeeListViewModel
 {
     public int Id { get; set; }

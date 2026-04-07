@@ -27,7 +27,6 @@ public class ApplicationDbContext : DbContext
         base.OnModelCreating(modelBuilder);
 
         // ========== UTC DATE CONVERTER - FIXES ALL DATE INCONSISTENCIES ==========
-        // This ensures all DateTime properties are stored and retrieved as UTC
         var dateTimeConverter = new ValueConverter<DateTime, DateTime>(
             v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc),
             v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
@@ -50,6 +49,10 @@ public class ApplicationDbContext : DbContext
                 }
             }
         }
+
+        // ========== GLOBAL QUERY FILTERS ==========
+        // Soft delete filter for DailyTasks
+        modelBuilder.Entity<DailyTask>().HasQueryFilter(dt => !dt.IsDeleted);
 
         // ========== EMPLOYEE CONFIGURATION ==========
         modelBuilder.Entity<Employee>(entity =>
@@ -80,9 +83,19 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            // INDEX #1: Unique indexes
             entity.HasIndex(e => e.EmployeeId).IsUnique();
             entity.HasIndex(e => e.Email).IsUnique().HasFilter("\"Email\" IS NOT NULL");
+            
+            // INDEX #2: Foreign key indexes
+            entity.HasIndex(e => e.DepartmentId);
+            entity.HasIndex(e => e.ManagerId);
+            
+            // INDEX #3: Status index for filtering
             entity.HasIndex(e => e.IsActive);
+            
+            // INDEX #4: Composite index for common queries
+            entity.HasIndex(e => new { e.IsActive, e.DepartmentId });
 
             entity.HasOne(e => e.Department)
                 .WithMany(d => d.Employees)
@@ -127,9 +140,21 @@ public class ApplicationDbContext : DbContext
             entity.Property(b => b.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            // INDEX #5: Basic indexes
             entity.HasIndex(b => b.Name);
             entity.HasIndex(b => b.Code);
             entity.HasIndex(b => b.IsActive);
+            
+            // INDEX #6: Foreign key index
+            entity.HasIndex(b => b.DepartmentId);
+            
+            // INDEX #7: Composite index for branch lookups
+            entity.HasIndex(b => new { b.IsActive, b.DepartmentId });
+
+            // INDEX #8: GIN index for JSONB field (PostgreSQL)
+            entity.HasIndex(b => b.HiddenTasksJson)
+                .HasMethod("gin")
+                .HasDatabaseName("IX_Branches_HiddenTasksJson_GIN");
 
             entity.HasOne(b => b.Department)
                 .WithMany(d => d.Branches)
@@ -156,6 +181,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(d => d.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            // INDEX #9: Department indexes
             entity.HasIndex(d => d.Name);
             entity.HasIndex(d => d.Code);
             entity.HasIndex(d => d.IsActive);
@@ -183,10 +209,15 @@ public class ApplicationDbContext : DbContext
             entity.Property(t => t.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            // INDEX #10: Task indexes
             entity.HasIndex(t => t.Name).IsUnique();
             entity.HasIndex(t => t.DisplayOrder);
             entity.HasIndex(t => t.IsActive);
             entity.HasIndex(t => t.ExecutionType);
+            
+            // INDEX #11: Composite indexes for task scheduling queries
+            entity.HasIndex(t => new { t.IsActive, t.ExecutionType });
+            entity.HasIndex(t => new { t.StartDate, t.EndDate });
         });
 
         // ========== DAILY TASK CONFIGURATION ==========
@@ -198,11 +229,27 @@ public class ApplicationDbContext : DbContext
             entity.Property(dt => dt.AdjustmentReason)
                 .HasMaxLength(500);
 
+            // INDEX #12: Unique constraint
             entity.HasIndex(dt => new { dt.BranchId, dt.TaskItemId, dt.TaskDate }).IsUnique();
+            
+            // INDEX #13: Date range queries
             entity.HasIndex(dt => dt.TaskDate);
+            
+            // INDEX #14: Status filtering
             entity.HasIndex(dt => dt.IsCompleted);
+            
+            // INDEX #15: Foreign key indexes
             entity.HasIndex(dt => dt.BranchId);
             entity.HasIndex(dt => dt.TaskItemId);
+            
+            // INDEX #16: Composite indexes for performance (CRITICAL)
+            entity.HasIndex(dt => new { dt.BranchId, dt.TaskDate });
+            entity.HasIndex(dt => new { dt.BranchId, dt.IsCompleted });
+            entity.HasIndex(dt => new { dt.TaskDate, dt.IsCompleted });
+            entity.HasIndex(dt => new { dt.BranchId, dt.TaskDate, dt.IsCompleted });
+            
+            // INDEX #17: For dashboard queries
+            entity.HasIndex(dt => new { dt.TaskDate, dt.IsCompleted, dt.BranchId });
 
             entity.HasOne(dt => dt.Branch)
                 .WithMany(b => b.DailyTasks)
@@ -229,9 +276,15 @@ public class ApplicationDbContext : DbContext
             entity.Property(ta => ta.AssignedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            // INDEX #18: Unique constraint
             entity.HasIndex(ta => new { ta.EmployeeId, ta.DailyTaskId }).IsUnique();
+            
+            // INDEX #19: Foreign key indexes
             entity.HasIndex(ta => ta.EmployeeId);
             entity.HasIndex(ta => ta.DailyTaskId);
+            
+            // INDEX #20: Composite index for employee assignments
+            entity.HasIndex(ta => new { ta.EmployeeId, ta.AssignedAt });
 
             entity.HasOne(ta => ta.Employee)
                 .WithMany(e => e.TaskAssignments)
@@ -250,11 +303,25 @@ public class ApplicationDbContext : DbContext
             entity.HasKey(ba => ba.Id);
             entity.Property(ba => ba.Id).UseIdentityColumn();
 
+            // INDEX #21: Unique constraint
             entity.HasIndex(ba => new { ba.EmployeeId, ba.BranchId, ba.StartDate }).IsUnique();
+            
+            // INDEX #22: Foreign key indexes
             entity.HasIndex(ba => ba.EmployeeId);
             entity.HasIndex(ba => ba.BranchId);
+            
+            // INDEX #23: Date range queries
             entity.HasIndex(ba => ba.StartDate);
             entity.HasIndex(ba => ba.EndDate);
+            
+            // INDEX #24: Composite indexes for active assignments
+            entity.HasIndex(ba => new { ba.BranchId, ba.EndDate });
+            entity.HasIndex(ba => new { ba.EmployeeId, ba.EndDate });
+            entity.HasIndex(ba => new { ba.BranchId, ba.StartDate, ba.EndDate });
+            
+            // INDEX #25: For finding active assignments (filtered index)
+            entity.HasIndex(ba => new { ba.BranchId, ba.EmployeeId, ba.EndDate })
+                .HasFilter("\"EndDate\" IS NULL");
 
             entity.HasOne(ba => ba.Employee)
                 .WithMany(e => e.BranchAssignments)
@@ -276,8 +343,12 @@ public class ApplicationDbContext : DbContext
             entity.Property(h => h.Description)
                 .HasMaxLength(200);
 
+            // INDEX #26: Holiday indexes
             entity.HasIndex(h => h.HolidayDate);
             entity.HasIndex(h => new { h.IsWeekly, h.WeekDay });
+            
+            // INDEX #27: Composite index for holiday checks
+            entity.HasIndex(h => new { h.IsWeekly, h.HolidayDate });
         });
 
         // ========== AUDIT LOG CONFIGURATION ==========
@@ -318,11 +389,29 @@ public class ApplicationDbContext : DbContext
             entity.Property(a => a.Timestamp)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            // INDEX #28: Audit log indexes (critical for reporting)
             entity.HasIndex(a => a.Timestamp);
             entity.HasIndex(a => a.Action);
             entity.HasIndex(a => a.EntityType);
             entity.HasIndex(a => a.EntityId);
             entity.HasIndex(a => a.UserName);
+            
+            // INDEX #29: Composite indexes for audit reports
+            entity.HasIndex(a => new { a.Timestamp, a.Action });
+            entity.HasIndex(a => new { a.EntityType, a.EntityId });
+            entity.HasIndex(a => new { a.Timestamp, a.EntityType });
+            entity.HasIndex(a => new { a.UserName, a.Timestamp });
+            
+            // INDEX #30: GIN index for JSON fields
+            entity.HasIndex(a => a.Changes)
+                .HasMethod("gin")
+                .HasDatabaseName("IX_AuditLogs_Changes_GIN");
+            entity.HasIndex(a => a.OldValues)
+                .HasMethod("gin")
+                .HasDatabaseName("IX_AuditLogs_OldValues_GIN");
+            entity.HasIndex(a => a.NewValues)
+                .HasMethod("gin")
+                .HasDatabaseName("IX_AuditLogs_NewValues_GIN");
         });
 
         // ========== REPORT CONFIGURATION ==========
@@ -378,12 +467,26 @@ public class ApplicationDbContext : DbContext
             entity.Property(r => r.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            // INDEX #31: Report indexes
             entity.HasIndex(r => r.ReportType);
             entity.HasIndex(r => r.Category);
             entity.HasIndex(r => r.CreatedBy);
             entity.HasIndex(r => r.IsScheduled);
             entity.HasIndex(r => r.IsPublic);
             entity.HasIndex(r => r.IsActive);
+            
+            // INDEX #32: Composite indexes for report queries
+            entity.HasIndex(r => new { r.ReportType, r.IsActive });
+            entity.HasIndex(r => new { r.Category, r.IsPublic });
+            entity.HasIndex(r => new { r.IsScheduled, r.NextRunDate });
+            
+            // INDEX #33: GIN index for JSON fields
+            entity.HasIndex(r => r.Configuration)
+                .HasMethod("gin")
+                .HasDatabaseName("IX_Reports_Configuration_GIN");
+            entity.HasIndex(r => r.Tags)
+                .HasMethod("gin")
+                .HasDatabaseName("IX_Reports_Tags_GIN");
         });
 
         // ========== SEED DATA ==========

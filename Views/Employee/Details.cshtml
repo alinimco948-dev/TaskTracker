@@ -590,10 +590,28 @@
     }
 
     // Branch assignment functions
-    function assignBranch(employeeId) {
-        $('#branchEmployeeId').val(employeeId);
-        $('#branchModal').removeClass('hidden').addClass('flex');
-    }
+  function assignBranch(employeeId) {
+    $('#branchEmployeeId').val(employeeId);
+    
+    // Fetch available branches (excluding already assigned ones)
+    $.ajax({
+        url: '@Url.Action("GetAvailableBranches", "Employee")',
+        type: 'GET',
+        data: { employeeId: employeeId },
+        success: function(branches) {
+            var $select = $('#branchSelect');
+            $select.empty();
+            $select.append('<option value="">Select a branch...</option>');
+            $.each(branches, function(i, branch) {
+                $select.append('<option value="' + branch.id + '">' + branch.name + '</option>');
+            });
+            $('#branchModal').removeClass('hidden').addClass('flex');
+        },
+        error: function() {
+            showNotification('Error loading branches', 'error');
+        }
+    });
+}
 
     function closeBranchModal() {
         $('#branchModal').removeClass('flex').addClass('hidden');

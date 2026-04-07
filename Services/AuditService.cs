@@ -21,39 +21,40 @@ public class AuditService : IAuditService
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public async Task LogAsync(string action, string entityType, int? entityId, string description,
-        string? changes = null, string? oldValues = null, string? newValues = null)
+public async Task LogAsync(string action, string entityType, int? entityId, string description,
+    string? changes = null, string? oldValues = null, string? newValues = null)
+{
+    try
     {
-        try
-        {
-            var httpContext = _httpContextAccessor.HttpContext;
-            var userId = httpContext?.User?.Identity?.Name ?? "System";
-            var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString() ?? "Unknown";
+        var httpContext = _httpContextAccessor.HttpContext;
+        
+        // FIX #25: Add null checks
+        var userId = httpContext?.User?.Identity?.Name ?? "System";
+        var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString() ?? "Unknown";
 
-            var auditLog = new AuditLog
-            {
-                Action = action,
-                EntityType = entityType,
-                EntityId = entityId,
-                Description = description,
-                Changes = changes,
-                OldValues = oldValues,
-                NewValues = newValues,
-                UserId = userId,
-                UserName = userId,
-                IpAddress = ipAddress,
-                Timestamp = DateTime.UtcNow
-            };
-
-            _context.AuditLogs.Add(auditLog);
-            await _context.SaveChangesAsync();
-        }
-        catch (Exception ex)
+        var auditLog = new AuditLog
         {
-            _logger.LogError(ex, "Error logging audit");
-        }
+            Action = action,
+            EntityType = entityType,
+            EntityId = entityId,
+            Description = description,
+            Changes = changes,
+            OldValues = oldValues,
+            NewValues = newValues,
+            UserId = userId,
+            UserName = userId,
+            IpAddress = ipAddress,
+            Timestamp = DateTime.UtcNow
+        };
+
+        _context.AuditLogs.Add(auditLog);
+        await _context.SaveChangesAsync();
     }
-
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error logging audit");
+    }
+}
     public async Task<List<AuditLog>> GetAuditLogsAsync(DateTime? startDate = null, DateTime? endDate = null,
         string? action = null, string? entityType = null)
     {

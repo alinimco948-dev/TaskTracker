@@ -26,8 +26,11 @@ public interface IReportService
     Task<AuditLogReportViewModel> ExecuteAuditReportAsync(DateTime startDate, DateTime endDate, string? action = null, string? entityType = null);
     Task<List<Dictionary<string, object>>> ExecuteCustomReportAsync(CustomReportRequest request);
     
-    // ========== Employee Ranking ==========
-    Task<List<EmployeeRankingViewModel>> GetEmployeeRankingAsync(DateTime? startDate = null, DateTime? endDate = null);  // ✅ ADD THIS LINE
+    // ========== Employee Comparison & Ranking ==========
+    Task<List<EmployeeRankingViewModel>> GetEmployeeRankingAsync(DateTime? startDate = null, DateTime? endDate = null);
+    
+    // UPDATED: New method signature with employeeIds and comparisonMode
+    Task<EmployeeComparisonViewModel> ExecuteEmployeeComparisonReportAsync(int? branchId, List<int> employeeIds, DateTime startDate, DateTime endDate, string comparisonMode = "branch");
 
     // ========== Report Export ==========
     Task<byte[]> ExportToExcelAsync(object data, string reportName);

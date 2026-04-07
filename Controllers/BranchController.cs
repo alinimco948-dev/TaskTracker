@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using TaskTracker.Data;
 using TaskTracker.Models.Entities;
@@ -6,6 +7,7 @@ using TaskTracker.Models.ViewModels;
 using TaskTracker.Services.Interfaces;
 
 namespace TaskTracker.Controllers;
+
 
 public class BranchController : Controller
 {
@@ -85,7 +87,6 @@ public class BranchController : Controller
         {
             try
             {
-                // Check for duplicate branch name
                 var existingBranch = await _context.Branches
                     .FirstOrDefaultAsync(b => b.Name.ToLower() == model.Name.ToLower());
                 
@@ -157,7 +158,6 @@ public class BranchController : Controller
         {
             try
             {
-                // Check for duplicate branch name (excluding current branch)
                 var existingBranch = await _context.Branches
                     .FirstOrDefaultAsync(b => b.Name.ToLower() == model.Name.ToLower() && b.Id != model.Id);
                 
@@ -216,7 +216,6 @@ public class BranchController : Controller
                 return Json(new { success = false, message = "Branch not found" });
             }
 
-            // Check if branch has active assignments
             var hasActiveAssignments = await _context.BranchAssignments
                 .AnyAsync(ba => ba.BranchId == id && ba.EndDate == null);
             
@@ -254,7 +253,6 @@ public class BranchController : Controller
             if (employee == null)
                 return Json(new { success = false, message = "Employee not found" });
 
-            // Check if already assigned
             var existingAssignment = await _context.BranchAssignments
                 .FirstOrDefaultAsync(ba => ba.BranchId == branchId && 
                                            ba.EmployeeId == employeeId && 
@@ -363,7 +361,6 @@ public class BranchController : Controller
                     .Select(t => t.Name)
                     .ToListAsync();
 
-                // Visible tasks are those with Visible = true
                 var visibleTasks = group.Where(u => u.Visible).Select(u => u.TaskName).ToList();
                 var hiddenTasks = allTasks.Except(visibleTasks).ToList();
 
@@ -388,7 +385,6 @@ public class BranchController : Controller
     {
         try
         {
-            // Get employees not currently assigned to ANY branch
             var assignedEmployeeIds = await _context.BranchAssignments
                 .Where(ba => ba.EndDate == null)
                 .Select(ba => ba.EmployeeId)
@@ -417,35 +413,36 @@ public class BranchController : Controller
         }
     }
 
- // GET: Branch/GetBranchEmployees
-[HttpGet]
-public async Task<IActionResult> GetBranchEmployees(int branchId)
-{
-    try
+    // GET: Branch/GetBranchEmployees
+    [HttpGet]
+    public async Task<IActionResult> GetBranchEmployees(int branchId)
     {
-        var employees = await _context.BranchAssignments
-            .Include(ba => ba.Employee)
-            .Where(ba => ba.BranchId == branchId && ba.EndDate == null)
-            .Select(ba => new
-            {
-                AssignmentId = ba.Id,
-                EmployeeId = ba.EmployeeId,
-                EmployeeName = ba.Employee != null ? ba.Employee.Name : "Unknown",
-                EmployeeNumber = ba.Employee != null ? ba.Employee.EmployeeId : "N/A",
-                Position = ba.Employee != null ? ba.Employee.Position : "N/A",
-                AssignedSince = ba.StartDate,
-                Initials = ba.Employee != null ? GetInitials(ba.Employee.Name) : "?"
-            })
-            .ToListAsync();
+        try
+        {
+            var employees = await _context.BranchAssignments
+                .Include(ba => ba.Employee)
+                .Where(ba => ba.BranchId == branchId && ba.EndDate == null)
+                .Select(ba => new
+                {
+                    AssignmentId = ba.Id,
+                    EmployeeId = ba.EmployeeId,
+                    EmployeeName = ba.Employee != null ? ba.Employee.Name : "Unknown",
+                    EmployeeNumber = ba.Employee != null ? ba.Employee.EmployeeId : "N/A",
+                    Position = ba.Employee != null ? ba.Employee.Position : "N/A",
+                    AssignedSince = ba.StartDate,
+                    Initials = ba.Employee != null ? GetInitials(ba.Employee.Name) : "?"
+                })
+                .ToListAsync();
 
-        return Json(employees);
+            return Json(employees);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting branch employees");
+            return Json(new List<object>());
+        }
     }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error getting branch employees");
-        return Json(new List<object>());
-    }
-}
+
     // Helper Methods
     private async Task<List<int>> GetTaskIdsFromNamesAsync(List<string> taskNames)
     {
@@ -473,7 +470,6 @@ public async Task<IActionResult> GetBranchEmployees(int branchId)
     }
 }
 
-// Model for task visibility updates
 public class TaskVisibilityUpdate
 {
     public int BranchId { get; set; }
