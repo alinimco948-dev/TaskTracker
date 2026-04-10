@@ -77,10 +77,11 @@ builder.Services.AddSession(options =>
 // Add response caching
 builder.Services.AddResponseCaching();
 
-// Configure Kestrel for local development
+// Configure Kestrel for Railway - use PORT env variable
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(5000);
+    options.ListenAnyIP(int.Parse(port));
 });
 
 // Set EPPlus license
@@ -99,7 +100,8 @@ else
     app.UseDeveloperExceptionPage();
 }
 
-app.UseHttpsRedirection();
+// Remove HTTPS redirection for Railway deployment - use HTTP only
+// app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
@@ -112,49 +114,34 @@ app.MapControllerRoute(
 
 app.MapGet("/", () => Results.Redirect("/Home/Index"));
 
-// Run migrations on startup (seed data will be applied automatically!)
-using (var scope = app.Services.CreateScope())
+// Run migrations on startup in background - don't block startup
+_ = Task.Run(async () =>
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    
     try
     {
-        logger.LogInformation("=========================================");
-        logger.LogInformation("Starting TaskTracker Application");
-        logger.LogInformation("=========================================");
+        await Task.Delay(2000); // Wait for app to start
         
-        // Test database connection
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        
         logger.LogInformation("Testing database connection...");
-        var canConnect = dbContext.Database.CanConnect();
+        var canConnect = await dbContext.Database.CanConnectAsync();
         logger.LogInformation($"Database connection: {(canConnect ? "SUCCESS" : "FAILED")}");
         
         if (canConnect)
         {
-            // Apply migrations - THIS WILL ALSO APPLY SEED DATA from OnModelCreating
             logger.LogInformation("Applying database migrations...");
             await dbContext.Database.MigrateAsync();
-            logger.LogInformation("Migrations applied successfully (including seed data from DbContext)");
-            
-            // Verify data exists
-            var branchCount = await dbContext.Branches.CountAsync();
-            var taskCount = await dbContext.TaskItems.CountAsync();
-            var departmentCount = await dbContext.Departments.CountAsync();
-            
-            logger.LogInformation($"Database contains:");
-            logger.LogInformation($"  - Departments: {departmentCount}");
-            logger.LogInformation($"  - Branches: {branchCount}");
-            logger.LogInformation($"  - Tasks: {taskCount}");
+            logger.LogInformation("Migrations applied successfully");
         }
-        
-        logger.LogInformation("=========================================");
-        logger.LogInformation("Application is ready!");
-        logger.LogInformation("=========================================");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "An error occurred during database initialization.");
+        // Log but don't crash - migrations will run on first request
+        var logger = app.Services.GetService<ILogger<Program>>();
+        logger?.LogError(ex, "Background migration failed");
     }
-}
+});
 
 app.Run();
