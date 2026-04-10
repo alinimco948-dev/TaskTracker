@@ -474,7 +474,7 @@ public class BranchService : IBranchService
 
     private async Task<double> GetBranchCompletionRateAsync(int branchId, DateTime date)
     {
-        var utcStart = _timezoneService.GetStartOfDayLocal(date);
+        var utcStart = _timezoneService.GetStartOfDayLocal(date.AddDays(-7));
         var utcEnd = _timezoneService.GetEndOfDayLocal(date);
         
         var tasks = await _context.DailyTasks

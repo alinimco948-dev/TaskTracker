@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +46,25 @@ public class ReportController : Controller
         _logger = logger;
         _context = context;
         _timezoneService = timezoneService;
+    }
+
+    // GET: Report/ExecutiveSummary
+    public async Task<IActionResult> ExecutiveSummary(DateTime? startDate = null, DateTime? endDate = null)
+    {
+        try
+        {
+            var end = endDate ?? _timezoneService.GetCurrentLocalTime().Date;
+            var start = startDate ?? end.AddDays(-30);
+
+            var model = await _reportService.GetExecutiveSummaryAsync(start, end);
+            return View(model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating executive summary report");
+            TempData["ErrorMessage"] = "Could not generate Executive Summary at this time.";
+            return RedirectToAction("Index", "Home");
+        }
     }
 
     // GET: Report/EmployeePerformance
@@ -824,10 +843,10 @@ public async Task<IActionResult> ExportEmployeeComparison(int? branchId, List<in
                 ["Timestamp"] = e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"),
                 ["Action"] = e.Action,
                 ["Entity Type"] = e.EntityType,
-                ["Entity ID"] = e.EntityId,
-                ["Description"] = e.Description,
-                ["User"] = e.UserName,
-                ["IP Address"] = e.IpAddress
+                ["Entity ID"] = e.EntityId ?? 0,
+                ["Description"] = e.Description ?? "",
+                ["User"] = e.UserName ?? "",
+                ["IP Address"] = e.IpAddress ?? ""
             }).ToList();
             
             byte[] fileData;

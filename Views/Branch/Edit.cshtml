@@ -1,35 +1,134 @@
-﻿public class EmployeeViewModel
-{
-    public int Id { get; set; }
-    
-    [Required(ErrorMessage = "Name is required")]
-    [StringLength(100)]
-    public string Name { get; set; } = string.Empty;
-    
-    [Required(ErrorMessage = "Employee ID is required")]
-    [StringLength(50)]
-    public string EmployeeId { get; set; } = string.Empty;
-    
-    [EmailAddress]
-    [StringLength(100)]
-    public string Email { get; set; } = string.Empty;
-    
-    [StringLength(20)]
-    public string Phone { get; set; } = string.Empty;
-    
-    [StringLength(200)]
-    public string Address { get; set; } = string.Empty;
-    
-    public DateTime? HireDate { get; set; }
-    
-    [StringLength(100)]
-    public string Position { get; set; } = string.Empty;
-    
-    public int? DepartmentId { get; set; }
-    
-    public int? ManagerId { get; set; }
-    
-    public bool IsActive { get; set; } = true;
-    
-    public List<int> BranchIds { get; set; } = new List<int>();
+@model TaskTracker.Models.ViewModels.BranchViewModel
+@{
+    ViewData["Title"] = "Edit Branch";
+}
+
+<div class="max-w-3xl mx-auto animate-fade-up">
+    <div class="glass-card overflow-hidden">
+        <!-- Header -->
+        <div class="px-6 py-5 flex items-center gap-4" style="background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(99,102,241,0.15)); border-bottom: 1px solid rgba(255,255,255,0.08);">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 4px 15px rgba(16,185,129,0.4);">
+                <i class="fas fa-edit text-white"></i>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold text-white">Edit Branch</h2>
+                <p class="text-slate-400 text-sm mt-0.5">Update branch information and task visibility</p>
+            </div>
+        </div>
+
+        <form asp-action="Edit" method="post" class="p-6">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+
+            <div asp-validation-summary="ModelOnly" class="alert-error rounded-xl p-4 mb-6 text-sm"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Left Column -->
+                <div class="space-y-5">
+                    <div>
+                        <label asp-for="Name" class="block text-sm font-semibold text-slate-300 mb-2">
+                            Branch Name <span class="text-red-400">*</span>
+                        </label>
+                        <input asp-for="Name" class="dark-input" />
+                        <span asp-validation-for="Name" class="text-xs text-red-400 mt-1 block"></span>
+                    </div>
+
+                    <div>
+                        <label asp-for="Code" class="block text-sm font-semibold text-slate-300 mb-2">Branch Code</label>
+                        <input asp-for="Code" class="dark-input" />
+                    </div>
+
+                    <div>
+                        <label asp-for="Address" class="block text-sm font-semibold text-slate-300 mb-2">Address</label>
+                        <input asp-for="Address" class="dark-input" />
+                    </div>
+
+                    <div>
+                        <label asp-for="DepartmentId" class="block text-sm font-semibold text-slate-300 mb-2">Department</label>
+                        <select asp-for="DepartmentId" class="dark-input">
+                            <option value="">Select Department (Optional)</option>
+                            @if (ViewBag.Departments != null)
+                            {
+                                @foreach (var dept in ViewBag.Departments)
+                                {
+                                    <option value="@dept.Id">@dept.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div class="space-y-5">
+                    <div>
+                        <label asp-for="Phone" class="block text-sm font-semibold text-slate-300 mb-2">Phone Number</label>
+                        <input asp-for="Phone" class="dark-input" />
+                    </div>
+
+                    <div>
+                        <label asp-for="Email" class="block text-sm font-semibold text-slate-300 mb-2">Email Address</label>
+                        <input asp-for="Email" type="email" class="dark-input" />
+                        <span asp-validation-for="Email" class="text-xs text-red-400 mt-1 block"></span>
+                    </div>
+
+                    <div>
+                        <label asp-for="Notes" class="block text-sm font-semibold text-slate-300 mb-2">Notes</label>
+                        <textarea asp-for="Notes" rows="3" class="dark-input resize-none"></textarea>
+                    </div>
+
+                    <div class="rounded-xl p-4 flex items-center gap-4" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);">
+                        <input asp-for="IsActive" type="checkbox" class="w-4 h-4 accent-emerald-500 cursor-pointer" />
+                        <div>
+                            <span class="text-sm font-semibold text-slate-200">Active Branch</span>
+                            <p class="text-xs text-slate-500 mt-0.5">Inactive branches won't appear in dropdown menus</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Task Visibility -->
+            @if (ViewBag.Tasks != null)
+            {
+                <div class="mt-6 pt-6 border-t" style="border-color: rgba(255,255,255,0.06);">
+                    <h3 class="text-base font-bold text-white mb-1">Task Visibility</h3>
+                    <p class="text-sm text-slate-400 mb-4">Select tasks that should be <span class="text-emerald-400 font-medium">VISIBLE</span> for this branch:</p>
+
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                        @foreach (var task in ViewBag.Tasks)
+                        {
+                            var isVisible = ViewBag.HiddenTaskIds == null || !((List<string>)ViewBag.HiddenTaskIds).Contains(task.Name);
+                            <label class="flex items-center gap-2 p-3 rounded-xl cursor-pointer transition"
+                                   style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);"
+                                   onmouseover="this.style.borderColor='rgba(16,185,129,0.4)'"
+                                   onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+                                <input type="checkbox" name="hiddenTaskIds" value="@task.Id"
+                                       class="w-4 h-4 accent-emerald-500" @(isVisible ? "checked" : "") />
+                                <span class="text-sm text-slate-300">@task.Name</span>
+                            </label>
+                        }
+                    </div>
+                    <p class="text-xs text-slate-500 mt-3">
+                        <i class="fas fa-info-circle mr-1 text-indigo-400"></i>
+                        <span class="text-emerald-400">Checked = Visible</span> |
+                        <span class="text-slate-500">Unchecked = Hidden</span>
+                    </p>
+                </div>
+            }
+
+            <!-- Form Actions -->
+            <div class="flex justify-end gap-3 mt-6 pt-5 border-t" style="border-color: rgba(255,255,255,0.06);">
+                <a href="@Url.Action("Index")" class="px-5 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5 transition text-sm font-medium flex items-center gap-2">
+                    <i class="fas fa-times"></i>Cancel
+                </a>
+                <button type="submit" class="btn-primary" style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 15px rgba(16,185,129,0.3);">
+                    <i class="fas fa-save"></i>Update Branch
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
 }

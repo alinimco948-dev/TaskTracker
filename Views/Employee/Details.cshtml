@@ -1,358 +1,313 @@
-﻿@model TaskTracker.Models.ViewModels.EmployeeDetailsViewModel
+@model TaskTracker.Models.ViewModels.EmployeeDetailsViewModel
 @using TaskTracker.Models.ViewModels
 @{
     ViewData["Title"] = "Employee Details";
 
-    // Calculate initials for display
     var initials = "?";
     if (!string.IsNullOrEmpty(Model.Name))
     {
         var nameParts = Model.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (nameParts.Length == 1)
-            initials = nameParts[0].Substring(0, 1).ToUpper();
-        else if (nameParts.Length >= 2)
-            initials = (nameParts[0][0].ToString() + nameParts[^1][0].ToString()).ToUpper();
+        if (nameParts.Length == 1) initials = nameParts[0].Substring(0, 1).ToUpper();
+        else if (nameParts.Length >= 2) initials = (nameParts[0][0].ToString() + nameParts[^1][0].ToString()).ToUpper();
     }
-    
-    // Calculate performance metrics
+
     var completionRate = Model.TotalTasks > 0 ? Math.Round((double)Model.CompletedTasks / Model.TotalTasks * 100, 1) : 0;
     var onTimeRate = Model.CompletedTasks > 0 ? Math.Round((double)Model.OnTimeTasks / Model.CompletedTasks * 100, 1) : 0;
-    
-    // Group tasks by name for performance matrix
+
     var taskPerformance = new Dictionary<string, (int Total, int Completed, int OnTime, int Late, int Pending)>();
     if (Model.RecentTasks != null && Model.RecentTasks.Any())
     {
         foreach (var task in Model.RecentTasks)
         {
             var taskName = task.TaskName;
-            if (!taskPerformance.ContainsKey(taskName))
-            {
-                taskPerformance[taskName] = (0, 0, 0, 0, 0);
-            }
+            if (!taskPerformance.ContainsKey(taskName)) taskPerformance[taskName] = (0, 0, 0, 0, 0);
             var stats = taskPerformance[taskName];
             stats.Total++;
-            if (task.IsCompleted)
-            {
-                stats.Completed++;
-                if (task.IsOnTime)
-                {
-                    stats.OnTime++;
-                }
-                else
-                {
-                    stats.Late++;
-                }
-            }
-            else
-            {
-                stats.Pending++;
-            }
+            if (task.IsCompleted) { stats.Completed++; if (task.IsOnTime) stats.OnTime++; else stats.Late++; }
+            else stats.Pending++;
             taskPerformance[taskName] = stats;
         }
     }
+
+    var token = "";
+    if (Context != null)
+    {
+        var antiforgery = Context.RequestServices?.GetService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>();
+        if (antiforgery != null) { var tokens = antiforgery.GetAndStoreTokens(Context); token = tokens.RequestToken ?? ""; }
+    }
 }
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Left Column - Employee Info Card -->
+<input type="hidden" id="requestVerificationToken" value="@token" />
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-up">
+
+    <!-- Left Panel — Employee Info -->
     <div class="lg:col-span-1">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden sticky top-4">
-            <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4">
-                <h3 class="text-lg font-semibold text-white">Employee Information</h3>
+        <div class="glass-card overflow-hidden sticky top-4">
+            <!-- Header -->
+            <div class="px-5 py-4 flex items-center justify-between"
+                 style="background: linear-gradient(135deg, rgba(99,102,241,0.3), rgba(124,58,237,0.2)); border-bottom: 1px solid rgba(255,255,255,0.08);">
+                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-user-circle text-indigo-400"></i>Employee Information</h3>
             </div>
 
-            <div class="p-6 text-center border-b">
-                <div class="w-24 h-24 mx-auto rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                    <span class="text-3xl font-bold text-blue-600">@initials</span>
+            <!-- Avatar -->
+            <div class="p-6 text-center border-b" style="border-color: rgba(255,255,255,0.06);">
+                <div class="w-24 h-24 mx-auto rounded-2xl flex items-center justify-center mb-4 shadow-lg"
+                     style="background: linear-gradient(135deg, #6366f1, #7c3aed);">
+                    <span class="text-3xl font-bold text-white">@initials</span>
                 </div>
-                <h2 class="text-xl font-bold text-gray-900">@Model.Name</h2>
-                <p class="text-gray-500">@Model.Position</p>
-                <div class="mt-2">
+                <h2 class="text-xl font-bold text-white">@Model.Name</h2>
+                <p class="text-slate-400">@Model.Position</p>
+                <div class="mt-3">
                     @if (Model.IsActive)
                     {
-                        <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Active</span>
+                        <span class="stat-badge" style="background: rgba(16,185,129,0.15); color: #6ee7b7;">
+                            <i class="fas fa-circle text-[8px] text-emerald-400"></i>Active
+                        </span>
                     }
                     else
                     {
-                        <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">Inactive</span>
+                        <span class="stat-badge" style="background: rgba(239,68,68,0.15); color: #fca5a5;">
+                            <i class="fas fa-circle text-[8px] text-red-400"></i>Inactive
+                        </span>
                     }
                 </div>
             </div>
 
-            <div class="p-4 border-b">
-                <h4 class="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
+            <!-- Contact -->
+            <div class="p-5 border-b" style="border-color: rgba(255,255,255,0.06);">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Contact Information</h4>
                 <div class="space-y-2 text-sm">
-                    <div class="flex items-center">
-                        <i class="fas fa-envelope text-gray-400 w-5"></i>
-                        <span class="text-gray-600">@(!string.IsNullOrEmpty(Model.Email) ? Model.Email : "No email provided")</span>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-envelope text-slate-600 w-4 text-xs flex-shrink-0"></i>
+                        <span class="text-slate-400">@(!string.IsNullOrEmpty(Model.Email) ? Model.Email : "No email provided")</span>
                     </div>
-                    <div class="flex items-center">
-                        <i class="fas fa-phone text-gray-400 w-5"></i>
-                        <span class="text-gray-600">@(!string.IsNullOrEmpty(Model.Phone) ? Model.Phone : "No phone provided")</span>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-phone text-slate-600 w-4 text-xs flex-shrink-0"></i>
+                        <span class="text-slate-400">@(!string.IsNullOrEmpty(Model.Phone) ? Model.Phone : "No phone provided")</span>
                     </div>
-                    <div class="flex items-start">
-                        <i class="fas fa-map-marker-alt text-gray-400 w-5 mt-1"></i>
-                        <span class="text-gray-600">@(!string.IsNullOrEmpty(Model.Address) ? Model.Address : "No address provided")</span>
+                    <div class="flex items-start gap-2">
+                        <i class="fas fa-map-marker-alt text-slate-600 w-4 text-xs flex-shrink-0 mt-0.5"></i>
+                        <span class="text-slate-400">@(!string.IsNullOrEmpty(Model.Address) ? Model.Address : "No address provided")</span>
                     </div>
                 </div>
             </div>
 
-            <div class="p-4 border-b">
-                <h4 class="text-sm font-semibold text-gray-700 mb-3">Employment Details</h4>
+            <!-- Employment -->
+            <div class="p-5 border-b" style="border-color: rgba(255,255,255,0.06);">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Employment Details</h4>
                 <div class="space-y-2 text-sm">
-                    <div class="flex justify-between">
-                        <span class="text-gray-500">Employee ID:</span>
-                        <span class="font-mono font-medium">@Model.EmployeeId</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-gray-500">Department:</span>
-                        <span>@Model.Department</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-gray-500">Reports To:</span>
-                        <span>@Model.Manager</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-gray-500">Hire Date:</span>
-                        <span>@(Model.HireDate?.ToString("MMM dd, yyyy") ?? "Not set")</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-gray-500">Created:</span>
-                        <span>@Model.CreatedAt.ToString("MMM dd, yyyy")</span>
-                    </div>
+                    <div class="flex justify-between"><span class="text-slate-500">Employee ID:</span><span class="font-mono font-medium text-slate-200">@Model.EmployeeId</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Department:</span><span class="text-slate-300">@Model.Department</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Reports To:</span><span class="text-slate-300">@Model.Manager</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Hire Date:</span><span class="text-slate-300">@(Model.HireDate?.ToString("MMM dd, yyyy") ?? "Not set")</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Created:</span><span class="text-slate-300">@Model.CreatedAt.ToString("MMM dd, yyyy")</span></div>
                 </div>
             </div>
 
-            <div class="p-4 bg-gray-50 flex space-x-2">
-                <a href="@Url.Action("Edit", new { id = Model.Id })" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition text-center">
-                    <i class="fas fa-edit mr-2"></i>Edit
+            <!-- Actions -->
+            <div class="p-4 flex gap-2" style="background: rgba(255,255,255,0.02);">
+                <a href="@Url.Action("Edit", new { id = Model.Id })"
+                   class="flex-1 py-2.5 rounded-xl text-sm font-medium text-white text-center flex items-center justify-center gap-2 transition"
+                   style="background: linear-gradient(135deg, #6366f1, #7c3aed); box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
+                    <i class="fas fa-edit text-xs"></i>Edit
                 </a>
-                <a href="@Url.Action("EmployeePerformance", "Report", new { employeeId = Model.Id, startDate = Model.StartDate.ToString("yyyy-MM-dd"), endDate = Model.EndDate.ToString("yyyy-MM-dd") })" class="flex-1 px-4 py-2 border border-gray-300 bg-white rounded-lg text-sm font-medium hover:bg-gray-50 transition text-center">
-                    <i class="fas fa-chart-bar mr-2"></i>Full Report
+                <a href="@Url.Action("EmployeePerformance", "Report", new { employeeId = Model.Id, startDate = Model.StartDate.ToString("yyyy-MM-dd"), endDate = Model.EndDate.ToString("yyyy-MM-dd") })"
+                   class="flex-1 py-2.5 rounded-xl text-sm font-medium text-slate-300 text-center flex items-center justify-center gap-2 transition"
+                   style="border: 1px solid rgba(255,255,255,0.10);"
+                   onmouseover="this.style.background='rgba(255,255,255,0.05)'"
+                   onmouseout="this.style.background=''">
+                    <i class="fas fa-chart-bar text-xs"></i>Full Report
                 </a>
             </div>
         </div>
     </div>
 
-    <!-- Right Column - Performance Dashboard -->
-    <div class="lg:col-span-2 space-y-6">
+    <!-- Right Panel -->
+    <div class="lg:col-span-2 space-y-5">
+
         <!-- Date Range Filter -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <form method="post" asp-action="Details" class="flex flex-wrap items-end gap-4">
+        <div class="glass-card p-5">
+            <form method="post" asp-action="Details" class="flex flex-wrap items-end gap-3">
                 <input type="hidden" name="id" value="@Model.Id" />
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                    <input type="date" name="startDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" value="@Model.StartDate.ToString("yyyy-MM-dd")" />
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Start Date</label>
+                    <input type="date" name="startDate" class="dark-input" value="@Model.StartDate.ToString("yyyy-MM-dd")" />
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                    <input type="date" name="endDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" value="@Model.EndDate.ToString("yyyy-MM-dd")" />
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">End Date</label>
+                    <input type="date" name="endDate" class="dark-input" value="@Model.EndDate.ToString("yyyy-MM-dd")" />
                 </div>
-                <div>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
-                        <i class="fas fa-calendar-alt mr-2"></i>Apply Date Range
-                    </button>
-                </div>
-                <div class="text-sm text-gray-500">
-                    <i class="fas fa-info-circle mr-1"></i>
-                    Showing data from @Model.StartDate.ToString("MMM dd, yyyy") to @Model.EndDate.ToString("MMM dd, yyyy")
-                </div>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-calendar-alt"></i>Apply Range
+                </button>
+                <span class="text-xs text-slate-500 flex items-center gap-1">
+                    <i class="fas fa-info-circle text-indigo-400"></i>
+                    @Model.StartDate.ToString("MMM dd, yyyy") — @Model.EndDate.ToString("MMM dd, yyyy")
+                </span>
             </form>
         </div>
 
-        <!-- Warning Message for Inactive Period -->
         @if (!string.IsNullOrEmpty(Model.WarningMessage))
         {
-            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
-                <div class="flex items-start">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-exclamation-triangle text-yellow-500"></i>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-yellow-700">@Model.WarningMessage</p>
-                    </div>
-                </div>
+            <div class="rounded-xl p-4 border-l-4 flex items-start gap-3" style="background: rgba(245,158,11,0.08); border-color: #f59e0b;">
+                <i class="fas fa-exclamation-triangle text-amber-400 mt-0.5 flex-shrink-0"></i>
+                <p class="text-sm text-amber-200">@Model.WarningMessage</p>
             </div>
         }
 
-        <!-- Empty State for No Tasks -->
         @if (Model.TotalTasks == 0 && string.IsNullOrEmpty(Model.WarningMessage))
         {
-            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg">
-                <div class="flex items-start">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-info-circle text-blue-500"></i>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-blue-700">No tasks were found for the selected date range. This could mean:</p>
-                        <ul class="text-sm text-blue-700 mt-1 list-disc list-inside">
-                            <li>The employee had no branch assignments during this period</li>
-                            <li>No tasks were scheduled for this period</li>
-                            <li>The selected date range is outside the employee's active period</li>
-                        </ul>
-                    </div>
+            <div class="rounded-xl p-4 border-l-4 flex items-start gap-3" style="background: rgba(99,102,241,0.08); border-color: #6366f1;">
+                <i class="fas fa-info-circle text-indigo-400 mt-0.5 flex-shrink-0"></i>
+                <div>
+                    <p class="text-sm text-indigo-200">No tasks were found for the selected date range. This could mean:</p>
+                    <ul class="text-sm text-indigo-300 mt-1 list-disc list-inside space-y-0.5">
+                        <li>No branch assignments during this period</li>
+                        <li>No tasks were scheduled for this period</li>
+                        <li>Date range is outside the employee's active period</li>
+                    </ul>
                 </div>
             </div>
         }
 
-        <!-- Performance Summary Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-sm text-gray-500 mb-1">Total Tasks</div>
-                <div class="text-2xl font-bold text-blue-600">@Model.TotalTasks</div>
-                <div class="text-xs text-gray-400">In selected date range</div>
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass-card p-4 text-center">
+                <p class="text-2xl font-bold text-indigo-400">@Model.TotalTasks</p>
+                <p class="text-xs text-slate-500 mt-1">Total Tasks</p>
+                <p class="text-[10px] text-slate-600 mt-0.5">In date range</p>
             </div>
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-sm text-gray-500 mb-1">Completed</div>
-                <div class="text-2xl font-bold text-green-600">@Model.CompletedTasks</div>
-                <div class="text-xs text-gray-400">@completionRate% completion</div>
+            <div class="glass-card p-4 text-center">
+                <p class="text-2xl font-bold text-emerald-400">@Model.CompletedTasks</p>
+                <p class="text-xs text-slate-500 mt-1">Completed</p>
+                <p class="text-[10px] text-slate-600 mt-0.5">@completionRate% rate</p>
             </div>
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-sm text-gray-500 mb-1">On Time</div>
-                <div class="text-2xl font-bold text-blue-600">@Model.OnTimeTasks</div>
-                <div class="text-xs text-gray-400">@onTimeRate% of completed</div>
+            <div class="glass-card p-4 text-center">
+                <p class="text-2xl font-bold text-cyan-400">@Model.OnTimeTasks</p>
+                <p class="text-xs text-slate-500 mt-1">On Time</p>
+                <p class="text-[10px] text-slate-600 mt-0.5">@onTimeRate% of done</p>
             </div>
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-sm text-gray-500 mb-1">Performance Score</div>
-                <div class="text-2xl font-bold text-purple-600">@Model.PerformanceScore%</div>
-                <div class="text-xs text-gray-400">Completion rate</div>
+            <div class="glass-card p-4 text-center">
+                <p class="text-2xl font-bold text-violet-400">@Model.PerformanceScore%</p>
+                <p class="text-xs text-slate-500 mt-1">Score</p>
+                <div class="mt-2 w-full rounded-full h-1" style="background: rgba(255,255,255,0.08);">
+                    <div class="h-1 rounded-full" style="width: @Model.PerformanceScore%; background: linear-gradient(90deg, #7c3aed, #6366f1);"></div>
+                </div>
             </div>
         </div>
 
         <!-- Performance Trend Chart -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="px-6 py-4 border-b">
-                <h3 class="text-lg font-semibold">Performance Trend</h3>
-                <p class="text-xs text-gray-500 mt-1">Tasks completed per day (@Model.StartDate.ToString("MMM dd") - @Model.EndDate.ToString("MMM dd"))</p>
+        <div class="glass-card overflow-hidden">
+            <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(99,102,241,0.08);">
+                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-chart-line text-indigo-400"></i>Performance Trend</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Tasks completed per day (@Model.StartDate.ToString("MMM dd") - @Model.EndDate.ToString("MMM dd"))</p>
             </div>
-            <div class="p-6">
-                <canvas id="performanceChart" height="200"></canvas>
+            <div class="p-5" style="height: 250px;">
+                <canvas id="performanceChart"></canvas>
             </div>
         </div>
 
         <!-- Task Performance Matrix -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="px-6 py-4 border-b bg-gradient-to-r from-indigo-50 to-purple-50">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                            <i class="fas fa-chart-pie text-indigo-600 mr-2"></i>
-                            Task Performance Matrix
-                        </h3>
-                        <p class="text-xs text-gray-500 mt-1">Performance breakdown by task type</p>
-                    </div>
-                </div>
+        <div class="glass-card overflow-hidden">
+            <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(124,58,237,0.08);">
+                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-chart-pie text-violet-400"></i>Task Performance Matrix</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Performance breakdown by task type</p>
             </div>
-            <div class="p-6">
+            <div class="p-5">
                 @if (taskPerformance.Any())
                 {
-                    <div class="space-y-6">
-                        <!-- Bar Chart for Task Completion -->
-                        <div>
-                            <h4 class="text-sm font-semibold text-gray-700 mb-3">Completion Status by Task</h4>
-                            <div class="space-y-3">
-                                @foreach (var task in taskPerformance.OrderBy(t => t.Key))
-                                {
-                                    var stats = task.Value;
-                                    var completionPercent = stats.Total > 0 ? (stats.Completed * 100 / stats.Total) : 0;
-                                    var onTimePercent = stats.Completed > 0 ? (stats.OnTime * 100 / stats.Completed) : 0;
-                                    
-                                    <div>
-                                        <div class="flex justify-between text-xs mb-1">
-                                            <span class="font-medium">@task.Key</span>
-                                            <span class="text-gray-500">@stats.Completed/@stats.Total (@completionPercent%)</span>
-                                        </div>
-                                        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                            <div class="bg-green-500 h-2 rounded-l-full float-left" style="width: @completionPercent%"></div>
-                                            <div class="bg-yellow-500 h-2 float-left" style="width: @(100 - completionPercent)%"></div>
-                                        </div>
-                                        <div class="flex justify-between text-[10px] mt-1">
-                                            <span class="text-green-600"><i class="fas fa-check-circle mr-0.5"></i>@stats.Completed</span>
-                                            @if (stats.Pending > 0)
-                                            {
-                                                <span class="text-yellow-600"><i class="fas fa-clock mr-0.5"></i>@stats.Pending pending</span>
-                                            }
-                                            @if (stats.OnTime > 0)
-                                            {
-                                                <span class="text-blue-600"><i class="fas fa-tachometer-alt mr-0.5"></i>@onTimePercent% on time</span>
-                                            }
-                                            @if (stats.Late > 0)
-                                            {
-                                                <span class="text-red-600"><i class="fas fa-exclamation-triangle mr-0.5"></i>@stats.Late late</span>
-                                            }
-                                        </div>
-                                    </div>
-                                }
+                    <!-- Bar progress per task -->
+                    <div class="space-y-3 mb-6">
+                        @foreach (var task in taskPerformance.OrderBy(t => t.Key))
+                        {
+                            var stats = task.Value;
+                            var completionPercent = stats.Total > 0 ? (stats.Completed * 100 / stats.Total) : 0;
+                            var onTimePercent = stats.Completed > 0 ? (stats.OnTime * 100 / stats.Completed) : 0;
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="font-medium text-slate-300">@task.Key</span>
+                                    <span class="text-slate-500">@stats.Completed/@stats.Total (@completionPercent%)</span>
+                                </div>
+                                <div class="w-full rounded-full h-2 overflow-hidden" style="background: rgba(255,255,255,0.08);">
+                                    <div class="h-2 rounded-l-full float-left" style="width: @completionPercent%; background: #10b981;"></div>
+                                    <div class="h-2 float-left" style="width: @(100 - completionPercent)%; background: rgba(245,158,11,0.4);"></div>
+                                </div>
+                                <div class="flex justify-between text-[10px] mt-1">
+                                    <span class="text-emerald-400"><i class="fas fa-check-circle mr-0.5"></i>@stats.Completed</span>
+                                    @if (stats.Pending > 0) { <span class="text-amber-400"><i class="fas fa-clock mr-0.5"></i>@stats.Pending pending</span> }
+                                    @if (stats.OnTime > 0) { <span class="text-cyan-400"><i class="fas fa-tachometer-alt mr-0.5"></i>@onTimePercent% on time</span> }
+                                    @if (stats.Late > 0) { <span class="text-red-400"><i class="fas fa-exclamation-triangle mr-0.5"></i>@stats.Late late</span> }
+                                </div>
                             </div>
-                        </div>
+                        }
+                    </div>
 
-                        <!-- Pie Charts -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-4 border-t border-gray-200">
-                            <div>
-                                <h4 class="text-sm font-semibold text-gray-700 mb-3 text-center">Overall Completion</h4>
-                                <canvas id="completionPieChart" height="180"></canvas>
-                                <div class="text-center mt-2">
-                                    <span class="text-xs text-gray-500">@Model.CompletedTasks Completed / @Model.TotalTasks Total</span>
-                                </div>
-                            </div>
-                            <div>
-                                <h4 class="text-sm font-semibold text-gray-700 mb-3 text-center">On Time vs Late</h4>
-                                <canvas id="timingPieChart" height="180"></canvas>
-                                <div class="text-center mt-2">
-                                    <span class="text-xs text-gray-500">@Model.OnTimeTasks On Time / @Model.CompletedTasks Completed</span>
-                                </div>
-                            </div>
+                    <!-- Pie charts -->
+                    <div class="grid grid-cols-2 gap-6 pt-4 border-t" style="border-color: rgba(255,255,255,0.06);">
+                        <div>
+                            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 text-center">Overall Completion</h4>
+                            <canvas id="completionPieChart" height="180"></canvas>
+                            <p class="text-center text-xs text-slate-600 mt-2">@Model.CompletedTasks Completed / @Model.TotalTasks Total</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 text-center">On Time vs Late</h4>
+                            <canvas id="timingPieChart" height="180"></canvas>
+                            <p class="text-center text-xs text-slate-600 mt-2">@Model.OnTimeTasks On Time / @Model.CompletedTasks Completed</p>
                         </div>
                     </div>
                 }
                 else
                 {
-                    <div class="text-center py-4 text-gray-500">
-                        <i class="fas fa-chart-bar text-2xl mb-1 text-gray-300"></i>
-                        <p class="text-sm">No task data available for the selected date range</p>
+                    <div class="text-center py-10 text-slate-500">
+                        <i class="fas fa-chart-bar text-3xl mb-2 block text-slate-600"></i>
+                        No task data available for the selected date range
                     </div>
                 }
             </div>
         </div>
 
         <!-- Branch Assignment History -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="px-6 py-4 border-b flex justify-between items-center">
-                <h3 class="text-lg font-semibold">Branch Assignment History</h3>
-                <button onclick="assignBranch(@Model.Id)" class="text-sm text-blue-600 hover:text-blue-800">
-                    <i class="fas fa-plus-circle mr-1"></i>Assign Branch
+        <div class="glass-card overflow-hidden">
+            <div class="px-5 py-4 border-b flex justify-between items-center" style="border-color: rgba(255,255,255,0.06); background: rgba(16,185,129,0.08);">
+                <div>
+                    <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-history text-emerald-400"></i>Branch Assignment History</h3>
+                </div>
+                <button onclick="assignBranch(@Model.Id)" class="btn-primary text-xs py-1.5 px-3" style="background: linear-gradient(135deg,#10b981,#059669); box-shadow: 0 2px 8px rgba(16,185,129,0.3);">
+                    <i class="fas fa-plus-circle"></i>Assign Branch
                 </button>
             </div>
-            <div class="p-6">
+            <div class="p-5">
                 @if (Model.BranchHistory != null && Model.BranchHistory.Any())
                 {
                     <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
+                        <table class="w-full dark-table">
                             <thead>
-                                <tr class="bg-gray-50">
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Branch</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Start Date</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">End Date</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Duration</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Status</th>
+                                <tr>
+                                    <th>Branch</th>
+                                    <th>Start Date</th>
+                                    <th>End Date</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-200">
+                            <tbody>
                                 @foreach (var assignment in Model.BranchHistory)
                                 {
                                     var isActive = assignment.EndDate == null;
-                                    <tr class="hover:bg-gray-50">
-                                        <td class="px-4 py-2 font-medium">@assignment.BranchName</td>
-                                        <td class="px-4 py-2">@assignment.StartDate.ToString("MMM dd, yyyy")</td>
-                                        <td class="px-4 py-2">@(assignment.EndDate?.ToString("MMM dd, yyyy") ?? "Present")</td>
-                                        <td class="px-4 py-2">@assignment.Duration days</td>
-                                        <td class="px-4 py-2">
+                                    <tr>
+                                        <td class="font-semibold text-white">@assignment.BranchName</td>
+                                        <td class="text-slate-400">@assignment.StartDate.ToString("MMM dd, yyyy")</td>
+                                        <td class="text-slate-400">@(assignment.EndDate?.ToString("MMM dd, yyyy") ?? "Present")</td>
+                                        <td class="text-slate-400">@assignment.Duration days</td>
+                                        <td>
                                             @if (isActive)
                                             {
-                                                <span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">Active</span>
+                                                <span class="stat-badge" style="background: rgba(16,185,129,0.15); color: #6ee7b7; font-size: 10px;">Active</span>
                                             }
                                             else
                                             {
-                                                <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">Completed</span>
+                                                <span class="stat-badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 10px;">Completed</span>
                                             }
                                         </td>
                                     </tr>
@@ -363,67 +318,67 @@
                 }
                 else
                 {
-                    <p class="text-center text-gray-500 py-4">No branch assignment history</p>
+                    <p class="text-center text-slate-500 py-6">No branch assignment history</p>
                 }
             </div>
         </div>
 
         <!-- Recent Tasks -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="px-6 py-4 border-b">
-                <h3 class="text-lg font-semibold">Recent Tasks</h3>
-                <p class="text-xs text-gray-500 mt-1">Last 10 tasks assigned to @Model.Name in selected date range</p>
+        <div class="glass-card overflow-hidden">
+            <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(6,182,212,0.08);">
+                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-tasks text-cyan-400"></i>Recent Tasks</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Last 10 tasks in selected date range</p>
             </div>
-            <div class="p-6">
+            <div class="p-5">
                 @if (Model.RecentTasks != null && Model.RecentTasks.Any())
                 {
                     <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
+                        <table class="w-full dark-table">
                             <thead>
-                                <tr class="bg-gray-50">
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Date</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Branch</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Task</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Status</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Performance</th>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Branch</th>
+                                    <th>Task</th>
+                                    <th>Status</th>
+                                    <th>Performance</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-200">
+                            <tbody>
                                 @foreach (var task in Model.RecentTasks.OrderByDescending(t => t.Date).Take(10))
                                 {
-                                    <tr class="hover:bg-gray-50">
-                                        <td class="px-4 py-2">@task.Date.ToString("MMM dd")</td>
-                                        <td class="px-4 py-2">@task.BranchName</td>
-                                        <td class="px-4 py-2">@task.TaskName</td>
-                                        <td class="px-4 py-2">
+                                    <tr>
+                                        <td class="text-slate-400">@task.Date.ToString("MMM dd")</td>
+                                        <td class="text-slate-300">@task.BranchName</td>
+                                        <td class="text-slate-200 font-medium">@task.TaskName</td>
+                                        <td>
                                             @if (task.IsCompleted)
                                             {
-                                                <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Completed</span>
+                                                <span class="stat-badge" style="background: rgba(16,185,129,0.15); color: #6ee7b7; font-size: 10px;">Completed</span>
                                             }
                                             else
                                             {
-                                                <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">Pending</span>
+                                                <span class="stat-badge" style="background: rgba(245,158,11,0.15); color: #fcd34d; font-size: 10px;">Pending</span>
                                             }
                                         </td>
-                                        <td class="px-4 py-2">
+                                        <td>
                                             @if (task.IsCompleted)
                                             {
                                                 if (task.IsOnTime)
                                                 {
-                                                    <span class="text-green-600 text-xs font-medium">
+                                                    <span class="text-emerald-400 text-xs font-medium">
                                                         <i class="fas fa-check-circle mr-1"></i>On Time
                                                     </span>
                                                 }
                                                 else
                                                 {
-                                                    <span class="text-red-600 text-xs font-medium">
+                                                    <span class="text-red-400 text-xs font-medium">
                                                         <i class="fas fa-exclamation-circle mr-1"></i>Late
                                                     </span>
                                                 }
                                             }
                                             else
                                             {
-                                                <span class="text-gray-400 text-xs">—</span>
+                                                <span class="text-slate-600 text-xs">—</span>
                                             }
                                         </td>
                                     </tr>
@@ -434,39 +389,39 @@
                 }
                 else
                 {
-                    <p class="text-center text-gray-500 py-4">No recent tasks in selected date range</p>
+                    <p class="text-center text-slate-500 py-6">No recent tasks in selected date range</p>
                 }
             </div>
         </div>
 
-        <!-- Performance Insights Summary -->
-        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4">
-            <div class="flex items-start">
-                <i class="fas fa-lightbulb text-yellow-500 mt-0.5 mr-3"></i>
+        <!-- Performance Insights -->
+        <div class="rounded-xl p-5" style="background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(124,58,237,0.08)); border: 1px solid rgba(99,102,241,0.2);">
+            <div class="flex items-start gap-3">
+                <i class="fas fa-lightbulb text-amber-400 mt-0.5 flex-shrink-0"></i>
                 <div class="flex-1">
-                    <h4 class="text-sm font-semibold text-gray-800 mb-2">Performance Insights</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-600">
-                        <div>
-                            <p><i class="fas fa-chart-line text-blue-500 mr-1"></i> <strong>Completion Rate:</strong> @completionRate%</p>
-                            <p><i class="fas fa-clock text-green-500 mr-1"></i> <strong>On Time Rate:</strong> @onTimeRate%</p>
-                            <p><i class="fas fa-calendar-alt text-purple-500 mr-1"></i> <strong>Date Range:</strong> @Model.StartDate.ToString("MMM dd, yyyy") - @Model.EndDate.ToString("MMM dd, yyyy")</p>
+                    <h4 class="text-sm font-bold text-white mb-2">Performance Insights</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-400">
+                        <div class="space-y-1">
+                            <p><i class="fas fa-chart-line text-indigo-400 mr-2"></i><strong class="text-slate-300">Completion Rate:</strong> @completionRate%</p>
+                            <p><i class="fas fa-clock text-emerald-400 mr-2"></i><strong class="text-slate-300">On Time Rate:</strong> @onTimeRate%</p>
+                            <p><i class="fas fa-calendar-alt text-violet-400 mr-2"></i><strong class="text-slate-300">Period:</strong> @Model.StartDate.ToString("MMM dd, yyyy") – @Model.EndDate.ToString("MMM dd, yyyy")</p>
                         </div>
                         <div>
                             @if (Model.PerformanceScore >= 90)
                             {
-                                <p><i class="fas fa-trophy text-green-500 mr-1"></i> Exceptional performer</p>
+                                <p class="text-emerald-400"><i class="fas fa-trophy mr-2"></i>Exceptional performer</p>
                             }
                             else if (Model.PerformanceScore >= 75)
                             {
-                                <p><i class="fas fa-chart-line text-blue-500 mr-1"></i> Strong performer</p>
+                                <p class="text-cyan-400"><i class="fas fa-chart-line mr-2"></i>Strong performer</p>
                             }
                             else if (Model.PerformanceScore >= 60)
                             {
-                                <p><i class="fas fa-chart-simple text-yellow-500 mr-1"></i> Meets requirements</p>
+                                <p class="text-amber-400"><i class="fas fa-chart-simple mr-2"></i>Meets requirements</p>
                             }
                             else
                             {
-                                <p><i class="fas fa-exclamation-triangle text-red-500 mr-1"></i> Needs improvement</p>
+                                <p class="text-red-400"><i class="fas fa-exclamation-triangle mr-2"></i>Needs improvement</p>
                             }
                         </div>
                     </div>
@@ -477,16 +432,17 @@
 </div>
 
 <!-- Branch Assignment Modal -->
-<div id="branchModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div class="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-800 rounded-t-lg">
-            <h3 class="text-lg font-semibold text-white">Assign Branch</h3>
+<div id="branchModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+    <div class="w-full max-w-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl animate-fade-up" style="background: #1a1a2e;">
+        <div class="px-6 py-4 flex items-center gap-3" style="background: linear-gradient(135deg, rgba(99,102,241,0.4), rgba(124,58,237,0.3));">
+            <i class="fas fa-store text-indigo-400"></i>
+            <h3 class="font-bold text-white">Assign Branch</h3>
         </div>
-        <div class="p-4">
+        <div class="p-6 space-y-4">
             <input type="hidden" id="branchEmployeeId" value="@Model.Id">
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Select Branch</label>
-                <select id="branchSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Select Branch</label>
+                <select id="branchSelect" class="dark-input">
                     <option value="">Select a branch...</option>
                     @if (ViewBag.Branches != null)
                     {
@@ -497,26 +453,27 @@
                     }
                 </select>
             </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                <input type="date" id="assignmentStartDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@DateTime.Today.ToString("yyyy-MM-dd")">
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Start Date</label>
+                <input type="date" id="assignmentStartDate" class="dark-input" value="@DateTime.Today.ToString("yyyy-MM-dd")">
             </div>
         </div>
-        <div class="p-4 border-t border-gray-200 flex justify-end space-x-2">
-            <button onclick="closeBranchModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-            <button onclick="saveBranchAssignment()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Save Assignment</button>
+        <div class="px-6 py-4 border-t flex justify-end gap-3" style="border-color: rgba(255,255,255,0.06);">
+            <button onclick="closeBranchModal()" class="px-4 py-2 rounded-lg text-sm text-slate-300 border border-white/10 hover:bg-white/5 transition">Cancel</button>
+            <button onclick="saveBranchAssignment()" class="btn-primary">
+                <i class="fas fa-save"></i>Save Assignment
+            </button>
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     // Performance Trend Chart
-    var ctx = document.getElementById('performanceChart').getContext('2d');
-    var chartLabels = @Html.Raw(Json.Serialize(Model.ChartLabels ?? new List<string>()));
-    var chartData = @Html.Raw(Json.Serialize(Model.ChartData ?? new List<int>()));
-    
+    const ctx = document.getElementById('performanceChart').getContext('2d');
+    const chartLabels = @Html.Raw(Json.Serialize(Model.ChartLabels ?? new List<string>()));
+    const chartData = @Html.Raw(Json.Serialize(Model.ChartData ?? new List<int>()));
+
     new Chart(ctx, {
         type: 'line',
         data: {
@@ -524,217 +481,75 @@
             datasets: [{
                 label: 'Tasks Completed',
                 data: chartData,
-                borderColor: 'rgb(59, 130, 246)',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.4,
-                fill: true
+                borderColor: 'rgb(99, 102, 241)',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                tension: 0.4, fill: true,
+                pointBackgroundColor: 'rgb(99, 102, 241)',
+                pointBorderColor: '#0b0b18',
+                pointRadius: 4
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
             scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
-                x: { grid: { display: false } }
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                x: { grid: { display: false }, ticks: { color: '#64748b' } }
             }
         }
     });
-    
-    // Completion Pie Chart
-    var completionCtx = document.getElementById('completionPieChart');
+
+    const completionCtx = document.getElementById('completionPieChart');
     if (completionCtx) {
         new Chart(completionCtx, {
-            type: 'pie',
+            type: 'doughnut',
             data: {
                 labels: ['Completed', 'Pending'],
-                datasets: [{
-                    data: [@Model.CompletedTasks, @(Model.TotalTasks - Model.CompletedTasks)],
-                    backgroundColor: ['#22c55e', '#eab308'],
-                    borderWidth: 0
-                }]
+                datasets: [{ data: [@Model.CompletedTasks, @(Model.TotalTasks - Model.CompletedTasks)], backgroundColor: ['#10b981', 'rgba(245,158,11,0.4)'], borderWidth: 0, borderRadius: 4 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10 } } } }
         });
     }
-    
-    // Timing Pie Chart
-    var timingCtx = document.getElementById('timingPieChart');
+
+    const timingCtx = document.getElementById('timingPieChart');
     if (timingCtx && @Model.CompletedTasks > 0) {
         new Chart(timingCtx, {
-            type: 'pie',
+            type: 'doughnut',
             data: {
                 labels: ['On Time', 'Late'],
-                datasets: [{
-                    data: [@Model.OnTimeTasks, @(Model.CompletedTasks - Model.OnTimeTasks)],
-                    backgroundColor: ['#3b82f6', '#ef4444'],
-                    borderWidth: 0
-                }]
+                datasets: [{ data: [@Model.OnTimeTasks, @(Model.CompletedTasks - Model.OnTimeTasks)], backgroundColor: ['#06b6d4', 'rgba(239,68,68,0.6)'], borderWidth: 0, borderRadius: 4 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10 } } } }
         });
     }
 
-    // Branch assignment functions
-  function assignBranch(employeeId) {
-    $('#branchEmployeeId').val(employeeId);
-    
-    // Fetch available branches (excluding already assigned ones)
-    $.ajax({
-        url: '@Url.Action("GetAvailableBranches", "Employee")',
-        type: 'GET',
-        data: { employeeId: employeeId },
-        success: function(branches) {
-            var $select = $('#branchSelect');
-            $select.empty();
-            $select.append('<option value="">Select a branch...</option>');
-            $.each(branches, function(i, branch) {
-                $select.append('<option value="' + branch.id + '">' + branch.name + '</option>');
-            });
-            $('#branchModal').removeClass('hidden').addClass('flex');
-        },
-        error: function() {
-            showNotification('Error loading branches', 'error');
-        }
-    });
-}
-
-    function closeBranchModal() {
-        $('#branchModal').removeClass('flex').addClass('hidden');
-        $('#branchSelect').val('');
-        $('#assignmentStartDate').val(new Date().toISOString().split('T')[0]);
-    }
-
-    function saveBranchAssignment() {
-        var employeeId = $('#branchEmployeeId').val();
-        var branchId = $('#branchSelect').val();
-        var startDate = $('#assignmentStartDate').val();
-        var token = $('#requestVerificationToken').val();
-
-        if (!branchId) {
-            showNotification('Please select a branch', 'error');
-            return;
-        }
-
-        if (!startDate) {
-            showNotification('Please select a start date', 'error');
-            return;
-        }
-
+    function assignBranch(employeeId) {
+        $('#branchEmployeeId').val(employeeId);
         $.ajax({
-            url: '@Url.Action("AssignBranch", "Employee")',
-            type: 'POST',
-            data: {
-                employeeId: employeeId,
-                branchId: branchId,
-                startDate: startDate
+            url: '@Url.Action("GetAvailableBranches", "Employee")', type: 'GET', data: { employeeId },
+            success: function(branches) {
+                var $s = $('#branchSelect'); $s.empty(); $s.append('<option value="">Select a branch...</option>');
+                $.each(branches, function(i, b) { $s.append('<option value="' + b.id + '">' + b.name + '</option>'); });
+                $('#branchModal').removeClass('hidden').addClass('flex');
             },
+            error: function() { if (window.TaskTracker) TaskTracker.showNotification('Error loading branches', 'error'); }
+        });
+    }
+    function closeBranchModal() { $('#branchModal').removeClass('flex').addClass('hidden'); }
+    function saveBranchAssignment() {
+        const employeeId = $('#branchEmployeeId').val(), branchId = $('#branchSelect').val();
+        const startDate = $('#assignmentStartDate').val(), token = $('#requestVerificationToken').val();
+        if (!branchId) { if (window.TaskTracker) TaskTracker.showNotification('Please select a branch', 'error'); return; }
+        $.ajax({
+            url: '@Url.Action("AssignBranch", "Employee")', type: 'POST',
+            data: { employeeId, branchId, startDate },
             headers: { 'RequestVerificationToken': token },
-            success: function(response) {
-                if (response.success) {
-                    showNotification(response.message || 'Branch assigned successfully', 'success');
-                    closeBranchModal();
-                    setTimeout(function() { location.reload(); }, 1500);
-                } else {
-                    showNotification(response.message || 'Error assigning branch', 'error');
-                }
+            success: function(r) {
+                if (r.success) { if (window.TaskTracker) TaskTracker.showNotification(r.message || 'Assigned!', 'success'); closeBranchModal(); setTimeout(() => location.reload(), 1500); }
+                else { if (window.TaskTracker) TaskTracker.showNotification(r.message || 'Error', 'error'); }
             },
-            error: function(xhr) {
-                var errorMsg = 'Error assigning branch';
-                try {
-                    var response = JSON.parse(xhr.responseText);
-                    errorMsg = response.message || errorMsg;
-                } catch(e) {}
-                showNotification(errorMsg, 'error');
-            }
+            error: function() { if (window.TaskTracker) TaskTracker.showNotification('Error assigning branch', 'error'); }
         });
     }
-
-    function showNotification(message, type) {
-        var colors = {
-            success: 'bg-green-500',
-            error: 'bg-red-500',
-            info: 'bg-blue-500',
-            warning: 'bg-yellow-500'
-        };
-        
-        $('.custom-notification').remove();
-        var notification = $('<div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ' + colors[type] + ' animate-slide-in flex items-center">' +
-            '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle') + ' mr-2"></i>' +
-            '<span>' + message + '</span>' +
-            '</div>');
-        
-        $('body').append(notification);
-        setTimeout(function() { 
-            notification.fadeOut(300, function() { $(this).remove(); }); 
-        }, 3000);
-    }
-
-    // Add anti-forgery token to all AJAX requests
-    $(document).ready(function() {
-        var token = $('input[name="__RequestVerificationToken"]').val();
-        if (token) {
-            $.ajaxSetup({
-                headers: { 'RequestVerificationToken': token }
-            });
-        }
-        
-        // Close modal on escape key
-        $(document).keydown(function(e) {
-            if (e.key === 'Escape') {
-                closeBranchModal();
-            }
-        });
-        
-        // Close modal when clicking outside
-        $(window).click(function(e) {
-            if ($(e.target).hasClass('fixed')) {
-                closeBranchModal();
-            }
-        });
-    });
+    $(document).keydown(function(e) { if (e.key === 'Escape') closeBranchModal(); });
 </script>
-
-<style>
-    .animate-slide-in {
-        animation: slideIn 0.3s ease-out;
-    }
-    
-    @@keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    #branchModal {
-        backdrop-filter: blur(4px);
-    }
-    
-    .transition {
-        transition: all 0.2s ease;
-    }
-    
-    /* Hover effects for table rows */
-    .hover\:bg-gray-50:hover {
-        background-color: #f9fafb;
-    }
-</style>

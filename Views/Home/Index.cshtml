@@ -1,4 +1,4 @@
-﻿@model TaskTracker.Models.ViewModels.DashboardViewModel
+@model TaskTracker.Models.ViewModels.DashboardViewModel
 @using TaskTracker.Models.Entities
 @{
     ViewData["Title"] = "Dashboard";
@@ -44,661 +44,482 @@
     }
     
     var notesDict = Model.NotesData ?? new Dictionary<string, string>();
-    
-    var completedTasks = Model.TaskData.Count(kvp => kvp.Value?.IsCompleted == true);
+    var completedTasks = Model.TaskData.Values.Count(v => v?.IsCompleted == true);
+
+    // Dynamic stats for pending
+    var totalVisibleAssignments = 0;
+    foreach (var branch in Model.Branches)
+    {
+        var hiddenNames = hiddenTasksDict.ContainsKey(branch.Id) ? hiddenTasksDict[branch.Id] : new List<string>();
+        totalVisibleAssignments += Model.Tasks.Count(t => !hiddenNames.Contains(t.Name));
+    }
+    var pendingTasksCount = totalVisibleAssignments - completedTasks;
 }
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>@ViewData["Title"] - TaskTracker</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- SheetJS for Excel export (FIX #3) -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+@section Styles {
     <style>
-        /* Mobile responsive styles (FIX #59) */
-        @@media (max-width: 768px) {
-            .container { padding: 0.5rem; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 0.5rem !important; }
-            .filter-bar { flex-direction: column; align-items: stretch !important; }
-            .filter-bar > div, .filter-bar > select, .filter-bar > button { width: 100%; margin-bottom: 0.5rem; }
-            .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            .task-header span { font-size: 0.7rem; }
-            .task-button { font-size: 0.7rem !important; padding: 0.25rem !important; }
-            .branch-name { font-size: 0.7rem; }
-            .progress-percent { font-size: 0.7rem; }
-            .legend { flex-wrap: wrap; gap: 0.5rem; }
+        .dark-table {
+            border-collapse: separate;
+            border-spacing: 0 4px;
         }
-        
-        @@media (max-width: 480px) {
-            .stats-card { padding: 0.5rem !important; }
-            .stats-card .text-base { font-size: 0.875rem !important; }
-            .stats-card .text-[9px] { font-size: 0.65rem !important; }
-            .task-header .text-xs { font-size: 0.6rem; }
-            .task-header button { font-size: 0.55rem !important; padding: 0.15rem 0.3rem !important; }
-        }
-        
-        /* Dark mode styles (FIX #63) */
-        @@media (prefers-color-scheme: dark) {
-            body { background-color: #1a1a2e; }
-            .bg-white { background-color: #16213e !important; }
-            .text-gray-800, .text-gray-700, .text-gray-600 { color: #e2e8f0 !important; }
-            .text-gray-500, .text-gray-400 { color: #94a3b8 !important; }
-            .border-gray-200, .border-gray-300 { border-color: #334155 !important; }
-            .bg-gray-50, .bg-gray-100 { background-color: #0f172a !important; }
-            .hover\\:bg-gray-50:hover { background-color: #1e293b !important; }
-            .divide-gray-200 > * { border-color: #334155 !important; }
-            .bg-gradient-to-r.from-gray-900 { background: linear-gradient(to right, #0f172a, #1e293b) !important; }
-            input, select, textarea { background-color: #0f172a !important; border-color: #334155 !important; color: #e2e8f0 !important; }
-            input:focus, select:focus, textarea:focus { border-color: #3b82f6 !important; }
-        }
-        
-        /* Animations */
-        .animate-slide-in { animation: slideIn 0.2s ease-out; }
-        @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0%); opacity: 1; } }
-        
-        /* Table styles */
-        .sticky.left-0 { position: sticky; left: 0; z-index: 10; background-color: inherit; }
-        .table-fixed { table-layout: fixed; }
-        .group:hover .group-hover\\:flex { display: flex !important; }
-        td, th { vertical-align: middle; }
-        .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        
-        /* Button styles */
-        .task-button { transition: all 0.2s ease; cursor: pointer; }
-        .task-button:disabled { opacity: 0.7; cursor: not-allowed; }
-        .task-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        
-        /* Filter styles */
-        .branch-row.hidden-row { display: none; }
-        .task-cell.filtered-out { opacity: 0.3; background-color: #f3f4f6; }
-        
-        /* Tooltip styles (FIX #64) */
-        [data-tooltip] {
-            position: relative;
-            cursor: help;
-        }
-        [data-tooltip]:before {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 0.25rem 0.5rem;
-            background-color: #1f2937;
-            color: white;
+
+        .dark-table thead th {
+            background: rgba(255, 255, 255, 0.02);
+            padding: 1rem 0.5rem;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
             font-size: 0.7rem;
-            border-radius: 0.25rem;
-            white-space: nowrap;
-            z-index: 50;
-            display: none;
-            pointer-events: none;
+            border-bottom: 2px solid var(--border);
         }
-        [data-tooltip]:hover:before {
-            display: block;
+
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            background: #0b0b18 !important;
+            z-index: 20;
+            border-right: 1px solid var(--border) !important;
         }
-        
-        /* Loading spinner */
-        .loading-spinner {
-            display: inline-block;
-            width: 1rem;
-            height: 1rem;
-            border: 2px solid #e5e7eb;
-            border-top-color: #3b82f6;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
+
+        .task-button {
+            width: 100%;
+            height: 32px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 700;
+            transition: all 0.15s;
+            border: 1px solid rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03);
+            color: #64748b;
         }
-        @@keyframes spin {
-            to { transform: rotate(360deg); }
+
+        .task-button:hover:not(:disabled) {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.15);
         }
-        
-        /* Print styles */
+
+        /* Status Colors */
+        .status-early { background: rgba(16, 185, 129, 0.15) !important; color: #10b981 !important; border-color: rgba(16,185,129,0.3) !important; }
+        .status-on-time { background: rgba(59, 130, 246, 0.15) !important; color: #3b82f6 !important; border-color: rgba(59,130,246,0.3) !important; }
+        .status-late-min { background: rgba(245, 158, 11, 0.15) !important; color: #f59e0b !important; border-color: rgba(245,158,11,0.3) !important; }
+        .status-late-hour { background: rgba(249, 115, 22, 0.15) !important; color: #f97316 !important; border-color: rgba(249,115,22,0.3) !important; }
+        .status-late-day { background: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border-color: rgba(239,68,68,0.3) !important; }
+
         @@media print {
-            .no-print, .bg-gradient-to-r, .shadow-sm, .border, button, .modal-backdrop { display: none !important; }
-            body { background-color: white !important; }
-            .bg-white { background-color: white !important; }
-            .text-gray-800 { color: black !important; }
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; }
+            .glass-card { border: 1px solid #ddd; background: none; backdrop-filter: none; }
         }
     </style>
-</head>
-<body class="bg-gray-100">
-    <div class="container mx-auto px-4 py-4 max-w-7xl">
-        <input type="hidden" id="requestVerificationToken" value="@token" />
-        <input type="hidden" id="currentDate" value="@dateKey" />
-        <input type="hidden" id="isHoliday" value="@Model.IsHoliday.ToString().ToLower()" />
-        <input type="hidden" id="holidayName" value="@Model.HolidayName" />
-        <input type="hidden" id="previousDate" value="@previousDateKey" />
+}
 
-        <script>
-            var branchNotes = @Html.Raw(Json.Serialize(notesDict));
-        </script>
+<div class="animate-fade-up space-y-6">
+    <input type="hidden" id="requestVerificationToken" value="@token" />
+    <input type="hidden" id="currentDate" value="@dateKey" />
+    <input type="hidden" id="isHoliday" value="@Model.IsHoliday.ToString().ToLower()" />
+    <input type="hidden" id="holidayName" value="@Model.HolidayName" />
+    <input type="hidden" id="previousDate" value="@previousDateKey" />
 
-        <!-- Header -->
-        <div class="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-xl shadow-xl mb-4 overflow-hidden no-print">
-            <div class="px-6 py-5">
-                <div class="flex flex-wrap justify-between items-center">
-                    <div>
-                        <div class="flex items-center gap-2 mb-1">
-                            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                            <span class="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Live Dashboard</span>
-                        </div>
-                        <h1 class="text-2xl font-bold text-white">Task Dashboard</h1>
-                        <div class="flex items-center gap-2 mt-1">
-                            <span class="text-xs text-gray-400">
-                                <i class="far fa-calendar-alt mr-1"></i>@safeCurrentDate.ToString("dddd, MMMM d, yyyy")
-                            </span>
-                            @if (Model.IsHoliday)
-                            {
-                                <span class="px-2 py-0.5 bg-purple-500/30 text-purple-300 rounded-full text-[10px]">
-                                    <i class="fas fa-calendar-alt mr-1"></i>@Model.HolidayName
-                                </span>
-                            }
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                        <div class="flex items-center bg-white/5 border border-gray-700 rounded-lg">
-                            <button type="button" onclick="changeDate(-1)" class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-l-lg transition" title="Previous day (Ctrl+A)">
-                                <i class="fas fa-chevron-left text-xs"></i>
-                            </button>
-                            <div class="px-2 py-1 text-xs font-medium text-gray-300 border-x border-gray-700">
-                                @safeCurrentDate.ToString("MMM dd")
-                            </div>
-                            <button type="button" onclick="changeDate(1)" class="px-3 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-r-lg transition" title="Next day (Ctrl+D)">
-                                <i class="fas fa-chevron-right text-xs"></i>
-                            </button>
-                        </div>
-                        <input type="date" id="datePicker" value="@safeCurrentDate.ToString("yyyy-MM-dd")"
-                               class="text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               style="color-scheme: dark;" />
-
-                        @if (!Model.IsHoliday)
-                        {
-                            <button type="button" onclick="openBulkUpdateModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition shadow-sm flex items-center gap-2" title="Bulk update (Ctrl+B)">
-                                <i class="fas fa-layer-group text-[10px]"></i> Bulk
-                            </button>
-                        }
-                    </div>
+    <!-- Header Section -->
+    <div class="glass-card overflow-hidden no-print">
+        <div class="px-6 py-5 flex flex-wrap justify-between items-center gap-4">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Live Operations Monitor</span>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Action Buttons -->
-        <div class="flex justify-end gap-2 mb-3 no-print">
-            <button onclick="exportDashboardToExcel()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg flex items-center transition" title="Export to Excel">
-                <i class="fas fa-file-excel mr-1"></i> Excel
-            </button>
-            <button onclick="window.print()" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded-lg flex items-center transition" title="Print dashboard">
-                <i class="fas fa-print mr-1"></i> Print
-            </button>
-            <button onclick="showKeyboardShortcuts()" class="px-3 py-1.5 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded-lg flex items-center transition" title="Keyboard Shortcuts (Ctrl+H)">
-                <i class="fas fa-keyboard mr-1"></i> Shortcuts
-            </button>
-        </div>
-
-   
-
-        <!-- Stats Cards (Mobile responsive - FIX #59) -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4 stats-grid">
-            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-blue-500 stats-card">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-[9px] text-gray-500 uppercase tracking-wider">Branches</div>
-                        <div class="text-base font-bold text-gray-800" id="totalBranches">@Model.Branches.Count</div>
-                    </div>
-                    <div class="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center">
-                        <i class="fas fa-store text-blue-600 text-xs"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-green-500 stats-card">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-[9px] text-gray-500 uppercase tracking-wider">Tasks</div>
-                        <div class="text-base font-bold text-gray-800" id="totalTasksCount">@Model.Tasks.Count</div>
-                    </div>
-                    <div class="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center">
-                        <i class="fas fa-tasks text-green-600 text-xs"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-green-500 stats-card">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-[9px] text-gray-500 uppercase tracking-wider">Completed</div>
-                        <p class="text-base font-bold text-green-600" id="completedCount">@completedTasks</p>
-                        <div class="text-[8px] text-green-500" id="completedTrend">
-                            <i class="fas fa-chart-line"></i> <span id="completedTrendValue">--</span>
-                        </div>
-                    </div>
-                    <div class="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center">
-                        <i class="fas fa-check-circle text-green-600 text-xs"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-md shadow-sm p-2 border-l-4 border-yellow-500 stats-card">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-[9px] text-gray-500 uppercase tracking-wider">Pending</div>
-                        <p class="text-base font-bold text-yellow-600" id="pendingCount">
-                            @{
-                                var totalVisibleTasks = 0;
-                                foreach (var branch in Model.Branches)
-                                {
-                                    var hiddenTaskNames = hiddenTasksDict.ContainsKey(branch.Id)
-                                    ? hiddenTasksDict[branch.Id]
-                                    : new List<string>();
-                                    var visibleTasksCount = Model.Tasks.Count(t => !hiddenTaskNames.Contains(t.Name));
-                                    totalVisibleTasks += visibleTasksCount;
-                                }
-                                var pendingTasks = totalVisibleTasks - completedTasks;
-                            }
-                            @pendingTasks
-                        </p>
-                        <div class="text-[8px] text-red-500" id="pendingTrend">
-                            <i class="fas fa-chart-line"></i> <span id="pendingTrendValue">--</span>
-                        </div>
-                    </div>
-                    <div class="w-7 h-7 bg-yellow-100 rounded-full flex items-center justify-center">
-                        <i class="fas fa-clock text-yellow-600 text-xs"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Completion Rate Card -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mb-4">
-            <div class="flex items-center justify-between flex-wrap gap-2">
-                <div class="flex items-center gap-3">
-                    <div>
-                        <div class="text-[10px] text-gray-500">Overall Completion Rate</div>
-                        <div class="text-xl font-bold text-blue-600" id="overallCompletionRate">0%</div>
-                    </div>
-                    <div class="w-px h-8 bg-gray-200"></div>
-                    <div>
-                        <div class="text-[10px] text-gray-500">On-Time Rate</div>
-                        <div class="text-xl font-bold text-green-600" id="onTimeRate">0%</div>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <div class="text-[9px] text-gray-400" id="trendText">Loading trend data...</div>
-                </div>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" id="completionBar" style="width: 0%"></div>
-            </div>
-        </div>
-
-        <!-- Skeleton Loader (FIX #65 - Fixed size to match content) -->
-        <div id="skeletonLoader" class="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden mb-6">
-            <div class="animate-pulse">
-                <div class="h-10 bg-gray-200 rounded-t-lg"></div>
-                <div class="p-4 space-y-3">
-                    @for (int i = 0; i < 5; i++)
+                <h1 class="text-3xl font-black text-white tracking-tight"> Dashboard</h1>
+                <div class="flex items-center gap-3 mt-1.5">
+                    <span class="text-xs text-slate-400 flex items-center gap-1">
+                        <i class="far fa-calendar-alt text-indigo-400"></i>
+                        @safeCurrentDate.ToString("dddd, MMMM d, yyyy")
+                    </span>
+                    @if (Model.IsHoliday)
                     {
-                        <div class="flex gap-2">
-                            <div class="h-8 bg-gray-200 rounded w-32"></div>
-                            @for (int j = 0; j < Model.Tasks.Count; j++)
-                            {
-                                <div class="h-8 bg-gray-200 rounded flex-1"></div>
-                            }
-                            <div class="h-8 bg-gray-200 rounded w-24"></div>
-                        </div>
+                        <span class="px-2.5 py-0.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-full text-[10px] font-bold">
+                            <i class="fas fa-gift mr-1"></i> HOLIDAY: @Model.HolidayName
+                        </span>
                     }
                 </div>
             </div>
-        </div>
 
-        <!-- Main Dashboard Table (FIX #65 - Hidden until loaded) -->
-        <div id="dashboardContainer" class="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden mb-6" style="display: none;">
-            <div class="overflow-x-auto table-container">
-                <table class="w-full text-xs table-fixed" id="dashboardTable">
-                    <thead class="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
-                        <tr>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 w-32">Branch</th>
-                            @foreach (var task in Model.Tasks.OrderBy(t => t.DisplayOrder))
-                            {
-                                <th class="px-1 py-3 text-center font-semibold text-gray-700 task-header" data-task-id="@task.Id" style="min-width: 80px;">
-                                    <div class="flex flex-col items-center">
-                                        <span class="text-xs" data-tooltip="@task.Name">@task.Name</span>
-                                        <span class="text-[9px] text-gray-500 mt-0.5">@task.Deadline.ToString(@"hh\:mm")</span>
-                                        @if (!Model.IsHoliday)
-                                        {
-                                            <div class="flex gap-1 mt-1 w-full">
-                                                <button type="button" onclick="completeAllForTask(@task.Id, '@task.Name', event)"
-                                                        class="text-[8px] bg-green-500 text-white px-2 py-0.5 rounded-full hover:bg-green-600 transition flex-1"
-                                                        title="Complete all @task.Name tasks for all branches">
-                                                    All
-                                                </button>
-                                                <button type="button" onclick="resetAllForTask(@task.Id, '@task.Name', event)"
-                                                        class="text-[8px] bg-red-500 text-white px-2 py-0.5 rounded-full hover:bg-red-600 transition flex-1"
-                                                        title="Reset all @task.Name tasks for all branches">
-                                                    Reset
-                                                </button>
-                                            </div>
-                                        }
-                                    </div>
-                                </th>
-                            }
-                            <th class="px-3 py-3 text-center font-semibold text-gray-700 w-28">% / Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200" id="dashboardTableBody">
-                        @foreach (var branch in Model.Branches.OrderBy(b => b.Name))
-                        {
-                           var hiddenTaskNames = hiddenTasksDict.ContainsKey(branch.Id)
-        ? hiddenTasksDict[branch.Id]
-        : new List<string>();
-                           var branchNotes = (Model.NotesData != null && Model.NotesData.ContainsKey(branch.Id.ToString())) 
-    ? (Model.NotesData[branch.Id.ToString()] ?? "") 
-    : "";
-                            var visibleTasksCount = Model.Tasks.Count(t => !hiddenTaskNames.Contains(t.Name));
-                            var completedCountLocal = 0;
-                            foreach (var task in Model.Tasks.Where(t => !hiddenTaskNames.Contains(t.Name)))
-                            {
-                                if (Model.TaskData.ContainsKey($"{branch.Id}_{task.Id}") &&
-                                    Model.TaskData[$"{branch.Id}_{task.Id}"].IsCompleted)
-                                {
-                                    completedCountLocal++;
-                                }
-                            }
-                            var progress = visibleTasksCount > 0 ? (completedCountLocal * 100 / visibleTasksCount) : 0;
+            <div class="flex items-center gap-3">
+                <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-1">
+                    <button onclick="changeDate(-1)" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition" title="Prev Day (A)">
+                        <i class="fas fa-chevron-left text-xs"></i>
+                    </button>
+                    <div class="px-4 text-xs font-bold text-slate-200 border-x border-white/10">
+                        @safeCurrentDate.ToString("MMM dd")
+                    </div>
+                    <button onclick="changeDate(1)" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition" title="Next Day (D)">
+                        <i class="fas fa-chevron-right text-xs"></i>
+                    </button>
+                </div>
+                <input type="date" id="datePicker" value="@safeCurrentDate.ToString("yyyy-MM-dd")"
+                       class="bg-white/5 text-slate-200 border border-white/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                       style="color-scheme: dark;" />
 
-                            <tr class="hover:bg-gray-50 transition group branch-row" data-branch-id="@branch.Id" data-branch-name="@branch.Name.ToLower()" data-progress="@progress">
-                                <td class="px-3 py-2 font-medium sticky left-0 bg-white border-r group-hover:bg-gray-50">
-                                    <div class="flex items-center">
-                                        <span class="w-2 h-2 rounded-full @(branch.IsActive ? "bg-green-500" : "bg-red-500") mr-2"></span>
-                                        <span class="text-xs truncate branch-name" style="max-width: 90px;" data-tooltip="@branch.Name">@branch.Name</span>
-                                    </div>
-                                    <div class="text-[8px] text-gray-400 mt-0.5" id="assignedTo-@branch.Id">
-                                        @if (Model.BranchAssignments != null && Model.BranchAssignments.ContainsKey(branch.Id))
-                                        {
-                                            <i class="fas fa-user mr-0.5"></i><span data-tooltip="Assigned employee">@Model.BranchAssignments[branch.Id]</span>
-                                        }
-                                    </div>
-                                </td>
-
-                                @foreach (var task in Model.Tasks.OrderBy(t => t.DisplayOrder))
-                                {
-                                    var isHidden = hiddenTaskNames.Contains(task.Name);
-
-                                    if (isHidden)
-                                    {
-                                        <td class="px-1 py-2 text-center bg-gray-50">
-                                            <span class="text-gray-400 text-[9px]" data-tooltip="Task hidden for this branch">—</span>
-                                        </td>
-                                    }
-                                    else
-                                    {
-                                        <td class="px-1 py-1 text-center relative group/task task-cell" 
-                                            id="cell-@branch.Id-@task.Id"
-                                            data-branch="@branch.Id" 
-                                            data-task="@task.Id" 
-                                            data-date="@dateKey" 
-                                            data-task-name="@task.Name">
-                                            <div class="relative inline-block w-full">
-                                                @if (Model.IsHoliday)
-                                                {
-                                                    <button type="button"
-                                                            class="w-full px-1 py-2 rounded text-[9px] font-medium bg-purple-100 text-purple-700 cursor-default flex items-center justify-between gap-0.5 border border-purple-200 opacity-75"
-                                                            disabled
-                                                            title="Today is a holiday - No tasks required">
-                                                        <span class="font-mono font-bold flex-1">--:--</span>
-                                                        <span class="flex-1 text-[8px] truncate px-0.5">🎉 Holiday</span>
-                                                    </button>
-                                                }
-                                                else
-                                                {
-                                                    <button type="button"
-                                                            onclick="quickComplete(@branch.Id, @task.Id, '@dateKey', this)"
-                                                            class="w-full px-1 py-2 rounded text-[9px] font-medium bg-gray-50 text-gray-600 hover:opacity-90 transition-all flex items-center justify-between gap-0.5 border border-gray-200 task-button"
-                                                            title="Click to complete with current time"
-                                                            data-task-id="@task.Id"
-                                                            data-branch-id="@branch.Id"
-                                                            data-date="@dateKey">
-                                                        <span class="font-mono font-bold flex-1 time-display">--:--</span>
-                                                        <span class="flex-1 text-[8px] truncate px-0.5 status-display">Pending</span>
-                                                    </button>
-                                                    <div class="absolute -top-2 -right-2 hidden group-hover/task:flex space-x-0.5 z-20">
-                                                        <button type="button"
-                                                                onclick="event.stopPropagation(); openTimePicker(@branch.Id, @task.Id, '@dateKey', this)"
-                                                                class="w-4 h-4 bg-amber-500 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-amber-600 shadow-sm"
-                                                                title="Edit completion time">
-                                                            <i class="fas fa-clock"></i>
-                                                        </button>
-                                                        <button type="button"
-                                                                onclick="event.stopPropagation(); resetSingle(@branch.Id, @task.Id, '@dateKey', event, this)"
-                                                                class="w-4 h-4 bg-red-500 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-red-600 shadow-sm"
-                                                                title="Reset this specific task">
-                                                            <i class="fas fa-times"></i>
-                                                        </button>
-                                                        <button type="button"
-                                                                onclick="event.stopPropagation(); openAdjustmentModal(@branch.Id, @task.Id, '@task.Name', '@dateKey', this)"
-                                                                class="w-4 h-4 bg-amber-400 text-white rounded-full text-[6px] flex items-center justify-center hover:bg-amber-500 shadow-sm"
-                                                                title="Add adjustment">
-                                                            <i class="fas fa-plus"></i>
-                                                        </button>
-                                                    </div>
-                                                }
-                                            </div>
-                                        </td>
-                                    }
-                                }
-
-                                <td class="px-2 py-2 text-center">
-                                    <div class="flex items-center justify-center gap-2" id="progress-cell-@branch.Id">
-                                        <div class="w-12 bg-gray-200 rounded-full h-2">
-                                            <div class="bg-blue-500 h-2 rounded-full" style="width: @progress%"></div>
-                                        </div>
-                                        <span class="text-[10px] font-medium text-gray-600 progress-percent">@progress%</span>
-<button type="button" 
-    data-branch-id="@branch.Id"
-    data-branch-name="@branch.Name"
-    data-branch-notes="@branchNotes"
-    onclick="openNotesModalFromData(this)"
-    class="w-6 h-6 flex items-center justify-center rounded-full transition notes-btn-@branch.Id hover:scale-110"
-    title="View/Edit notes">
-    @if (!string.IsNullOrEmpty(branchNotes))
-    {
-        <i class="fas fa-sticky-note text-sm text-blue-500"></i>
-    }
-    else
-    {
-        <i class="fas fa-plus-circle text-sm text-gray-400 hover:text-blue-500"></i>
-    }
-</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Legend -->
-        <div class="bg-white rounded-lg shadow-md p-3 mb-6 legend no-print">
-            <div class="flex flex-wrap items-center gap-3 text-[9px]">
-                @if (Model.IsHoliday)
+                @if (!Model.IsHoliday)
                 {
-                    <span class="flex items-center"><span class="w-2 h-2 bg-purple-500 rounded-full mr-1"></span> Holiday - No tasks required</span>
+                    <button onclick="openBulkUpdateModal()" class="btn-action btn-primary">
+                        <i class="fas fa-layer-group"></i> <span>Bulk</span>
+                    </button>
                 }
-                else
-                {
-                    <span class="flex items-center"><span class="w-2 h-2 bg-blue-500 rounded-full mr-1"></span> Early</span>
-                    <span class="flex items-center"><span class="w-2 h-2 bg-green-500 rounded-full mr-1"></span> On Time</span>
-                    <span class="flex items-center"><span class="w-2 h-2 bg-yellow-500 rounded-full mr-1"></span> Minutes Late (1-59 min)</span>
-                    <span class="flex items-center"><span class="w-2 h-2 bg-orange-500 rounded-full mr-1"></span> Hours Late (1-23 hrs)</span>
-                    <span class="flex items-center"><span class="w-2 h-2 bg-red-500 rounded-full mr-1"></span> Days Late (1+ days)</span>
-                    <span class="flex items-center"><span class="w-2 h-2 bg-gray-300 rounded-full mr-1"></span> Hidden</span>
-                    <span class="flex items-center"><i class="fas fa-clock text-amber-500 text-[8px] mr-1"></i> Edit Time</span>
-                    <span class="flex items-center"><i class="fas fa-times text-red-500 text-[8px] mr-1"></i> Reset Single</span>
-                    <span class="flex items-center"><i class="fas fa-plus text-amber-600 text-[8px] mr-1"></i> Add Adjustment</span>
-                    <span class="flex items-center"><i class="fas fa-undo-alt text-red-500 text-[8px] mr-1"></i> Reset All</span>
-                    <span class="flex items-center"><i class="fas fa-sticky-note text-blue-500 text-sm mr-1"></i> Notes</span>
-                }
-            </div>
-            <div class="text-[8px] text-gray-400 mt-2 text-center">
-                <i class="fas fa-sync-alt text-green-500 mr-1"></i> All updates happen instantly - No refresh needed
-                <span class="mx-2">|</span>
-                <i class="fas fa-keyboard text-gray-400 mr-1"></i> <strong>Keyboard Shortcuts:</strong> Ctrl+D: Next | Ctrl+A: Prev | Ctrl+T: Today | Ctrl+F: Search | Ctrl+B: Bulk | Ctrl+R: Reset | Ctrl+H: Help
-            </div>
-        </div>
-
-        <!-- Modals (Time Picker, Adjustment, Notes, Bulk Update) - Same as before -->
-        <!-- Time Picker Modal -->
-        <div id="timePickerModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
-            <div class="bg-white rounded-xl shadow-2xl w-80 transform transition-all">
-                <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-4 py-3 rounded-t-xl">
-                    <h3 class="text-base font-semibold text-white flex items-center">
-                        <i class="fas fa-clock mr-2"></i>Edit Completion Time
-                    </h3>
-                    <p class="text-blue-100 text-[10px] mt-0.5" id="timePickerTaskInfo"></p>
-                </div>
-                <div class="p-4">
-                    <input type="hidden" id="timePickerBranchId">
-                    <input type="hidden" id="timePickerTaskId">
-                    <input type="hidden" id="timePickerDate">
-                    <div class="mb-3">
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Select Date & Time</label>
-                        <input type="datetime-local" id="timePickerDateTime" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    </div>
-                    <div class="mb-2">
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Quick Presets</label>
-                        <div class="grid grid-cols-3 gap-1">
-                            <button type="button" onclick="setTimePreset('now')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">Now</button>
-                            <button type="button" onclick="setTimePreset('morning')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">8 AM</button>
-                            <button type="button" onclick="setTimePreset('noon')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">12 PM</button>
-                            <button type="button" onclick="setTimePreset('afternoon')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">4 PM</button>
-                            <button type="button" onclick="setTimePreset('evening')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">8 PM</button>
-                            <button type="button" onclick="setTimePreset('night')" class="py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">11 PM</button>
-                        </div>
-                    </div>
-                    <div class="bg-blue-50 p-2 rounded text-[10px] text-blue-700 mt-3" id="timePickerPreview">
-                        <i class="fas fa-info-circle mr-1"></i> Select a time to see preview
-                    </div>
-                </div>
-                <div class="px-4 py-3 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
-                    <button type="button" onclick="closeTimePicker()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
-                    <button type="button" onclick="saveTaskTime()" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Time</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Adjustment Modal -->
-        <div id="adjustmentModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
-            <div class="bg-white rounded-xl shadow-2xl w-80 transform transition-all">
-                <div class="bg-gradient-to-r from-amber-600 to-amber-800 px-4 py-3 rounded-t-xl">
-                    <h3 class="text-base font-semibold text-white" id="adjustmentModalTitle">Adjust Task Time</h3>
-                </div>
-                <div class="p-4">
-                    <input type="hidden" id="adjustmentBranchId">
-                    <input type="hidden" id="adjustmentTaskId">
-                    <input type="hidden" id="adjustmentDate">
-                    <div class="bg-amber-50 p-2 rounded text-center mb-3">
-                        <span class="text-xl font-bold text-amber-600" id="currentAdjustmentDisplay">0</span>
-                        <span class="text-xs text-gray-500 ml-1">minutes added to deadline</span>
-                    </div>
-                    <div class="grid grid-cols-4 gap-1 mb-3">
-                        <button type="button" onclick="addAdjustment(5)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">+5</button>
-                        <button type="button" onclick="addAdjustment(10)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">+10</button>
-                        <button type="button" onclick="addAdjustment(15)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">+15</button>
-                        <button type="button" onclick="addAdjustment(30)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">+30</button>
-                        <button type="button" onclick="addAdjustment(60)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">+60</button>
-                        <button type="button" onclick="addAdjustment(120)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">+120</button>
-                        <button type="button" onclick="addAdjustment(240)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">+240</button>
-                        <button type="button" onclick="addAdjustment(480)" class="py-1.5 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200">+480</button>
-                    </div>
-                    <input type="number" id="adjustmentMinutes" min="0" value="0" class="w-full px-3 py-2 text-xs border rounded-lg mb-3" placeholder="Custom minutes">
-                    <textarea id="adjustmentReason" rows="2" class="w-full px-3 py-2 text-xs border rounded-lg mb-2" placeholder="Reason for adjustment (optional)"></textarea>
-                    <div class="text-[10px] text-amber-600 bg-amber-50 p-2 rounded">
-                        <i class="fas fa-info-circle mr-1"></i> Adding minutes extends the deadline. Set to 0 to remove adjustment.
-                    </div>
-                </div>
-                <div class="px-4 py-3 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
-                    <button type="button" onclick="closeAdjustmentModal()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
-                    <button type="button" onclick="clearAdjustment()" class="px-3 py-1.5 text-xs bg-gray-500 text-white rounded-lg hover:bg-gray-600">Clear</button>
-                    <button type="button" onclick="saveAdjustment()" class="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg hover:bg-amber-600">Save</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Notes Modal -->
-        <div id="notesModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
-            <div class="bg-white rounded-xl shadow-2xl w-96 transform transition-all">
-                <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-4 py-3 rounded-t-xl">
-                    <h3 class="text-base font-semibold text-white flex items-center">
-                        <i class="fas fa-sticky-note mr-2"></i>Branch Notes
-                    </h3>
-                    <p class="text-blue-100 text-[10px] mt-0.5" id="notesBranchName"></p>
-                </div>
-                <div class="p-4">
-                    <input type="hidden" id="notesBranchId">
-                    <textarea id="notesContent" rows="4" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter notes for this branch..."></textarea>
-                </div>
-                <div class="px-4 py-3 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
-                    <button type="button" onclick="closeNotesModal()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
-                    <button type="button" onclick="saveNotes()" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Notes</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Bulk Update Modal -->
-        <div id="bulkUpdateModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
-            <div class="bg-white rounded-xl shadow-2xl w-80 transform transition-all">
-                <div class="bg-gradient-to-r from-purple-600 to-purple-800 px-4 py-3 rounded-t-xl">
-                    <h3 class="text-base font-semibold text-white flex items-center">
-                        <i class="fas fa-layer-group mr-2"></i>Bulk Update
-                    </h3>
-                </div>
-                <div class="p-4">
-                    <div class="mb-3">
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Task</label>
-                        <select id="bulkTaskId" class="w-full px-3 py-2 text-xs border rounded-lg">
-                            <option value="">Select...</option>
-                            @foreach (var task in Model.Tasks.OrderBy(t => t.DisplayOrder))
-                            {
-                                <option value="@task.Id">@task.Name</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Completion Time</label>
-                        <input type="datetime-local" id="bulkCompletionTime" class="w-full px-3 py-2 text-xs border rounded-lg"
-                               value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")">
-                    </div>
-                    <div class="grid grid-cols-3 gap-1 mb-2">
-                        <button type="button" onclick="setBulkTime('now')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">Now</button>
-                        <button type="button" onclick="setBulkTime('morning')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">8a</button>
-                        <button type="button" onclick="setBulkTime('noon')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">12p</button>
-                        <button type="button" onclick="setBulkTime('afternoon')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">4p</button>
-                        <button type="button" onclick="setBulkTime('evening')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">8p</button>
-                        <button type="button" onclick="setBulkTime('night')" class="py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">11p</button>
-                    </div>
-                </div>
-                <div class="px-4 py-3 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
-                    <button type="button" onclick="closeBulkUpdateModal()" class="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-100">Cancel</button>
-                    <button type="button" onclick="executeBulkUpdate()" class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700">Update All</button>
-                </div>
             </div>
         </div>
     </div>
 
+    <!-- Action Bar -->
+    <div class="flex justify-end gap-2 no-print">
+        <button onclick="exportDashboardToExcel()" class="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 rounded-lg text-xs font-bold transition">
+            <i class="fas fa-file-excel mr-1"></i> EXCEL
+        </button>
+        <button onclick="window.print()" class="px-3 py-1.5 bg-slate-500/10 text-slate-400 border border-slate-500/20 hover:bg-slate-500/20 rounded-lg text-xs font-bold transition">
+            <i class="fas fa-print mr-1"></i> PRINT
+        </button>
+        <button onclick="showKeyboardShortcuts()" class="px-3 py-1.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 rounded-lg text-xs font-bold transition">
+            <i class="fas fa-keyboard mr-1"></i> SHORTCUTS
+        </button>
+    </div>
+
+    <!-- KPI Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass-card p-4">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Branches</p>
+                    <h3 class="text-2xl font-black text-white" id="totalBranches">@Model.Branches.Count</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                    <i class="fas fa-store"></i>
+                </div>
+            </div>
+        </div>
+        <div class="glass-card p-4">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Tasks</p>
+                    <h3 class="text-2xl font-black text-white" id="totalTasksCount">@Model.Tasks.Count</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400">
+                    <i class="fas fa-tasks"></i>
+                </div>
+            </div>
+        </div>
+        <div class="glass-card p-4">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Completed</p>
+                    <h3 class="text-2xl font-black text-emerald-400" id="completedCount">@completedTasks</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+            </div>
+            <div id="completedTrend" class="mt-2 text-[10px] text-slate-500"><i class="fas fa-chart-line mr-1"></i> <span id="completedTrendValue">Calculated...</span></div>
+        </div>
+        <div class="glass-card p-4">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pending</p>
+                    <h3 class="text-2xl font-black text-amber-500" id="pendingCount">@pendingTasksCount</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                    <i class="fas fa-clock"></i>
+                </div>
+            </div>
+            <div id="pendingTrend" class="mt-2 text-[10px] text-slate-500"><i class="fas fa-chart-line mr-1"></i> <span id="pendingTrendValue">Calculated...</span></div>
+        </div>
+    </div>
+
+    <!-- Overall Progress Card -->
+    <div class="glass-card p-4">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex gap-6">
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Completion Rate</p>
+                    <p class="text-xl font-black text-indigo-400" id="overallCompletionRate">0%</p>
+                </div>
+                <div class="w-px h-8 bg-white/10"></div>
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase mb-0.5">On-Time Reliability</p>
+                    <p class="text-xl font-black text-emerald-400" id="onTimeRate">0%</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-[10px] text-slate-500 font-medium" id="trendText">Analyzing live stream...</p>
+            </div>
+        </div>
+        <div class="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+            <div id="completionBar" class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-1000 ease-out" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="skeletonLoader" class="glass-card p-8 text-center space-y-4">
+        <div class="inline-flex items-center gap-3 text-indigo-400">
+            <i class="fas fa-circle-notch fa-spin text-2xl"></i>
+            <span class="font-bold tracking-tight">Initializing Enterprise Grid...</span>
+        </div>
+        <div class="grid grid-cols-1 gap-2 max-w-2xl mx-auto opacity-20">
+            <div class="h-4 bg-white/10 rounded w-full"></div>
+            <div class="h-4 bg-white/10 rounded w-5/6"></div>
+            <div class="h-4 bg-white/10 rounded w-4/6"></div>
+        </div>
+    </div>
+
+    <!-- Main Grid Container -->
+    <div id="dashboardContainer" class="glass-card overflow-hidden" style="display: none;">
+        <div class="overflow-x-auto">
+            <table class="w-full dark-table" id="dashboardTable">
+                <thead>
+                    <tr>
+                        <th class="sticky-col px-4 text-left">Branch Name</th>
+                        @foreach (var task in Model.Tasks.OrderBy(t => t.DisplayOrder))
+                        {
+                            <th class="text-center min-w-[100px]" data-task-id="@task.Id">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-white">@task.Name</span>
+                                    <span class="text-[10px] text-indigo-400 mt-0.5 font-mono">@task.Deadline.ToString(@"hh\:mm")</span>
+                                    @if (!Model.IsHoliday)
+                                    {
+                                        <div class="flex gap-1 mt-2">
+                                            <button type="button" onclick="completeAllForTask(@task.Id, '@task.Name', event)" class="w-7 h-4 bg-emerald-500/10 text-emerald-500 text-[8px] rounded uppercase hover:bg-emerald-500 hover:text-white transition">All</button>
+                                            <button type="button" onclick="resetAllForTask(@task.Id, '@task.Name', event)" class="w-7 h-4 bg-red-500/10 text-red-500 text-[8px] rounded uppercase hover:bg-red-500 hover:text-white transition">Clr</button>
+                                        </div>
+                                    }
+                                </div>
+                            </th>
+                        }
+                        <th class="w-32 text-center text-slate-300">Activity / Info</th>
+                    </tr>
+                </thead>
+                <tbody id="dashboardTableBody">
+                    @foreach (var branch in Model.Branches.OrderBy(b => b.Name))
+                    {
+                        var hiddenTaskNames = hiddenTasksDict.ContainsKey(branch.Id) ? hiddenTasksDict[branch.Id] : new List<string>();
+                        var bNotes = (Model.NotesData != null && Model.NotesData.ContainsKey(branch.Id.ToString())) ? (Model.NotesData[branch.Id.ToString()] ?? "") : "";
+                        
+                        var visibleTasks = Model.Tasks.Where(t => !hiddenTaskNames.Contains(t.Name)).ToList();
+                        var currentDone = visibleTasks.Count(t => Model.TaskData.ContainsKey($"{branch.Id}_{t.Id}") && Model.TaskData[$"{branch.Id}_{t.Id}"].IsCompleted);
+                        var prog = visibleTasks.Count > 0 ? (currentDone * 100 / visibleTasks.Count) : 0;
+
+                        <tr class="branch-row" data-branch-id="@branch.Id" data-branch-name="@branch.Name.ToLower()" data-progress="@prog">
+                            <td class="sticky-col px-4 border-r border-white/5">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-2 h-2 rounded-full @(branch.IsActive ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500")"></div>
+                                    <span class="text-xs font-bold text-white truncate max-w-[120px]" title="@branch.Name">@branch.Name</span>
+                                </div>
+                                <div class="text-[9px] text-slate-500 mt-1 flex items-center gap-1" id="assignedTo-@branch.Id">
+                                    @if (Model.BranchAssignments != null && Model.BranchAssignments.ContainsKey(branch.Id))
+                                    {
+                                        <i class="fas fa-user-tag text-indigo-400"></i>
+                                        <span class="truncate">@Model.BranchAssignments[branch.Id]</span>
+                                    }
+                                </div>
+                            </td>
+
+                            @foreach (var task in Model.Tasks.OrderBy(t => t.DisplayOrder))
+                            {
+                                if (hiddenTaskNames.Contains(task.Name))
+                                {
+                                    <td class="bg-white/[0.02] text-center opacity-20">
+                                        <span class="text-[10px]">—</span>
+                                    </td>
+                                }
+                                else
+                                {
+                                    <td class="p-1 text-center task-cell" id="cell-@branch.Id-@task.Id" data-branch="@branch.Id" data-task="@task.Id" data-date="@dateKey" data-task-name="@task.Name">
+                                        <div class="relative group/task">
+                                            @if (Model.IsHoliday)
+                                            {
+                                                <button type="button" class="task-button opacity-50 cursor-not-allowed" disabled>
+                                                    <span class="font-mono text-[9px]">--:--</span>
+                                                    <span class="text-[8px] text-slate-600 block">Holiday</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" onclick="quickComplete(@branch.Id, @task.Id, '@dateKey', this)" class="task-button flex flex-col items-center justify-center">
+                                                    <span class="font-mono text-[9px] time-display">--:--</span>
+                                                    <span class="text-[7px] uppercase tracking-tighter status-display">Pending</span>
+                                                </button>
+                                                <div class="absolute -top-1.5 -right-1.5 hidden group-hover/task:flex gap-0.5 z-30">
+                                                    <button type="button" onclick="event.stopPropagation(); openAdjustmentModal(@branch.Id, @task.Id, '@task.Name', '@dateKey', this)" class="w-4 h-4 rounded-full bg-indigo-500 text-white text-[7px] flex items-center justify-center hover:scale-110 shadow-lg" title="Adjust Time"><i class="fas fa-clock"></i></button>
+                                                    <button type="button" onclick="event.stopPropagation(); openTimePicker(@branch.Id, @task.Id, '@dateKey', this)" class="w-4 h-4 rounded-full bg-amber-500 text-white text-[7px] flex items-center justify-center hover:scale-110 shadow-lg" title="Edit Time"><i class="fas fa-edit"></i></button>
+                                                    <button type="button" onclick="event.stopPropagation(); resetSingle(@branch.Id, @task.Id, '@dateKey', event, this)" class="w-4 h-4 rounded-full bg-red-500 text-white text-[7px] flex items-center justify-center hover:scale-110 shadow-lg" title="Reset Task"><i class="fas fa-trash"></i></button>
+                                                </div>
+                                            }
+                                        </div>
+                                    </td>
+                                }
+                            }
+
+                            <td class="px-2">
+                                <div class="flex items-center justify-center gap-2" id="progress-cell-@branch.Id">
+                                    <div class="relative w-8 h-8 flex items-center justify-center">
+                                        <svg class="w-full h-full -rotate-90">
+                                            <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="3" fill="transparent" class="text-white/5"></circle>
+                                            <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="3" fill="transparent" class="text-indigo-500 transition-all duration-700" stroke-dasharray="88" stroke-dashoffset="@(88 - (88 * prog / 100))"></circle>
+                                        </svg>
+                                        <span class="absolute text-[8px] font-bold text-slate-300 progress-percent">@prog%</span>
+                                    </div>
+                                    <button type="button" data-branch-id="@branch.Id" data-branch-name="@branch.Name" data-branch-notes="@bNotes" onclick="openNotesModalFromData(this)" class="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:bg-white/10 transition notes-btn-@branch.Id">
+                                        <i class="fas @(string.IsNullOrEmpty(bNotes) ? "fa-plus text-[10px]" : "fa-sticky-note")"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="glass-card p-4 no-print border-indigo-500/10">
+        <div class="flex flex-wrap justify-between items-center gap-4">
+            <div class="flex flex-wrap gap-4 text-[10px] font-bold tracking-tight text-slate-500 uppercase">
+                <span class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-emerald-500"></div> Early</span>
+                <span class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-blue-500"></div> On Time</span>
+                <span class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-amber-500"></div> Late</span>
+                <span class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-red-500"></div> Critical</span>
+                <span class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-white/10"></div> Hidden</span>
+            </div>
+            <div class="text-[9px] text-slate-600 font-medium">
+                <i class="fas fa-keyboard mr-1"></i> [A] Prev | [D] Next | [T] Today | [F] Search | [B] Bulk | [H] Help
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="timePickerModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+    <div class="glass-card w-full max-w-sm m-4 overflow-hidden" style="background: #1a1a2e; border-color: rgba(255,255,255,0.1);">
+        <div class="px-6 py-4 border-b border-white/5 bg-gradient-to-r from-indigo-500/10 to-transparent">
+            <h3 class="text-white font-black flex items-center gap-2 tracking-tight"><i class="fas fa-clock text-indigo-400"></i> Sync Operations</h3>
+            <p id="timePickerTaskInfo" class="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider"></p>
+        </div>
+        <div class="p-6 space-y-4">
+            <input type="hidden" id="timePickerBranchId"><input type="hidden" id="timePickerTaskId"><input type="hidden" id="timePickerDate">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Precise Time Capture</label>
+                <input type="datetime-local" id="timePickerDateTime" class="dark-input">
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+                <button type="button" onclick="setTimePreset('now')" class="py-2 bg-white/5 text-[10px] font-bold rounded-lg hover:bg-white/10 transition border border-white/5">NOW</button>
+                <button type="button" onclick="setTimePreset('morning')" class="py-2 bg-white/5 text-[10px] font-bold rounded-lg hover:bg-white/10 transition border border-white/5">8AM</button>
+                <button type="button" onclick="setTimePreset('noon')" class="py-2 bg-white/5 text-[10px] font-bold rounded-lg hover:bg-white/10 transition border border-white/5">12PM</button>
+            </div>
+            <div id="timePickerPreview" class="text-[10px] p-3 rounded-lg bg-indigo-500/5 text-indigo-300 italic border border-indigo-500/10">Ready to sync...</div>
+        </div>
+        <div class="px-6 py-4 bg-black/20 border-t border-white/5 flex justify-end gap-3">
+            <button type="button" onclick="closeTimePicker()" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+            <button type="button" onclick="saveTaskTime()" class="px-5 py-2 btn-primary rounded-xl text-xs font-black">CONFIRM SYNC</button>
+        </div>
+    </div>
+</div>
+
+<div id="notesModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+    <div class="glass-card w-full max-w-md m-4 overflow-hidden" style="background: #1a1a2e; border-color: rgba(255,255,255,0.1);">
+        <div class="px-6 py-4 border-b border-white/5 bg-gradient-to-r from-emerald-500/10 to-transparent">
+            <h3 class="text-white font-black flex items-center gap-2 tracking-tight"><i class="fas fa-sticky-note text-emerald-400"></i> Field Intelligence</h3>
+            <p id="notesBranchName" class="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider"></p>
+        </div>
+        <div class="p-6">
+            <input type="hidden" id="notesBranchId">
+            <textarea id="notesContent" rows="5" class="dark-input" placeholder="Capture critical observations..."></textarea>
+        </div>
+        <div class="px-6 py-4 bg-black/20 border-t border-white/5 flex justify-end gap-3">
+            <button type="button" onclick="closeNotesModal()" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition">Dismiss</button>
+            <button type="button" onclick="saveNotes()" class="px-5 py-2 btn-primary rounded-xl text-xs font-black" style="background: linear-gradient(135deg, #10b981, #059669);">LOG INTEL</button>
+        </div>
+    </div>
+</div>
+
+<div id="bulkUpdateModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+    <div class="glass-card w-full max-w-sm m-4 overflow-hidden" style="background: #1a1a2e; border-color: rgba(255,255,255,0.1);">
+        <div class="px-6 py-4 border-b border-white/5 bg-gradient-to-r from-purple-500/10 to-transparent">
+            <h3 class="text-white font-black flex items-center gap-2 tracking-tight"><i class="fas fa-layer-group text-purple-400"></i> Industrial Bulk</h3>
+        </div>
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Target Task</label>
+                <select id="bulkTaskId" class="dark-input">
+                    <option value="">Select task...</option>
+                    @foreach (var task in Model.Tasks.OrderBy(t => t.DisplayOrder))
+                    {
+                        <option value="@task.Id">@task.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Sync Point</label>
+                <input type="datetime-local" id="bulkCompletionTime" class="dark-input">
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+                <button type="button" onclick="setBulkTime('now')" class="py-2 bg-white/5 text-[10px] font-bold rounded-lg border border-white/5">NOW</button>
+                <button type="button" onclick="setBulkTime('morning')" class="py-2 bg-white/5 text-[10px] font-bold rounded-lg border border-white/5">8AM</button>
+                <button type="button" onclick="setBulkTime('noon')" class="py-2 bg-white/5 text-[10px] font-bold rounded-lg border border-white/5">12PM</button>
+            </div>
+        </div>
+        <div class="px-6 py-4 bg-black/20 border-t border-white/5 flex justify-end gap-3">
+            <button type="button" onclick="closeBulkUpdateModal()" class="px-4 py-2 text-xs font-bold text-slate-400">Abort</button>
+            <button type="button" onclick="executeBulkUpdate()" class="px-5 py-2 btn-primary rounded-xl text-xs font-black" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">EXECUTE BATCH</button>
+        </div>
+    </div>
+</div>
+
+<div id="adjustmentModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+    <div class="glass-card w-full max-w-sm m-4 overflow-hidden" style="background: #1a1a2e; border-color: rgba(255,255,255,0.1);">
+        <div class="px-6 py-4 border-b border-white/5 bg-gradient-to-r from-amber-500/10 to-transparent">
+            <h3 id="adjustmentModalTitle" class="text-white font-black flex items-center gap-2 tracking-tight"><i class="fas fa-clock text-amber-500"></i> Task Adjustment</h3>
+        </div>
+        <div class="p-6 space-y-4">
+            <input type="hidden" id="adjustmentBranchId">
+            <input type="hidden" id="adjustmentTaskId">
+            <input type="hidden" id="adjustmentDate">
+            
+            <div class="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase">Current Buffer</p>
+                    <p class="text-2xl font-black text-amber-500"><span id="currentAdjustmentDisplay">0</span><span class="text-xs ml-1">MIN</span></p>
+                </div>
+                <button type="button" onclick="clearAdjustment()" class="text-[10px] font-bold text-red-400 hover:text-red-300 transition">CLEAR</button>
+            </div>
+
+            <input type="hidden" id="adjustmentMinutes" value="0">
+            
+            <div class="grid grid-cols-4 gap-2">
+                <button type="button" onclick="addAdjustment(5)" class="py-2 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition">+5m</button>
+                <button type="button" onclick="addAdjustment(10)" class="py-2 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition">+10m</button>
+                <button type="button" onclick="addAdjustment(-5)" class="py-2 bg-red-500/10 text-red-400 text-[10px] font-bold rounded-lg border border-red-500/20 hover:bg-red-500/20 transition">-5m</button>
+                <button type="button" onclick="addAdjustment(-10)" class="py-2 bg-red-500/10 text-red-400 text-[10px] font-bold rounded-lg border border-red-500/20 hover:bg-red-500/20 transition">-10m</button>
+            </div>
+
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Adjustment Reason</label>
+                <textarea id="adjustmentReason" class="dark-input h-20 resize-none" placeholder="Reason for adjustment..."></textarea>
+            </div>
+        </div>
+        <div class="px-6 py-4 bg-black/20 border-t border-white/5 flex justify-end gap-3">
+            <button type="button" onclick="closeAdjustmentModal()" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+            <button type="button" onclick="saveAdjustment()" class="px-5 py-2 btn-primary rounded-xl text-xs font-black" style="background: linear-gradient(135deg, #f59e0b, #d97706);">APPLY BUFFER</button>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-    <script src="~/js/dashboard.js"></script>
     <script>
-        // Pass server-side data to JavaScript
+        // Critical Initialization: Branch Notes
         window.branchNotes = @Html.Raw(Json.Serialize(notesDict));
-        window.currentUserName = @Html.Raw(Json.Serialize(User.Identity?.Name ?? "Admin User"));
+        
+        // Ensure DashboardState and apiService are ready 
+        $(document).ready(function() {
+            // Logic handled by dashboard.js
+        });
     </script>
+    <script src="~/js/dashboard.js"></script>
 }
-</body>
-</html>

@@ -1,5 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 using TaskTracker.Data;
 using TaskTracker.Models.Entities;
 using TaskTracker.Models.ViewModels;
@@ -774,7 +777,7 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
             var dailyTasks = await _context.DailyTasks
                 .Include(dt => dt.TaskItem)
                 .Include(dt => dt.TaskAssignment)
-                    .ThenInclude(ta => ta.Employee)
+                    .ThenInclude(ta => ta!.Employee)
                 .Where(dt => dt.BranchId == branchId && 
                              dt.TaskDate >= startDate && 
                              dt.TaskDate <= endDate)
@@ -1020,7 +1023,7 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
             var dailyTasks = await _context.DailyTasks
                 .Include(dt => dt.Branch)
                 .Include(dt => dt.TaskAssignment)
-                    .ThenInclude(ta => ta.Employee)
+                    .ThenInclude(ta => ta!.Employee)
                 .Where(dt => dt.TaskItemId == taskId && 
                              dt.TaskDate >= startDate && 
                              dt.TaskDate <= endDate)
@@ -1157,8 +1160,8 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
         
         var query = _context.DailyTasks
             .Include(dt => dt.TaskItem)
-            .Include(dt => dt.Branch).ThenInclude(b => b.Department)
-            .Include(dt => dt.TaskAssignment).ThenInclude(ta => ta.Employee)
+            .Include(dt => dt.Branch).ThenInclude(b => b!.Department)
+            .Include(dt => dt.TaskAssignment).ThenInclude(ta => ta!.Employee)
             .Where(dt => dt.TaskDate >= utcStartDate && dt.TaskDate <= utcEndDate);
 
         if (request.BranchIds?.Any() == true) query = query.Where(dt => request.BranchIds.Contains(dt.BranchId));
@@ -1328,8 +1331,104 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
 
     public async Task<byte[]> ExportToPdfAsync(object data, string reportName)
     {
-        _logger.LogWarning("PDF export not fully implemented - returning empty array");
-        return await Task.FromResult(Array.Empty<byte>());
+        try
+        {
+            var exportData = data as List<Dictionary<string, object>>;
+            
+            QuestPDF.Settings.License = LicenseType.Community;
+            
+            var document = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(30);
+                    page.DefaultTextStyle(x => x.FontSize(10));
+
+                    page.Header().Element(c => ComposeHeader(c, reportName));
+                    page.Content().Element(c => ComposeContent(c, exportData));
+                    page.Footer().Element(ComposeFooter);
+                });
+            });
+
+            return document.GeneratePdf();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating PDF for {ReportName}", reportName);
+            return Array.Empty<byte>();
+        }
+    }
+
+    private void ComposeHeader(IContainer container, string reportName)
+    {
+        container.Row(row =>
+        {
+            row.RelativeItem().Column(column =>
+            {
+                column.Item().Text("TaskTracker Report")
+                    .Bold().FontSize(16).FontColor(Colors.Blue.Darken2);
+                column.Item().Text($"Report: {reportName}")
+                    .FontSize(12).FontColor(Colors.Grey.Darken1);
+                column.Item().Text($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm}")
+                    .FontSize(10).FontColor(Colors.Grey.Medium);
+            });
+        });
+    }
+
+    private void ComposeContent(IContainer container, List<Dictionary<string, object>>? data)
+    {
+        if (data == null || !data.Any())
+        {
+            container.Padding(20).Text("No data available").FontSize(12);
+            return;
+        }
+
+        container.PaddingVertical(10).Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                var headers = data.First().Keys.ToList();
+                foreach (var _ in headers)
+                    columns.RelativeColumn();
+            });
+
+            table.Header(header =>
+            {
+                header.Cell().Background(Colors.Blue.Darken2).Padding(5)
+                    .Text(data.First().Keys.First()).Bold().FontColor(Colors.White);
+                foreach (var headerKey in data.First().Keys.Skip(1))
+                {
+                    header.Cell().Background(Colors.Blue.Darken2).Padding(5)
+                        .Text(headerKey).Bold().FontColor(Colors.White);
+                }
+            });
+
+            bool isAlternate = false;
+            foreach (var row in data)
+            {
+                var bgColor = isAlternate ? Colors.Grey.Lighten4 : Colors.White;
+                var values = row.Values.ToList();
+                
+                for (int i = 0; i < values.Count; i++)
+                {
+                    table.Cell().Background(bgColor).Padding(5)
+                        .Text(values[i]?.ToString() ?? "");
+                }
+                isAlternate = !isAlternate;
+            }
+        });
+    }
+
+    private void ComposeFooter(IContainer container)
+    {
+        container.AlignCenter().Text(text =>
+        {
+            text.Span("Page ");
+            text.CurrentPageNumber();
+            text.Span(" of ");
+            text.TotalPages();
+        });
     }
 
     #endregion
@@ -1584,6 +1683,124 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
         if (parts.Length == 0) return "?";
         if (parts.Length == 1) return parts[0].Substring(0, 1).ToUpper();
         return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
+    }
+
+    public async Task<ExecutiveSummaryViewModel> GetExecutiveSummaryAsync(DateTime startDate, DateTime endDate)
+    {
+        var utcStartDate = _timezoneService.GetStartOfDayLocal(startDate);
+        var utcEndDate = _timezoneService.GetEndOfDayLocal(endDate);
+
+        var model = new ExecutiveSummaryViewModel
+        {
+            StartDate = startDate,
+            EndDate = endDate
+        };
+
+        var allTasks = await _context.DailyTasks
+            .Include(dt => dt.Branch)
+                .ThenInclude(b => b!.Department)
+            .Include(dt => dt.TaskItem)
+            .Where(dt => dt.TaskDate >= utcStartDate && dt.TaskDate <= utcEndDate)
+            .ToListAsync();
+
+        model.TotalTasksAssigned = allTasks.Count;
+        model.TotalTasksCompleted = allTasks.Count(t => t.IsCompleted);
+        model.TotalTasksPending = allTasks.Count(t => !t.IsCompleted);
+        
+        int onTimeCount = 0;
+        int lateCount = 0;
+
+        // Group by Day for Trends
+        var groupedByDay = allTasks.GroupBy(t => _timezoneService.ConvertToLocalTime(t.TaskDate).Date).OrderBy(g => g.Key).ToList();
+        foreach (var dayGroup in groupedByDay)
+        {
+            var dayTasks = dayGroup.ToList();
+            model.DailyTrends.Add(new DailyTrendData
+            {
+                DateLabel = dayGroup.Key.ToString("MMM dd"),
+                TotalTasks = dayTasks.Count,
+                CompletedTasks = dayTasks.Count(t => t.IsCompleted),
+                CompletionRate = dayTasks.Count > 0 ? Math.Round((double)dayTasks.Count(t => t.IsCompleted) / dayTasks.Count * 100, 1) : 0
+            });
+        }
+
+        // Branch and Dept mapping
+        var branchScores = new Dictionary<int, BranchRiskData>();
+        var taskScores = new Dictionary<int, TaskRiskData>();
+        var deptScores = new Dictionary<string, DepartmentComparisonData>();
+
+        foreach (var task in allTasks)
+        {
+            // Simple On-Time Calculation
+            if (task.IsCompleted && task.CompletedAt.HasValue && task.TaskItem != null)
+            {
+                // In a true implementation, we'd use GetHolidayAdjustedDelayInfoAsync, but for memory performance over potentially 10,000s of global tasks we will do a fast calculation:
+                var deadline = await _taskCalculationService.CalculateDeadline(task.TaskItem, task.TaskDate);
+                var adjustedDeadline = deadline.AddMinutes(task.AdjustmentMinutes ?? 0);
+                if (task.CompletedAt.Value <= adjustedDeadline.AddMinutes(5)) onTimeCount++;
+                else lateCount++;
+            }
+
+            if (task.Branch != null)
+            {
+                if (!branchScores.ContainsKey(task.BranchId))
+                    branchScores[task.BranchId] = new BranchRiskData { BranchId = task.BranchId, BranchName = task.Branch.Name };
+                
+                var bs = branchScores[task.BranchId];
+                if (!task.IsCompleted) bs.PendingTasks++;
+
+                var deptName = task.Branch.Department?.Name ?? "Unassigned";
+                if (!deptScores.ContainsKey(deptName))
+                    deptScores[deptName] = new DepartmentComparisonData { DepartmentName = deptName };
+                
+                var ds = deptScores[deptName];
+                ds.TotalTasks++;
+                if (task.IsCompleted) ds.CompletedTasks++;
+            }
+
+            if (task.TaskItem != null)
+            {
+                if (!taskScores.ContainsKey(task.TaskItemId))
+                    taskScores[task.TaskItemId] = new TaskRiskData { TaskId = task.TaskItemId, TaskName = task.TaskItem.Name };
+                
+                var ts = taskScores[task.TaskItemId];
+                if (!task.IsCompleted) ts.PendingTasks++;
+            }
+        }
+
+        model.TotalTasksOnTime = onTimeCount;
+        model.TotalTasksLate = lateCount;
+
+        // Finalize Department scores
+        foreach (var dept in deptScores.Values)
+        {
+            dept.CompletionRate = dept.TotalTasks > 0 ? Math.Round((double)dept.CompletedTasks / dept.TotalTasks * 100, 1) : 0;
+            model.DepartmentComparisons.Add(dept);
+        }
+
+        // Calculate Branch Completion Rates (Bottom 3 risks)
+        var allBranchIds = allTasks.Select(t => t.BranchId).Distinct();
+        foreach (var bid in allBranchIds)
+        {
+            var totalBranch = allTasks.Count(t => t.BranchId == bid);
+            var bRisk = branchScores[bid];
+            bRisk.CompletionRate = totalBranch > 0 ? Math.Round((double)(totalBranch - bRisk.PendingTasks) / totalBranch * 100, 1) : 0;
+        }
+
+        model.BottomBranches = branchScores.Values.OrderBy(b => b.CompletionRate).ThenByDescending(b => b.PendingTasks).Take(5).ToList();
+
+        // Calculate Task Completion Rates (Bottom 3 risks)
+        var allTaskIds = allTasks.Select(t => t.TaskItemId).Distinct();
+        foreach (var tid in allTaskIds)
+        {
+            var totalTask = allTasks.Count(t => t.TaskItemId == tid);
+            var tRisk = taskScores[tid];
+            tRisk.CompletionRate = totalTask > 0 ? Math.Round((double)(totalTask - tRisk.PendingTasks) / totalTask * 100, 1) : 0;
+        }
+
+        model.BottomTasks = taskScores.Values.OrderBy(t => t.CompletionRate).ThenByDescending(t => t.PendingTasks).Take(5).ToList();
+
+        return model;
     }
 
     #endregion

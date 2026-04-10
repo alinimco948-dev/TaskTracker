@@ -380,7 +380,7 @@ private async Task AutoAssignTaskToAllEmployees(TaskItem task)
             
             var isHoliday = await _holidayService.IsHolidayAsync(viewingDate);
 
-            var deadline = _taskCalculationService.CalculateDeadline(task, utcViewingDate);
+            var deadline = await _taskCalculationService.CalculateDeadline(task, utcViewingDate);
             if (dailyTask?.AdjustmentMinutes > 0) 
                 deadline = deadline.AddMinutes(dailyTask.AdjustmentMinutes.Value);
 

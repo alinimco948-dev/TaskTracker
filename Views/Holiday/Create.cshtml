@@ -1,63 +1,83 @@
-﻿@model TaskTracker.Models.Entities.Holiday
+@model TaskTracker.Models.Entities.Holiday
 @{
     ViewData["Title"] = "Create Holiday";
 }
 
-<div class="max-w-2xl mx-auto">
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-semibold mb-4">Create New Holiday</h2>
+<div class="max-w-2xl mx-auto animate-fade-up">
+    <div class="glass-card overflow-hidden">
+        <!-- Header -->
+        <div class="px-6 py-5 flex items-center gap-4" style="background: linear-gradient(135deg, rgba(124,58,237,0.25), rgba(99,102,241,0.15)); border-bottom: 1px solid rgba(255,255,255,0.08);">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background: linear-gradient(135deg, #7c3aed, #6366f1); box-shadow: 0 4px 15px rgba(124,58,237,0.4);">
+                <i class="fas fa-calendar-plus text-white"></i>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold text-white">Create New Holiday</h2>
+                <p class="text-slate-400 text-sm mt-0.5">Add a holiday to the schedule</p>
+            </div>
+        </div>
 
-        <form asp-action="Create" method="post">
+        <form asp-action="Create" method="post" class="p-6 space-y-5">
             @Html.AntiForgeryToken()
 
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Holiday Type</label>
-                <div class="flex space-x-4">
-                    <label class="flex items-center">
-                        <input type="radio" name="holidayType" value="specific" class="mr-2" checked onchange="toggleHolidayType()">
-                        <span class="text-sm">Specific Date</span>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Holiday Type</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="cursor-pointer">
+                        <input type="radio" name="holidayType" value="specific" class="sr-only peer" checked onchange="toggleHolidayType()">
+                        <div class="p-4 rounded-xl border-2 transition peer-checked:border-indigo-500 text-center"
+                             style="border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.04);">
+                            <i class="fas fa-calendar-day text-indigo-400 text-xl mb-2 block"></i>
+                            <span class="text-sm font-semibold text-slate-300">Specific Date</span>
+                            <p class="text-xs text-slate-500 mt-0.5">One-time holiday</p>
+                        </div>
                     </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="holidayType" value="weekly" class="mr-2" onchange="toggleHolidayType()">
-                        <span class="text-sm">Weekly Recurring</span>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="holidayType" value="weekly" class="sr-only peer" onchange="toggleHolidayType()">
+                        <div class="p-4 rounded-xl border-2 transition peer-checked:border-violet-500 text-center"
+                             style="border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.04);">
+                            <i class="fas fa-calendar-week text-violet-400 text-xl mb-2 block"></i>
+                            <span class="text-sm font-semibold text-slate-300">Weekly Recurring</span>
+                            <p class="text-xs text-slate-500 mt-0.5">Repeats every week</p>
+                        </div>
                     </label>
                 </div>
             </div>
 
             <div id="specificDateSection">
-                <div class="mb-4">
-                    <label asp-for="HolidayDate" class="block text-sm font-medium text-gray-700 mb-1">Date *</label>
-                    <input asp-for="HolidayDate" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                           value="@DateTime.Today.ToString("yyyy-MM-dd")">
-                    <span asp-validation-for="HolidayDate" class="text-xs text-red-500"></span>
-                </div>
+                <label asp-for="HolidayDate" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Date <span class="text-red-400">*</span></label>
+                <input asp-for="HolidayDate" type="date" class="dark-input"
+                       value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                <span asp-validation-for="HolidayDate" class="text-xs text-red-400 mt-1 block"></span>
             </div>
 
             <div id="weeklySection" class="hidden">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Day of Week *</label>
-                    <select id="WeekDay" name="WeekDay" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
-                        <option value="">Select a day</option>
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5">Friday</option>
-                        <option value="6">Saturday</option>
-                    </select>
-                </div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Day of Week <span class="text-red-400">*</span></label>
+                <select id="WeekDay" name="WeekDay" class="dark-input">
+                    <option value="">Select a day</option>
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                </select>
             </div>
 
-            <div class="mb-4">
-                <label asp-for="Description" class="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-                <textarea asp-for="Description" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            <div>
+                <label asp-for="Description" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Description (Optional)</label>
+                <textarea asp-for="Description" rows="2" class="dark-input resize-none"
                           placeholder="e.g., New Year's Day, Christmas, etc."></textarea>
             </div>
 
-            <div class="flex justify-end space-x-2">
-                <a href="@Url.Action("Index")" class="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</a>
-                <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">Create Holiday</button>
+            <div class="flex justify-end gap-3 pt-4 border-t" style="border-color: rgba(255,255,255,0.06);">
+                <a href="@Url.Action("Index")" class="px-5 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5 transition text-sm font-medium flex items-center gap-2">
+                    <i class="fas fa-times"></i>Cancel
+                </a>
+                <button type="submit" class="btn-primary" style="background: linear-gradient(135deg, #7c3aed, #6366f1);">
+                    <i class="fas fa-calendar-plus"></i>Create Holiday
+                </button>
             </div>
         </form>
     </div>
@@ -70,24 +90,19 @@
         var weeklySection = document.getElementById('weeklySection');
         var specificInput = document.getElementById('HolidayDate');
         var weeklySelect = document.getElementById('WeekDay');
-
         if (type === 'specific') {
             specificSection.classList.remove('hidden');
             weeklySection.classList.add('hidden');
             weeklySelect.disabled = true;
-            specificInput.disabled = false;
+            if (specificInput) specificInput.disabled = false;
         } else {
             specificSection.classList.add('hidden');
             weeklySection.classList.remove('hidden');
             weeklySelect.disabled = false;
-            specificInput.disabled = true;
+            if (specificInput) specificInput.disabled = true;
         }
     }
-
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        toggleHolidayType();
-    });
+    document.addEventListener('DOMContentLoaded', toggleHolidayType);
 </script>
 
 @section Scripts {

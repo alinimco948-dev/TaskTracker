@@ -5,8 +5,8 @@ namespace TaskTracker.Services.Interfaces;
 public interface ITaskCalculationService
 {
     // ========== Core Calculations ==========
-    DateTime CalculateDeadline(TaskItem task, DateTime taskDate);
-    DateTime GetLocalDeadline(TaskItem task, DateTime taskDate);
+    Task<DateTime> CalculateDeadline(TaskItem task, DateTime taskDate);
+    Task<DateTime> GetLocalDeadline(TaskItem task, DateTime taskDate);
     bool IsTaskOnTime(DailyTask dailyTask);
     bool IsTaskOnTime(DateTime taskDate, DateTime? completedAt, TimeSpan deadlineTime, bool isSameDay, int? adjustmentMinutes);
     Task<TaskDelayInfo> GetTaskDelayInfoAsync(DailyTask dailyTask);
@@ -16,6 +16,7 @@ public interface ITaskCalculationService
     Task<DateTime> GetNextWorkingDayAsync(DateTime date);
     Task<DateTime> GetNextWorkingDayAsync(DateTime date, bool includeSameDay);
     Task<DateTime> AdjustDeadlineForHolidaysAsync(DateTime deadline);
+    Task<DateTime> AdjustDeadlineForHolidaysAsync(DateTime deadline, DateTime stopAtDate);
     Task<TaskDelayInfo> GetHolidayAdjustedDelayInfoAsync(DailyTask dailyTask);
     
     // ========== Task Visibility ==========

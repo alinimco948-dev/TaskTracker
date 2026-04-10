@@ -1,34 +1,40 @@
-﻿@model TaskTracker.Models.ViewModels.EmployeeViewModel
+@model TaskTracker.Models.ViewModels.EmployeeViewModel
 @using TaskTracker.Models.ViewModels
 @{
     ViewData["Title"] = "Create Employee";
 }
 
-<div class="container mx-auto px-4 py-8 max-w-4xl">
-    <div class="mb-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-800">Create New Employee</h1>
-                <p class="text-gray-600 mt-1">Add a new employee to the system</p>
-            </div>
-            <a href="@Url.Action("Index")" class="text-gray-600 hover:text-gray-800 transition flex items-center">
-                <i class="fas fa-arrow-left mr-2"></i> Back to List
-            </a>
+<div class="max-w-4xl mx-auto animate-fade-up space-y-5">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #6366f1, #7c3aed);">
+                    <i class="fas fa-user-plus text-white text-sm"></i>
+                </div>
+                Create New Employee
+            </h1>
+            <p class="text-slate-400 mt-1">Add a new employee to the system</p>
         </div>
+        <a href="@Url.Action("Index")" class="flex items-center gap-2 text-slate-400 hover:text-white transition text-sm">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
     </div>
 
     @if (TempData["ErrorMessage"] != null)
     {
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            <strong>Error:</strong> @TempData["ErrorMessage"]
+        <div class="alert-error rounded-xl p-4 flex items-center gap-3">
+            <i class="fas fa-exclamation-circle text-red-400"></i>
+            <p class="text-sm">@TempData["ErrorMessage"]</p>
         </div>
     }
 
     @if (!ViewContext.ViewData.ModelState.IsValid)
     {
-        <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-4">
-            <strong>Validation Errors:</strong>
-            <ul class="mt-2 list-disc list-inside">
+        <div class="alert-warning rounded-xl p-4">
+            <p class="font-semibold text-sm mb-2">Validation Errors:</p>
+            <ul class="text-sm space-y-1 list-disc list-inside">
                 @foreach (var error in ViewContext.ViewData.ModelState.Values.SelectMany(v => v.Errors))
                 {
                     <li>@error.ErrorMessage</li>
@@ -37,191 +43,165 @@
         </div>
     }
 
-    <div class="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
-        <div class="p-6">
-            <form asp-action="Create" method="post" id="createEmployeeForm">
-                @Html.AntiForgeryToken()
-                <div asp-validation-summary="ModelOnly" class="mb-6 p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200"></div>
+    <div class="glass-card overflow-hidden">
+        <form asp-action="Create" method="post" id="createEmployeeForm" class="p-6 space-y-6">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="alert-error rounded-xl p-4 text-sm"></div>
 
-                <!-- Basic Information -->
-                <div class="bg-gray-50 rounded-lg p-5 mb-6">
-                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-user-circle text-blue-500 mr-2"></i>Basic Information
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                            <label asp-for="Name" class="block text-sm font-medium text-gray-700 mb-1">
-                                Full Name <span class="text-red-500">*</span>
-                            </label>
-                            <input asp-for="Name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                            <span asp-validation-for="Name" class="text-xs text-red-600 mt-1 block"></span>
-                        </div>
-                        <div>
-                            <label asp-for="EmployeeId" class="block text-sm font-medium text-gray-700 mb-1">
-                                Employee ID <span class="text-red-500">*</span>
-                            </label>
-                            <input asp-for="EmployeeId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                            <span asp-validation-for="EmployeeId" class="text-xs text-red-600 mt-1 block"></span>
-                        </div>
-                        <div>
-                            <label asp-for="Email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                            <input asp-for="Email" type="email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="employee@company.com" />
-                            <span asp-validation-for="Email" class="text-xs text-red-600 mt-1 block"></span>
-                            <p class="text-xs text-gray-400 mt-1">Leave empty if not applicable</p>
-                        </div>
-                        <div>
-                            <label asp-for="Phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                            <input asp-for="Phone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="+252 63 1234567" />
-                            <span asp-validation-for="Phone" class="text-xs text-red-600 mt-1 block"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Employment Information -->
-                <div class="bg-gray-50 rounded-lg p-5 mb-6">
-                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-briefcase text-green-500 mr-2"></i>Employment Information
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                            <label asp-for="Position" class="block text-sm font-medium text-gray-700 mb-1">Position</label>
-                            <input asp-for="Position" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="e.g., Cashier, Manager" />
-                            <span asp-validation-for="Position" class="text-xs text-red-600 mt-1 block"></span>
-                        </div>
-                        <div>
-                            <label asp-for="DepartmentId" class="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                            <select asp-for="DepartmentId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                <option value="">Select Department</option>
-                                @if (ViewBag.Departments != null)
-                                {
-                                    foreach (var dept in ViewBag.Departments)
-                                    {
-                                        <option value="@dept.Id">@dept.Name</option>
-                                    }
-                                }
-                            </select>
-                            <span asp-validation-for="DepartmentId" class="text-xs text-red-600 mt-1 block"></span>
-                        </div>
-                        <div>
-                            <label asp-for="HireDate" class="block text-sm font-medium text-gray-700 mb-1">Hire Date</label>
-                            <input asp-for="HireDate" type="date" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                            <span asp-validation-for="HireDate" class="text-xs text-red-600 mt-1 block"></span>
-                        </div>
-                        <div>
-                            <label asp-for="ManagerId" class="block text-sm font-medium text-gray-700 mb-1">Reports To (Manager)</label>
-                            <select asp-for="ManagerId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                <option value="">None (Top Level / No Manager)</option>
-                                @if (ViewBag.Managers != null)
-                                {
-                                    foreach (var mgr in ViewBag.Managers)
-                                    {
-                                        if (mgr.Id != Model.Id)
-                                        {
-                                            <option value="@mgr.Id">@mgr.Name - @mgr.Position</option>
-                                        }
-                                    }
-                                }
-                            </select>
-                            <span asp-validation-for="ManagerId" class="text-xs text-red-600 mt-1 block"></span>
-                            <p class="text-xs text-blue-600 mt-1">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Leave empty if this employee doesn't report to anyone
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Branch Assignments - Multi-Select -->
-                <div class="bg-gray-50 rounded-lg p-5 mb-6">
-                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-store text-purple-500 mr-2"></i>Branch Assignments
-                    </h3>
-                    <p class="text-sm text-gray-500 mb-3">Select all branches this employee is responsible for</p>
-                    
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-60 overflow-y-auto p-2 border border-gray-200 rounded-lg bg-white">
-                        @if (ViewBag.Branches != null && ((IEnumerable<BranchListViewModel>)ViewBag.Branches).Any())
-                        {
-                            foreach (var branch in ViewBag.Branches as IEnumerable<BranchListViewModel>)
-                            {
-                                <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-100 cursor-pointer transition branch-item">
-                                    <input type="checkbox" 
-                                           name="BranchIds" 
-                                           value="@branch.Id" 
-                                           class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 branch-checkbox" />
-                                    <span class="text-sm text-gray-700">@branch.Name</span>
-                                </label>
-                            }
-                        }
-                        else
-                        {
-                            <p class="text-sm text-gray-400 italic col-span-full text-center py-4">
-                                <i class="fas fa-exclamation-circle mr-1"></i>
-                                No active branches available. Please create branches first.
-                            </p>
-                        }
-                    </div>
-                    
-                    <div class="mt-3 flex items-center justify-between">
-                        <div class="text-xs text-blue-600">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            Employees can be assigned to multiple branches (e.g., regional managers overseeing multiple locations)
-                        </div>
-                        <div class="text-xs text-gray-500">
-                            <i class="fas fa-check-circle mr-1"></i>
-                            <span id="selectedCount">0</span> branches selected
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Address Information -->
-                <div class="bg-gray-50 rounded-lg p-5 mb-6">
-                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-map-marker-alt text-orange-500 mr-2"></i>Address Information
-                    </h3>
+            <!-- Basic Information -->
+            <div class="rounded-xl p-5 space-y-4" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15);">
+                <h3 class="text-sm font-bold text-indigo-300 uppercase tracking-widest flex items-center gap-2">
+                    <i class="fas fa-user-circle text-indigo-400"></i>Basic Information
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label asp-for="Address" class="block text-sm font-medium text-gray-700 mb-1">Full Address</label>
-                        <textarea asp-for="Address" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Street address, city, postal code..."></textarea>
-                        <span asp-validation-for="Address" class="text-xs text-red-600 mt-1 block"></span>
+                        <label asp-for="Name" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Full Name <span class="text-red-400">*</span></label>
+                        <input asp-for="Name" class="dark-input" />
+                        <span asp-validation-for="Name" class="text-xs text-red-400 mt-1 block"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EmployeeId" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Employee ID <span class="text-red-400">*</span></label>
+                        <input asp-for="EmployeeId" class="dark-input" />
+                        <span asp-validation-for="EmployeeId" class="text-xs text-red-400 mt-1 block"></span>
+                    </div>
+                    <div>
+                        <label asp-for="Email" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                        <input asp-for="Email" type="email" class="dark-input" placeholder="employee@company.com" />
+                        <span asp-validation-for="Email" class="text-xs text-red-400 mt-1 block"></span>
+                        <p class="text-xs text-slate-600 mt-1">Leave empty if not applicable</p>
+                    </div>
+                    <div>
+                        <label asp-for="Phone" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Phone Number</label>
+                        <input asp-for="Phone" class="dark-input" placeholder="+252 63 1234567" />
                     </div>
                 </div>
+            </div>
 
-                <!-- Status Section -->
-                <div class="bg-gray-50 rounded-lg p-5 mb-6">
-                    <h3 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-toggle-on text-yellow-500 mr-2"></i>Status
-                    </h3>
-                    <div class="flex items-center">
-                        <input asp-for="IsActive" type="checkbox" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked />
-                        <label asp-for="IsActive" class="ml-2 text-sm text-gray-700">Active Employee</label>
+            <!-- Employment Information -->
+            <div class="rounded-xl p-5 space-y-4" style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.15);">
+                <h3 class="text-sm font-bold text-emerald-300 uppercase tracking-widest flex items-center gap-2">
+                    <i class="fas fa-briefcase text-emerald-400"></i>Employment Information
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label asp-for="Position" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Position</label>
+                        <input asp-for="Position" class="dark-input" placeholder="e.g., Cashier, Manager" />
                     </div>
-                    <p class="text-xs text-gray-500 mt-2">Inactive employees won't appear in task assignments</p>
+                    <div>
+                        <label asp-for="DepartmentId" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Department</label>
+                        <select asp-for="DepartmentId" class="dark-input">
+                            <option value="">Select Department</option>
+                            @if (ViewBag.Departments != null)
+                            {
+                                foreach (var dept in ViewBag.Departments)
+                                {
+                                    <option value="@dept.Id">@dept.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label asp-for="HireDate" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Hire Date</label>
+                        <input asp-for="HireDate" type="date" class="dark-input" />
+                    </div>
+                    <div>
+                        <label asp-for="ManagerId" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Reports To (Manager)</label>
+                        <select asp-for="ManagerId" class="dark-input">
+                            <option value="">None (Top Level / No Manager)</option>
+                            @if (ViewBag.Managers != null)
+                            {
+                                foreach (var mgr in ViewBag.Managers)
+                                {
+                                    if (mgr.Id != Model.Id)
+                                    {
+                                        <option value="@mgr.Id">@mgr.Name - @mgr.Position</option>
+                                    }
+                                }
+                            }
+                        </select>
+                        <p class="text-xs text-indigo-400 mt-1"><i class="fas fa-info-circle mr-1"></i>Leave empty if this employee doesn't report to anyone</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Branch Assignments -->
+            <div class="rounded-xl p-5" style="background: rgba(124,58,237,0.06); border: 1px solid rgba(124,58,237,0.15);">
+                <h3 class="text-sm font-bold text-violet-300 uppercase tracking-widest flex items-center gap-2 mb-3">
+                    <i class="fas fa-store text-violet-400"></i>Branch Assignments
+                </h3>
+                <p class="text-xs text-slate-400 mb-4">Select all branches this employee is responsible for</p>
+
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-52 overflow-y-auto p-2 rounded-xl" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);">
+                    @if (ViewBag.Branches != null && ((IEnumerable<BranchListViewModel>)ViewBag.Branches).Any())
+                    {
+                        foreach (var branch in (ViewBag.Branches as IEnumerable<BranchListViewModel>) ?? Enumerable.Empty<BranchListViewModel>())
+                        {
+                            <label class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition branch-item"
+                                   style="border: 1px solid transparent;">
+                                <input type="checkbox" name="BranchIds" value="@branch.Id"
+                                       class="w-4 h-4 accent-violet-500 branch-checkbox cursor-pointer" />
+                                <span class="text-sm text-slate-300">@branch.Name</span>
+                            </label>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-sm text-slate-500 italic col-span-full text-center py-6">
+                            <i class="fas fa-exclamation-circle mr-1"></i>No active branches available. Please create branches first.
+                        </p>
+                    }
                 </div>
 
-                <!-- Form Actions -->
-                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                    <a href="@Url.Action("Index")" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
-                        <i class="fas fa-times mr-2"></i>Cancel
-                    </a>
-                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
-                        <i class="fas fa-save mr-2"></i>Create Employee
-                    </button>
+                <div class="mt-3 flex justify-between text-xs">
+                    <span class="text-indigo-400"><i class="fas fa-info-circle mr-1"></i>Employees can be assigned to multiple branches</span>
+                    <span class="text-slate-500"><i class="fas fa-check-circle mr-1 text-emerald-400"></i><span id="selectedCount">0</span> selected</span>
                 </div>
-            </form>
-        </div>
+            </div>
+
+            <!-- Address -->
+            <div class="rounded-xl p-5" style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15);">
+                <h3 class="text-sm font-bold text-amber-300 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <i class="fas fa-map-marker-alt text-amber-400"></i>Address Information
+                </h3>
+                <label asp-for="Address" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Full Address</label>
+                <textarea asp-for="Address" rows="2" class="dark-input resize-none" placeholder="Street address, city, postal code..."></textarea>
+            </div>
+
+            <!-- Status -->
+            <div class="rounded-xl p-4 flex items-center gap-4" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);">
+                <input asp-for="IsActive" type="checkbox" class="w-4 h-4 accent-indigo-500 cursor-pointer" checked />
+                <div>
+                    <span class="text-sm font-semibold text-slate-200">Active Employee</span>
+                    <p class="text-xs text-slate-500 mt-0.5">Inactive employees won't appear in task assignments</p>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex justify-end gap-3 pt-4 border-t" style="border-color: rgba(255,255,255,0.06);">
+                <a href="@Url.Action("Index")" class="px-5 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5 transition text-sm font-medium flex items-center gap-2">
+                    <i class="fas fa-times"></i>Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save"></i>Create Employee
+                </button>
+            </div>
+        </form>
     </div>
 
     <!-- Help Card -->
-    <div class="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4">
-        <div class="flex items-start">
-            <i class="fas fa-lightbulb text-yellow-500 mt-0.5 mr-3"></i>
-            <div class="flex-1">
-                <h4 class="text-sm font-semibold text-gray-800 mb-1">Quick Tips</h4>
-                <ul class="text-xs text-gray-600 space-y-1">
-                    <li>• <strong>Employee ID</strong> should be unique across the system</li>
-                    <li>• <strong>Email</strong> is optional but must be unique if provided</li>
-                    <li>• <strong>Manager field</strong> is optional - leave empty for top-level employees</li>
-                    <li>• <strong>Branch Assignments</strong> - Select multiple branches if the employee oversees multiple locations</li>
-                    <li>• Inactive employees won't appear in daily task boards</li>
+    <div class="glass-card p-5" style="border-color: rgba(99,102,241,0.2);">
+        <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(245,158,11,0.15);">
+                <i class="fas fa-lightbulb text-amber-400 text-sm"></i>
+            </div>
+            <div class="text-sm text-slate-400">
+                <p class="font-semibold text-slate-300 mb-1">Quick Tips</p>
+                <ul class="text-xs text-slate-500 space-y-1 list-disc list-inside">
+                    <li><strong class="text-slate-400">Employee ID</strong> should be unique across the system</li>
+                    <li><strong class="text-slate-400">Email</strong> is optional but must be unique if provided</li>
+                    <li><strong class="text-slate-400">Manager field</strong> is optional — leave empty for top-level employees</li>
+                    <li><strong class="text-slate-400">Branch Assignments</strong> — Select multiple branches if the employee oversees multiple locations</li>
+                    <li>Inactive employees won't appear in daily task boards</li>
                 </ul>
             </div>
         </div>
@@ -234,66 +214,19 @@
         function updateSelectedCount() {
             var checked = $('input[name="BranchIds"]:checked').length;
             $('#selectedCount').text(checked);
-            
-            $('.branch-item').removeClass('bg-blue-50');
-            $('input[name="BranchIds"]:checked').each(function() {
-                $(this).closest('.branch-item').addClass('bg-blue-50');
+            $('.branch-item').each(function() {
+                const cb = $(this).find('input[type="checkbox"]');
+                if (cb.is(':checked')) {
+                    $(this).css('border-color', 'rgba(124,58,237,0.4)').css('background', 'rgba(124,58,237,0.1)');
+                } else {
+                    $(this).css('border-color', 'transparent').css('background', '');
+                }
             });
         }
-        
+
         $(document).ready(function() {
             updateSelectedCount();
-            
-            $('input[name="BranchIds"]').on('change', function() {
-                updateSelectedCount();
-            });
-            
-            $('#createEmployeeForm').on('submit', function() {
-                var selected = [];
-                $('input[name="BranchIds"]:checked').each(function() {
-                    selected.push($(this).val());
-                });
-                console.log('Submitting employee with branches:', selected);
-            });
+            $('input[name="BranchIds"]').on('change', updateSelectedCount);
         });
     </script>
 }
-
-<style>
-    .branch-item {
-        transition: all 0.2s ease;
-    }
-    
-    .branch-item:hover {
-        background-color: #f3f4f6;
-    }
-    
-    .branch-item.bg-blue-50 {
-        background-color: #eff6ff;
-    }
-    
-    input:focus, select:focus, textarea:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-    }
-    
-    /* Custom scrollbar for branch selection box */
-    .grid.max-h-60::-webkit-scrollbar {
-        width: 6px;
-    }
-    
-    .grid.max-h-60::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 3px;
-    }
-    
-    .grid.max-h-60::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 3px;
-    }
-    
-    .grid.max-h-60::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8;
-    }
-</style>

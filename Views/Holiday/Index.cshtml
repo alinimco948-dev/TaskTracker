@@ -1,4 +1,4 @@
-﻿@model IEnumerable<TaskTracker.Models.Entities.Holiday>
+@model IEnumerable<TaskTracker.Models.Entities.Holiday>
 @{
     ViewData["Title"] = "Holiday Management";
 
@@ -7,8 +7,7 @@
     var specificHolidays = holidaysList.Where(h => !h.IsWeekly).OrderBy(h => h.HolidayDate).ToList();
 
     var weekdays = new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
-    
-    // Get anti-forgery token for AJAX
+
     var token = "";
     if (Context != null)
     {
@@ -23,60 +22,61 @@
 
 <input type="hidden" id="requestVerificationToken" value="@token" />
 
-<!-- Header -->
-<div class="mb-6">
-    <div class="flex justify-between items-center">
+<div class="space-y-6 animate-fade-up">
+
+    <!-- Header -->
+    <div class="flex flex-wrap justify-between items-start gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-800">Holiday Management</h1>
-            <p class="text-gray-500 text-sm mt-1">Configure weekly recurring holidays and specific date holidays</p>
+            <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #7c3aed, #6366f1);">
+                    <i class="fas fa-calendar-alt text-white text-sm"></i>
+                </div>
+                Holiday Management
+            </h1>
+            <p class="text-slate-400 mt-1">Configure weekly recurring holidays and specific date holidays</p>
         </div>
-        <div class="text-sm text-gray-400">
-            <i class="fas fa-calendar-alt mr-1"></i> Holidays affect task deadlines
+        <div class="stat-badge" style="background: rgba(99,102,241,0.15); color: #a5b4fc; padding: 0.5rem 1rem;">
+            <i class="fas fa-calendar-alt"></i> Holidays affect task deadlines
         </div>
     </div>
-</div>
 
-<!-- Alert Container for Notifications -->
-<div id="alertContainer"></div>
+    <div id="alertContainer"></div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    
-    <!-- ========== WEEKLY HOLIDAYS SECTION ========== -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-white">
-            <h3 class="font-semibold text-lg flex items-center">
-                <i class="fas fa-calendar-week text-purple-600 mr-2"></i>
-                Weekly Holidays
-            </h3>
-            <p class="text-xs text-gray-500 mt-0.5">Holidays that repeat every week on the same day</p>
-        </div>
-        
-        <div class="p-5">
-            <!-- Weekly Day Toggle Buttons -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                @for (int i = 0; i < weekdays.Length; i++)
-                {
-                    var isActive = weeklyHolidays.Contains(i);
-                    <button type="button" 
-                            onclick="toggleWeeklyHoliday(@i, '@weekdays[i]')"
-                            class="weekly-holiday-btn w-full px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200
-                                   @(isActive ? "bg-purple-600 text-white shadow-md" : "bg-gray-100 text-gray-700 hover:bg-gray-200")"
-                            data-day="@i"
-                            data-active="@isActive.ToString().ToLower()">
-                        @weekdays[i]
-                        @if (isActive)
-                        {
-                            <i class="fas fa-check ml-1 text-xs"></i>
-                        }
-                    </button>
-                }
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Weekly Holidays -->
+        <div class="glass-card overflow-hidden">
+            <div class="px-5 py-4 border-b flex items-center gap-3" style="border-color: rgba(255,255,255,0.06); background: rgba(124,58,237,0.1);">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(124,58,237,0.3);">
+                    <i class="fas fa-calendar-week text-violet-400 text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white text-sm">Weekly Holidays</h3>
+                    <p class="text-xs text-slate-500">Holidays that repeat every week on the same day</p>
+                </div>
             </div>
-            
-            <!-- Weekly Holiday Descriptions -->
-            <div class="mt-4">
-                <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                    <i class="fas fa-list mr-2 text-purple-500"></i>
-                    Configured Weekly Holidays
+
+            <div class="p-5">
+                <!-- Day Toggle Buttons -->
+                <div class="grid grid-cols-4 gap-2 mb-5">
+                    @for (int i = 0; i < weekdays.Length; i++)
+                    {
+                        var isActive = weeklyHolidays.Contains(i);
+                        <button type="button"
+                                onclick="toggleWeeklyHoliday(@i, '@weekdays[i]')"
+                                class="weekly-holiday-btn px-2 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200"
+                                data-day="@i"
+                                data-active="@isActive.ToString().ToLower()"
+                                style="@(isActive ? "background: linear-gradient(135deg, #7c3aed, #6366f1); color: white; box-shadow: 0 4px 12px rgba(124,58,237,0.4);" : "background: rgba(255,255,255,0.04); color: #94a3b8; border: 1px solid rgba(255,255,255,0.08);")">
+                            @weekdays[i]
+                            @if (isActive) { <i class="fas fa-check ml-1 text-[10px]"></i> }
+                        </button>
+                    }
+                </div>
+
+                <!-- Weekly Holiday List -->
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <i class="fas fa-list text-violet-500"></i>Configured Weekly Holidays
                 </h4>
                 @if (weeklyHolidays.Any())
                 {
@@ -84,128 +84,28 @@
                         @foreach (var day in weeklyHolidays.OrderBy(d => d))
                         {
                             var holiday = holidaysList.FirstOrDefault(h => h.IsWeekly && h.WeekDay == day);
-                            <div class="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
+                            <div class="flex items-center justify-between p-3 rounded-xl" style="background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.25);">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center">
-                                        <i class="fas fa-calendar-week text-purple-600 text-xs"></i>
+                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(124,58,237,0.25);">
+                                        <i class="fas fa-calendar-week text-violet-400 text-xs"></i>
                                     </div>
                                     <div>
-                                        <span class="font-medium text-gray-800">@weekdays[day.Value]</span>
+                                        <span class="font-semibold text-white text-sm">@weekdays[day!.Value]</span>
                                         @if (!string.IsNullOrEmpty(holiday?.Description) && holiday.Description != weekdays[day.Value])
                                         {
-                                            <p class="text-xs text-gray-500">@holiday.Description</p>
-                                        }
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <button type="button" 
-                                            onclick="editWeeklyHoliday(@day.Value, '@weekdays[day.Value]', '@(holiday?.Description ?? weekdays[day.Value])')"
-                                            class="p-1.5 text-gray-500 hover:text-purple-600 rounded-lg transition">
-                                        <i class="fas fa-edit text-xs"></i>
-                                    </button>
-                                    <button type="button" 
-                                            onclick="removeWeeklyHoliday(@day.Value, '@weekdays[day.Value]')"
-                                            class="p-1.5 text-gray-500 hover:text-red-600 rounded-lg transition">
-                                        <i class="fas fa-trash-alt text-xs"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-                else
-                {
-                    <div class="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                        <i class="fas fa-calendar-week text-3xl text-gray-300 mb-2"></i>
-                        <p class="text-sm text-gray-500">No weekly holidays configured</p>
-                        <p class="text-xs text-gray-400">Click on any day above to add a weekly holiday</p>
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-
-    <!-- ========== SPECIFIC HOLIDAYS SECTION ========== -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
-            <h3 class="font-semibold text-lg flex items-center">
-                <i class="fas fa-calendar-day text-blue-600 mr-2"></i>
-                Specific Date Holidays
-            </h3>
-            <p class="text-xs text-gray-500 mt-0.5">One-time holidays on specific dates</p>
-        </div>
-        
-        <div class="p-5">
-            <!-- Add Specific Holiday Form with Description -->
-            <form id="addSpecificHolidayForm" class="mb-6">
-                @Html.AntiForgeryToken()
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                        <input type="date" name="date" id="specificDate" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-                        <div class="flex gap-2">
-                            <input type="text" name="description" id="specificDescription" 
-                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                   placeholder="e.g., New Year's Day, Christmas, etc." />
-                            <button type="button" onclick="addSpecificHoliday()" 
-                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
-                                <i class="fas fa-plus text-xs"></i> Add
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </form>
-            
-            <!-- Specific Holidays List -->
-            <div>
-                <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                    <i class="fas fa-list mr-2 text-blue-500"></i>
-                    Configured Specific Holidays
-                    @if (specificHolidays.Any())
-                    {
-                        <span class="ml-2 text-xs text-gray-400">(@specificHolidays.Count)</span>
-                    }
-                </h4>
-                
-                @if (specificHolidays.Any())
-                {
-                    <div class="space-y-2 max-h-96 overflow-y-auto pr-1">
-                        @foreach (var holiday in specificHolidays)
-                        {
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-blue-50 transition group">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                        <i class="fas fa-calendar-day text-blue-600 text-xs"></i>
-                                    </div>
-                                    <div>
-                                        <div class="flex items-center gap-2">
-                                            <span class="font-medium text-gray-800">@holiday.HolidayDate.ToString("dddd, MMMM d, yyyy")</span>
-                                            <span class="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full">@holiday.HolidayDate.ToString("MMM dd")</span>
-                                        </div>
-                                        @if (!string.IsNullOrEmpty(holiday.Description) && holiday.Description != $"Holiday on {holiday.HolidayDate:MMMM d, yyyy}")
-                                        {
-                                            <p class="text-xs text-gray-500">@holiday.Description</p>
-                                        }
-                                        else
-                                        {
-                                            <p class="text-xs text-gray-400">No description</p>
+                                            <p class="text-xs text-slate-500">@holiday.Description</p>
                                         }
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1">
-                                    <button type="button" 
-                                            onclick="editSpecificHoliday('@holiday.HolidayDate.ToString("yyyy-MM-dd")', '@holiday.Description?.Replace("'", "\\'")')"
-                                            class="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg transition opacity-0 group-hover:opacity-100">
+                                    <button type="button"
+                                            onclick="editWeeklyHoliday(@day.Value, '@weekdays[day.Value]', '@(holiday?.Description ?? weekdays[day.Value])')"
+                                            class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-400 hover:bg-violet-400/10 transition">
                                         <i class="fas fa-edit text-xs"></i>
                                     </button>
-                                    <button type="button" 
-                                            onclick="removeSpecificHoliday('@holiday.HolidayDate.ToString("yyyy-MM-dd")', '@holiday.Description?.Replace("'", "\\'")')"
-                                            class="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition">
+                                    <button type="button"
+                                            onclick="removeWeeklyHoliday(@day.Value, '@weekdays[day.Value]')"
+                                            class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition">
                                         <i class="fas fa-trash-alt text-xs"></i>
                                     </button>
                                 </div>
@@ -215,10 +115,106 @@
                 }
                 else
                 {
-                    <div class="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                        <i class="fas fa-calendar-day text-3xl text-gray-300 mb-2"></i>
-                        <p class="text-sm text-gray-500">No specific holidays configured</p>
-                        <p class="text-xs text-gray-400">Use the form above to add a holiday on a specific date</p>
+                    <div class="text-center py-8 rounded-xl border border-dashed" style="border-color: rgba(255,255,255,0.08);">
+                        <i class="fas fa-calendar-week text-3xl text-slate-600 mb-2 block"></i>
+                        <p class="text-sm text-slate-500">No weekly holidays configured</p>
+                        <p class="text-xs text-slate-600 mt-1">Click on any day above to add a weekly holiday</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Specific Date Holidays -->
+        <div class="glass-card overflow-hidden">
+            <div class="px-5 py-4 border-b flex items-center gap-3" style="border-color: rgba(255,255,255,0.06); background: rgba(99,102,241,0.1);">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(99,102,241,0.3);">
+                    <i class="fas fa-calendar-day text-indigo-400 text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white text-sm">Specific Date Holidays</h3>
+                    <p class="text-xs text-slate-500">One-time holidays on specific dates</p>
+                </div>
+            </div>
+
+            <div class="p-5">
+                <!-- Add Specific Holiday Form -->
+                <form id="addSpecificHolidayForm" class="mb-5">
+                    @Html.AntiForgeryToken()
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Date</label>
+                            <input type="date" name="date" id="specificDate" class="dark-input"
+                                   value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Description (Optional)</label>
+                            <div class="flex gap-2">
+                                <input type="text" name="description" id="specificDescription" class="dark-input flex-1"
+                                       placeholder="e.g., New Year's Day, Christmas..." />
+                                <button type="button" onclick="addSpecificHoliday()" class="btn-primary whitespace-nowrap">
+                                    <i class="fas fa-plus text-xs"></i>Add
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Specific Holidays List -->
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <i class="fas fa-list text-indigo-500"></i>
+                    Configured Specific Holidays
+                    @if (specificHolidays.Any()) { <span class="text-slate-600">(@specificHolidays.Count)</span> }
+                </h4>
+
+                @if (specificHolidays.Any())
+                {
+                    <div class="space-y-2 max-h-80 overflow-y-auto pr-1">
+                        @foreach (var holiday in specificHolidays)
+                        {
+                            <div class="flex items-center justify-between p-3 rounded-xl transition group"
+                                 style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.15);"
+                                 onmouseover="this.style.borderColor='rgba(99,102,241,0.3)'"
+                                 onmouseout="this.style.borderColor='rgba(99,102,241,0.15)'">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(99,102,241,0.2);">
+                                        <i class="fas fa-calendar-day text-indigo-400 text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-semibold text-white text-sm">@holiday.HolidayDate.ToString("dddd, MMMM d, yyyy")</span>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(holiday.Description) && holiday.Description != $"Holiday on {holiday.HolidayDate:MMMM d, yyyy}")
+                                        {
+                                            <p class="text-xs text-slate-400">@holiday.Description</p>
+                                        }
+                                        else
+                                        {
+                                            <p class="text-xs text-slate-600">No description</p>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <button type="button"
+                                            onclick="editSpecificHoliday('@holiday.HolidayDate.ToString("yyyy-MM-dd")', '@holiday.Description?.Replace("'", "\\'")')"
+                                            class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 transition opacity-0 group-hover:opacity-100">
+                                        <i class="fas fa-edit text-xs"></i>
+                                    </button>
+                                    <button type="button"
+                                            onclick="removeSpecificHoliday('@holiday.HolidayDate.ToString("yyyy-MM-dd")', '@holiday.Description?.Replace("'", "\\'")')"
+                                            class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition">
+                                        <i class="fas fa-trash-alt text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-10 rounded-xl border border-dashed" style="border-color: rgba(255,255,255,0.08);">
+                        <i class="fas fa-calendar-day text-3xl text-slate-600 mb-2 block"></i>
+                        <p class="text-sm text-slate-500">No specific holidays configured</p>
+                        <p class="text-xs text-slate-600 mt-1">Use the form above to add a holiday on a specific date</p>
                     </div>
                 }
             </div>
@@ -227,302 +223,146 @@
 </div>
 
 <!-- Edit Weekly Holiday Modal -->
-<div id="editWeeklyModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div class="bg-gradient-to-r from-purple-600 to-purple-800 px-5 py-3 rounded-t-xl">
-            <h3 class="text-lg font-semibold text-white">Edit Weekly Holiday</h3>
+<div id="editWeeklyModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+    <div class="w-full max-w-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl animate-fade-up" style="background: #1a1a2e;">
+        <div class="px-6 py-4 flex items-center gap-3" style="background: linear-gradient(135deg, rgba(124,58,237,0.4), rgba(99,102,241,0.3));">
+            <i class="fas fa-calendar-week text-violet-400"></i>
+            <h3 class="font-bold text-white">Edit Weekly Holiday</h3>
         </div>
-        <div class="p-5">
+        <div class="p-6 space-y-4">
             <input type="hidden" id="editWeekDay" />
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Day</label>
-                <input type="text" id="editWeekDayName" readonly class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg" />
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Day</label>
+                <input type="text" id="editWeekDayName" readonly class="dark-input opacity-60" />
             </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea id="editWeeklyDescription" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="Description for this holiday..."></textarea>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                <textarea id="editWeeklyDescription" rows="2" class="dark-input resize-none" placeholder="Description for this holiday..."></textarea>
             </div>
         </div>
-        <div class="px-5 py-3 border-t border-gray-200 flex justify-end gap-2 rounded-b-xl">
-            <button onclick="closeEditWeeklyModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-            <button onclick="saveWeeklyDescription()" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">Save</button>
+        <div class="px-6 py-4 border-t flex justify-end gap-3" style="border-color: rgba(255,255,255,0.06);">
+            <button onclick="closeEditWeeklyModal()" class="px-4 py-2 rounded-lg text-sm text-slate-300 border border-white/10 hover:bg-white/5 transition">Cancel</button>
+            <button onclick="saveWeeklyDescription()" class="btn-primary" style="background: linear-gradient(135deg, #7c3aed, #6366f1);">
+                <i class="fas fa-save"></i>Save
+            </button>
         </div>
     </div>
 </div>
 
 <!-- Edit Specific Holiday Modal -->
-<div id="editSpecificModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-5 py-3 rounded-t-xl">
-            <h3 class="text-lg font-semibold text-white">Edit Specific Holiday</h3>
+<div id="editSpecificModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
+    <div class="w-full max-w-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl animate-fade-up" style="background: #1a1a2e;">
+        <div class="px-6 py-4 flex items-center gap-3" style="background: linear-gradient(135deg, rgba(99,102,241,0.4), rgba(124,58,237,0.3));">
+            <i class="fas fa-calendar-day text-indigo-400"></i>
+            <h3 class="font-bold text-white">Edit Specific Holiday</h3>
         </div>
-        <div class="p-5">
+        <div class="p-6 space-y-4">
             <input type="hidden" id="editSpecificDate" />
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                <input type="text" id="editSpecificDateDisplay" readonly class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg" />
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Date</label>
+                <input type="text" id="editSpecificDateDisplay" readonly class="dark-input opacity-60" />
             </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea id="editSpecificDescription" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Description for this holiday..."></textarea>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                <textarea id="editSpecificDescription" rows="2" class="dark-input resize-none" placeholder="Description for this holiday..."></textarea>
             </div>
         </div>
-        <div class="px-5 py-3 border-t border-gray-200 flex justify-end gap-2 rounded-b-xl">
-            <button onclick="closeEditSpecificModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-            <button onclick="saveSpecificDescription()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Save</button>
+        <div class="px-6 py-4 border-t flex justify-end gap-3" style="border-color: rgba(255,255,255,0.06);">
+            <button onclick="closeEditSpecificModal()" class="px-4 py-2 rounded-lg text-sm text-slate-300 border border-white/10 hover:bg-white/5 transition">Cancel</button>
+            <button onclick="saveSpecificDescription()" class="btn-primary">
+                <i class="fas fa-save"></i>Save
+            </button>
         </div>
     </div>
 </div>
 
 @section Scripts {
     <script>
-        // ========== HELPER FUNCTIONS ==========
         function showAlert(message, type) {
-            const colors = {
-                success: 'bg-green-100 border-green-500 text-green-700',
-                error: 'bg-red-100 border-red-500 text-red-700',
-                warning: 'bg-yellow-100 border-yellow-500 text-yellow-700',
-                info: 'bg-blue-100 border-blue-500 text-blue-700'
+            const configs = {
+                success: { cls: 'alert-success', icon: 'fa-check-circle' },
+                error:   { cls: 'alert-error',   icon: 'fa-exclamation-circle' },
+                warning: { cls: 'alert-warning',  icon: 'fa-exclamation-triangle' },
+                info:    { cls: 'alert-info',     icon: 'fa-info-circle' }
             };
-            const icons = {
-                success: 'fa-check-circle',
-                error: 'fa-exclamation-circle',
-                warning: 'fa-exclamation-triangle',
-                info: 'fa-info-circle'
-            };
-            
-            const alert = $(`
-                <div class="${colors[type]} border-l-4 p-3 mb-3 rounded shadow-sm animate-slide-in">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center">
-                            <i class="fas ${icons[type]} mr-2"></i>
-                            <span class="text-sm">${message}</span>
-                        </div>
-                        <button onclick="$(this).closest('.border-l-4').fadeOut()" class="text-gray-500 hover:text-gray-700">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-            `);
+            const c = configs[type] || configs.info;
+            const alert = $(`<div class="${c.cls} rounded-xl p-4 mb-3 flex items-center justify-between animate-slide-in">
+                <div class="flex items-center gap-3"><i class="fas ${c.icon}"></i><span class="text-sm">${message}</span></div>
+                <button onclick="$(this).closest('div.rounded-xl').fadeOut()" class="ml-3 opacity-70 hover:opacity-100"><i class="fas fa-times"></i></button>
+            </div>`);
             $('#alertContainer').prepend(alert);
             setTimeout(() => alert.fadeOut(300, () => alert.remove()), 5000);
         }
-        
-        function showNotification(message, type) {
-            const colors = {
-                success: 'bg-green-500',
-                error: 'bg-red-500',
-                info: 'bg-blue-500',
-                warning: 'bg-yellow-500'
-            };
-            $('.custom-notification').remove();
-            const notification = $(`<div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${colors[type]} animate-slide-in">${message}</div>`);
-            $('body').append(notification);
-            setTimeout(() => notification.fadeOut(300, () => notification.remove()), 3000);
-        }
-        
-        // ========== WEEKLY HOLIDAY FUNCTIONS ==========
+
         async function toggleWeeklyHoliday(weekDay, dayName) {
             const btn = $(`.weekly-holiday-btn[data-day="${weekDay}"]`);
             const isActive = btn.data('active') === 'true';
             const token = $('#requestVerificationToken').val();
-            
             btn.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
-            
             try {
-                const response = await $.ajax({
-                    url: '@Url.Action("ToggleWeekly", "Holiday")',
-                    type: 'POST',
-                    data: { weekDay: weekDay },
-                    headers: { 'RequestVerificationToken': token }
-                });
-                
-                if (response.success) {
-                    showNotification(response.message, 'success');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showNotification(response.message || 'Error toggling holiday', 'error');
-                    btn.html(isActive ? `${dayName} <i class="fas fa-check ml-1"></i>` : dayName).prop('disabled', false);
-                }
-            } catch (error) {
-                showNotification('Error toggling holiday', 'error');
-                btn.html(isActive ? `${dayName} <i class="fas fa-check ml-1"></i>` : dayName).prop('disabled', false);
-            }
+                const response = await $.ajax({ url: '@Url.Action("ToggleWeekly", "Holiday")', type: 'POST', data: { weekDay }, headers: { 'RequestVerificationToken': token } });
+                if (response.success) { if (window.TaskTracker) TaskTracker.showNotification(response.message, 'success'); setTimeout(() => location.reload(), 1000); }
+                else { if (window.TaskTracker) TaskTracker.showNotification(response.message || 'Error', 'error'); btn.prop('disabled', false); }
+            } catch(e) { if (window.TaskTracker) TaskTracker.showNotification('Error toggling holiday', 'error'); btn.prop('disabled', false); }
         }
-        
+
         function editWeeklyHoliday(weekDay, dayName, description) {
-            $('#editWeekDay').val(weekDay);
-            $('#editWeekDayName').val(dayName);
+            $('#editWeekDay').val(weekDay); $('#editWeekDayName').val(dayName);
             $('#editWeeklyDescription').val(description !== dayName ? description : '');
             $('#editWeeklyModal').removeClass('hidden').addClass('flex');
         }
-        
         async function saveWeeklyDescription() {
-            const weekDay = $('#editWeekDay').val();
-            const description = $('#editWeeklyDescription').val();
-            const token = $('#requestVerificationToken').val();
-            
+            const weekDay = $('#editWeekDay').val(), description = $('#editWeeklyDescription').val(), token = $('#requestVerificationToken').val();
             closeEditWeeklyModal();
-            showNotification('Updating holiday description...', 'info');
-            
             try {
-                // First remove, then add with description
-                await $.ajax({
-                    url: '@Url.Action("RemoveWeekly", "Holiday")',
-                    type: 'POST',
-                    data: { weekDay: weekDay },
-                    headers: { 'RequestVerificationToken': token }
-                });
-                
-                await $.ajax({
-                    url: '@Url.Action("AddWeeklyWithDescription", "Holiday")',
-                    type: 'POST',
-                    data: { weekDay: weekDay, description: description },
-                    headers: { 'RequestVerificationToken': token }
-                });
-                
-                showNotification('Holiday description updated', 'success');
+                await $.ajax({ url: '@Url.Action("RemoveWeekly", "Holiday")', type: 'POST', data: { weekDay }, headers: { 'RequestVerificationToken': token } });
+                await $.ajax({ url: '@Url.Action("AddWeeklyWithDescription", "Holiday")', type: 'POST', data: { weekDay, description }, headers: { 'RequestVerificationToken': token } });
+                if (window.TaskTracker) TaskTracker.showNotification('Description updated', 'success');
                 setTimeout(() => location.reload(), 1000);
-            } catch (error) {
-                showNotification('Error updating description', 'error');
-            }
+            } catch(e) { if (window.TaskTracker) TaskTracker.showNotification('Error updating', 'error'); }
         }
-        
-        function closeEditWeeklyModal() {
-            $('#editWeeklyModal').addClass('hidden').removeClass('flex');
-        }
-        
+        function closeEditWeeklyModal() { $('#editWeeklyModal').addClass('hidden').removeClass('flex'); }
         async function removeWeeklyHoliday(weekDay, dayName) {
             if (!confirm(`Remove "${dayName}" as a weekly holiday?`)) return;
             const token = $('#requestVerificationToken').val();
-            
-            try {
-                const response = await $.ajax({
-                    url: '@Url.Action("RemoveWeekly", "Holiday")',
-                    type: 'POST',
-                    data: { weekDay: weekDay },
-                    headers: { 'RequestVerificationToken': token }
-                });
-                
-                if (response.success) {
-                    showNotification(response.message, 'success');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showNotification(response.message || 'Error removing holiday', 'error');
-                }
-            } catch (error) {
-                showNotification('Error removing holiday', 'error');
-            }
+            const response = await $.ajax({ url: '@Url.Action("RemoveWeekly", "Holiday")', type: 'POST', data: { weekDay }, headers: { 'RequestVerificationToken': token } });
+            if (response.success) { if (window.TaskTracker) TaskTracker.showNotification(response.message, 'success'); setTimeout(() => location.reload(), 1000); }
         }
-        
-        // ========== SPECIFIC HOLIDAY FUNCTIONS ==========
+
         async function addSpecificHoliday() {
-            const date = $('#specificDate').val();
-            const description = $('#specificDescription').val();
-            const token = $('#requestVerificationToken').val();
-            
-            if (!date) {
-                showAlert('Please select a date', 'warning');
-                return;
-            }
-            
-            const btn = $('#addSpecificHolidayForm button');
-            const originalText = btn.html();
+            const date = $('#specificDate').val(), description = $('#specificDescription').val(), token = $('#requestVerificationToken').val();
+            if (!date) { showAlert('Please select a date', 'warning'); return; }
+            const btn = $('#addSpecificHolidayForm button'), orig = btn.html();
             btn.html('<i class="fas fa-spinner fa-spin"></i> Adding...').prop('disabled', true);
-            
             try {
-                const response = await $.ajax({
-                    url: '@Url.Action("AddSpecific", "Holiday")',
-                    type: 'POST',
-                    data: { date: date, description: description },
-                    headers: { 'RequestVerificationToken': token }
-                });
-                
-                if (response.success) {
-                    showNotification(response.message, 'success');
-                    $('#specificDescription').val('');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showAlert(response.message || 'Error adding holiday', 'error');
-                    btn.html(originalText).prop('disabled', false);
-                }
-            } catch (error) {
-                let errorMsg = 'Error adding holiday';
-                try {
-                    const response = JSON.parse(error.responseText);
-                    errorMsg = response.message || errorMsg;
-                } catch(e) {}
-                showAlert(errorMsg, 'error');
-                btn.html(originalText).prop('disabled', false);
-            }
+                const response = await $.ajax({ url: '@Url.Action("AddSpecific", "Holiday")', type: 'POST', data: { date, description }, headers: { 'RequestVerificationToken': token } });
+                if (response.success) { if (window.TaskTracker) TaskTracker.showNotification(response.message, 'success'); $('#specificDescription').val(''); setTimeout(() => location.reload(), 1000); }
+                else { showAlert(response.message || 'Error adding holiday', 'error'); btn.html(orig).prop('disabled', false); }
+            } catch(e) { let msg='Error'; try{msg=JSON.parse(e.responseText).message||msg;}catch(x){} showAlert(msg,'error'); btn.html(orig).prop('disabled', false); }
         }
-        
         function editSpecificHoliday(date, description) {
             $('#editSpecificDate').val(date);
-            $('#editSpecificDateDisplay').val(new Date(date).toLocaleDateString('en-US', { 
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
-            }));
-            $('#editSpecificDescription').val(description !== `Holiday on ${new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` ? description : '');
+            $('#editSpecificDateDisplay').val(new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+            $('#editSpecificDescription').val(description);
             $('#editSpecificModal').removeClass('hidden').addClass('flex');
         }
-        
         async function saveSpecificDescription() {
-            const date = $('#editSpecificDate').val();
-            const description = $('#editSpecificDescription').val();
-            const token = $('#requestVerificationToken').val();
-            
+            const date = $('#editSpecificDate').val(), description = $('#editSpecificDescription').val(), token = $('#requestVerificationToken').val();
             closeEditSpecificModal();
-            showNotification('Updating holiday description...', 'info');
-            
             try {
-                // Remove and re-add with new description
-                await $.ajax({
-                    url: '@Url.Action("RemoveSpecific", "Holiday")',
-                    type: 'POST',
-                    data: { date: date },
-                    headers: { 'RequestVerificationToken': token }
-                });
-                
-                await $.ajax({
-                    url: '@Url.Action("AddSpecific", "Holiday")',
-                    type: 'POST',
-                    data: { date: date, description: description },
-                    headers: { 'RequestVerificationToken': token }
-                });
-                
-                showNotification('Holiday description updated', 'success');
+                await $.ajax({ url: '@Url.Action("RemoveSpecific", "Holiday")', type: 'POST', data: { date }, headers: { 'RequestVerificationToken': token } });
+                await $.ajax({ url: '@Url.Action("AddSpecific", "Holiday")', type: 'POST', data: { date, description }, headers: { 'RequestVerificationToken': token } });
+                if (window.TaskTracker) TaskTracker.showNotification('Description updated', 'success');
                 setTimeout(() => location.reload(), 1000);
-            } catch (error) {
-                showNotification('Error updating description', 'error');
-            }
+            } catch(e) { if (window.TaskTracker) TaskTracker.showNotification('Error updating', 'error'); }
         }
-        
-        function closeEditSpecificModal() {
-            $('#editSpecificModal').addClass('hidden').removeClass('flex');
-        }
-        
+        function closeEditSpecificModal() { $('#editSpecificModal').addClass('hidden').removeClass('flex'); }
         async function removeSpecificHoliday(date, description) {
             const displayDate = new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
             if (!confirm(`Remove holiday on ${displayDate}?`)) return;
             const token = $('#requestVerificationToken').val();
-            
-            try {
-                const response = await $.ajax({
-                    url: '@Url.Action("RemoveSpecific", "Holiday")',
-                    type: 'POST',
-                    data: { date: date },
-                    headers: { 'RequestVerificationToken': token }
-                });
-                
-                if (response.success) {
-                    showNotification(response.message, 'success');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showNotification(response.message || 'Error removing holiday', 'error');
-                }
-            } catch (error) {
-                showNotification('Error removing holiday', 'error');
-            }
+            const response = await $.ajax({ url: '@Url.Action("RemoveSpecific", "Holiday")', type: 'POST', data: { date }, headers: { 'RequestVerificationToken': token } });
+            if (response.success) { if (window.TaskTracker) TaskTracker.showNotification(response.message, 'success'); setTimeout(() => location.reload(), 1000); }
         }
     </script>
 }

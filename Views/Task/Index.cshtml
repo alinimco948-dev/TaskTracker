@@ -1,7 +1,6 @@
-﻿@model IEnumerable<TaskTracker.Models.ViewModels.TaskListViewModel>
+@model IEnumerable<TaskTracker.Models.ViewModels.TaskListViewModel>
 @{
     ViewData["Title"] = "Tasks";
-    // Get anti-forgery token
     var token = "";
     if (Context != null)
     {
@@ -12,270 +11,244 @@
             token = tokens.RequestToken ?? "";
         }
     }
-    
-    // Cast ViewBag.Branches to IEnumerable for LINQ operations
     var branchesList = ViewBag.Branches as IEnumerable<TaskTracker.Models.ViewModels.BranchListViewModel>;
     var hasBranches = branchesList != null && branchesList.Any();
 }
 
-<div class="bg-white rounded-lg shadow-sm border border-gray-200">
+<input type="hidden" id="requestVerificationToken" value="@token" />
+
+<div class="space-y-6 animate-fade-up">
+
     <!-- Header -->
-    <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-        <h2 class="text-lg font-semibold">Task Management</h2>
-        <a href="@Url.Action("Create")" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center">
-            <i class="fas fa-plus-circle mr-2"></i>Add Task
+    <div class="flex flex-wrap justify-between items-start gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                    <i class="fas fa-tasks text-white text-sm"></i>
+                </div>
+                Task Management
+            </h1>
+            <p class="text-slate-400 mt-1">Configure tasks and manage their visibility per branch</p>
+        </div>
+        <a href="@Url.Action("Create")" class="btn-primary">
+            <i class="fas fa-plus-circle"></i>Add Task
         </a>
     </div>
 
-    <!-- Tasks Table with Drag & Drop -->
-    <div class="overflow-x-auto p-4">
-        <div class="text-xs text-gray-500 mb-2 flex items-center">
-            <i class="fas fa-grip-vertical text-gray-400 mr-2"></i> Drag and drop rows to reorder tasks
+    <!-- Tasks Table -->
+    <div class="glass-card overflow-hidden">
+        <div class="px-5 py-3 flex items-center gap-2 border-b" style="border-color: rgba(255,255,255,0.06);">
+            <i class="fas fa-grip-vertical text-slate-600 text-sm"></i>
+            <span class="text-xs text-slate-500">Drag rows to reorder tasks</span>
         </div>
-        <table class="w-full text-sm" id="tasksTable">
-            <thead class="bg-gray-50 border-y border-gray-200">
-                <tr>
-                    <th class="px-4 py-3 w-10"></th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Task Name</th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Deadline</th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Type</th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Display Order</th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Status</th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="sortable" class="divide-y divide-gray-200">
-                @if (Model != null && Model.Any())
-                {
-                    @foreach (var task in Model.OrderBy(t => t.DisplayOrder))
+        <div class="overflow-x-auto">
+            <table class="w-full dark-table" id="tasksTable">
+                <thead>
+                    <tr>
+                        <th class="w-10"></th>
+                        <th>Task Name</th>
+                        <th>Deadline</th>
+                        <th>Type</th>
+                        <th class="text-center">Display Order</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="sortable">
+                    @if (Model != null && Model.Any())
                     {
-                        <tr class="hover:bg-gray-50 transition cursor-move" data-id="@task.Id">
-                            <td class="px-4 py-3 text-center">
-                                <i class="fas fa-grip-vertical text-gray-400"></i>
-                            </td>
-                            <td class="px-4 py-3 font-medium">@task.Name</td>
-                            <td class="px-4 py-3 font-mono">@DateTime.Today.Add(task.Deadline).ToString("h:mm tt")</td>
-                            <td class="px-4 py-3">
-                                @if (task.Type == "Same Day")
-                                {
-                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Same Day</span>
-                                }
-                                else
-                                {
-                                    <span class="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">Next Day</span>
-                                }
-                            </td>
-                            <td class="px-4 py-3">@task.DisplayOrder</td>
-                            <td class="px-4 py-3">
-                                @if (task.IsActive)
-                                {
-                                    <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Active</span>
-                                }
-                                else
-                                {
-                                    <span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Inactive</span>
-                                }
-                            </td>
-                            <td class="px-4 py-3">
-                                <div class="flex items-center space-x-2">
-                                    <a href="@Url.Action("Edit", new { id = task.Id })" 
-                                       class="p-1 text-green-600 hover:bg-green-50 rounded transition" title="Edit">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    <button type="button" onclick="deleteTask(@task.Id, '@task.Name')" 
-                                            class="p-1 text-red-600 hover:bg-red-50 rounded transition" title="Delete">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                        @foreach (var task in Model.OrderBy(t => t.DisplayOrder))
+                        {
+                            <tr class="cursor-move" data-id="@task.Id">
+                                <td class="text-center text-slate-600">
+                                    <i class="fas fa-grip-vertical"></i>
+                                </td>
+                                <td class="font-semibold text-white">@task.Name</td>
+                                <td class="font-mono text-cyan-400">@DateTime.Today.Add(task.Deadline).ToString("h:mm tt")</td>
+                                <td>
+                                    @if (task.Type == "Same Day")
+                                    {
+                                        <span class="stat-badge" style="background: rgba(99,102,241,0.15); color: #a5b4fc;">Same Day</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="stat-badge" style="background: rgba(124,58,237,0.15); color: #c4b5fd;">Next Day</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <span class="stat-badge" style="background: rgba(255,255,255,0.06); color: #94a3b8;">@task.DisplayOrder</span>
+                                </td>
+                                <td class="text-center">
+                                    @if (task.IsActive)
+                                    {
+                                        <span class="stat-badge" style="background: rgba(16,185,129,0.15); color: #6ee7b7;">
+                                            <i class="fas fa-circle text-[8px] text-emerald-400"></i>Active
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="stat-badge" style="background: rgba(239,68,68,0.15); color: #fca5a5;">
+                                            <i class="fas fa-circle text-[8px] text-red-400"></i>Inactive
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center gap-1">
+                                        <a href="@Url.Action("Edit", new { id = task.Id })"
+                                           class="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-400 hover:bg-emerald-400/10 transition" title="Edit">
+                                            <i class="fas fa-edit text-sm"></i>
+                                        </a>
+                                        <button type="button" onclick="deleteTask(@task.Id, '@task.Name')"
+                                                class="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-400/10 transition" title="Delete">
+                                            <i class="fas fa-trash text-sm"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="7" class="py-16 text-center">
+                                <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                                     style="background: rgba(245,158,11,0.1);">
+                                    <i class="fas fa-tasks text-amber-400 text-2xl"></i>
                                 </div>
+                                <p class="text-slate-300 font-semibold mb-1">No tasks found</p>
+                                <a href="@Url.Action("Create")" class="text-indigo-400 hover:underline text-sm">Create your first task</a>
                             </td>
                         </tr>
                     }
-                }
-                else
-                {
-                    <tr>
-                        <td colspan="7" class="px-4 py-8 text-center text-gray-500">
-                            <i class="fas fa-tasks text-3xl mb-2 text-gray-300"></i>
-                            <p>No tasks found</p>
-                            <a href="@Url.Action("Create")" class="text-blue-600 hover:underline text-sm mt-2 inline-block">Create your first task</a>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <!-- Branch Task Visibility Section -->
-    <div class="p-4 border-t border-gray-200 bg-gray-50">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Branch Task Visibility</h3>
-        <p class="text-sm text-gray-600 mb-4">Configure which tasks are visible for each branch. <span class="text-xs text-gray-500">(Checked = Visible, Unchecked = Hidden)</span></p>
-        
+    <!-- Branch Task Visibility -->
+    <div class="glass-card overflow-hidden">
+        <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06);">
+            <h3 class="font-bold text-white text-base flex items-center gap-2">
+                <i class="fas fa-eye text-indigo-400"></i>Branch Task Visibility
+            </h3>
+            <p class="text-sm text-slate-400 mt-0.5">Configure which tasks are visible for each branch.
+                <span class="text-xs text-slate-500">(Checked = Visible, Unchecked = Hidden)</span></p>
+        </div>
+
         @if (hasBranches && Model != null && Model.Any())
         {
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm border border-gray-200">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="px-4 py-3 text-left font-medium text-gray-700 border-b">Branch</th>
-                            @foreach (var task in Model.Where(t => t.IsActive).OrderBy(t => t.DisplayOrder))
-                            {
-                                <th class="px-4 py-3 text-center font-medium text-gray-700 border-b">@task.Name</th>
-                            }
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white">
-                        @foreach (var branch in branchesList)
-                        {
-                            <tr class="border-b hover:bg-gray-50">
-                                <td class="px-4 py-3 font-medium">@branch.Name</td>
+            <div class="p-5">
+                <div class="overflow-x-auto">
+                    <table class="w-full dark-table">
+                        <thead>
+                            <tr>
+                                <th>Branch</th>
                                 @foreach (var task in Model.Where(t => t.IsActive).OrderBy(t => t.DisplayOrder))
                                 {
-                                    var isVisible = true;
-                                    if (branch.HiddenTasks != null)
-                                    {
-                                        isVisible = !branch.HiddenTasks.Contains(task.Name);
-                                    }
-                                    <td class="px-4 py-3 text-center">
-                                        <input type="checkbox" 
-                                               class="task-visibility w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                                               data-branch-id="@branch.Id" 
-                                               data-task-name="@task.Name" 
-                                               @(isVisible ? "checked" : "") />
-                                    </td>
+                                    <th class="text-center">@task.Name</th>
                                 }
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-            <div class="mt-4 flex justify-end">
-                <button type="button" 
-                        onclick="saveTaskVisibility()" 
-                        class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center">
-                    <i class="fas fa-save mr-2"></i>Save Visibility Settings
-                </button>
+                        </thead>
+                        <tbody>
+                            @foreach (var branch in branchesList ?? Enumerable.Empty<TaskTracker.Models.ViewModels.BranchListViewModel>())
+                            {
+                                <tr>
+                                    <td class="font-semibold text-white">@branch.Name</td>
+                                    @foreach (var task in Model.Where(t => t.IsActive).OrderBy(t => t.DisplayOrder))
+                                    {
+                                        var isVisible = !( branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name));
+                                        <td class="text-center">
+                                            <input type="checkbox"
+                                                   class="task-visibility w-5 h-5 accent-indigo-500 cursor-pointer"
+                                                   data-branch-id="@branch.Id"
+                                                   data-task-name="@task.Name"
+                                                   @(isVisible ? "checked" : "") />
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-5 flex justify-end">
+                    <button type="button" onclick="saveTaskVisibility()" class="btn-primary">
+                        <i class="fas fa-save"></i>Save Visibility Settings
+                    </button>
+                </div>
             </div>
         }
         else
         {
-            <div class="text-center py-8 text-gray-500 bg-white rounded-lg border border-gray-200">
-                <i class="fas fa-info-circle text-3xl mb-2 text-gray-300"></i>
-                <p>No branches or tasks available to configure visibility.</p>
+            <div class="p-12 text-center">
+                <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                     style="background: rgba(255,255,255,0.04);">
+                    <i class="fas fa-info-circle text-slate-500 text-2xl"></i>
+                </div>
+                <p class="text-slate-400">No branches or tasks available to configure visibility.</p>
                 @if (!hasBranches)
                 {
-                    <a href="@Url.Action("Create", "Branch")" class="text-blue-600 hover:underline text-sm mt-2 inline-block">Create a branch first</a>
+                    <a href="@Url.Action("Create", "Branch")" class="text-indigo-400 hover:underline text-sm mt-2 inline-block">Create a branch first</a>
                 }
             </div>
         }
     </div>
 </div>
 
-<!-- Hidden anti-forgery token -->
-<input type="hidden" id="requestVerificationToken" value="@token" />
-
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script>
         $(document).ready(function() {
-            console.log('Task index page loaded');
-            console.log('Branches available:', @(branchesList?.Count() ?? 0));
-            console.log('Tasks available:', @(Model?.Count() ?? 0));
-            
-            // Initialize drag & drop sorting
             if (document.getElementById('sortable')) {
-                const sortable = new Sortable(document.getElementById('sortable'), {
+                new Sortable(document.getElementById('sortable'), {
                     animation: 150,
                     handle: '.fa-grip-vertical',
-                    onEnd: function() {
-                        updateTaskOrder();
-                    }
+                    ghostClass: 'opacity-40',
+                    onEnd: function() { updateTaskOrder(); }
                 });
             }
         });
 
-        // ========== Task Order Functions ==========
         function updateTaskOrder() {
             const taskIds = [];
-            $('#sortable tr').each(function() {
-                taskIds.push($(this).data('id'));
-            });
-
-            console.log('Updating task order:', taskIds);
-
+            $('#sortable tr').each(function() { taskIds.push($(this).data('id')); });
             const token = $('#requestVerificationToken').val();
-
             $.ajax({
                 url: '@Url.Action("Reorder", "Task")',
                 type: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(taskIds),
-                headers: {
-                    'RequestVerificationToken': token
-                },
+                headers: { 'RequestVerificationToken': token },
                 success: function(response) {
-                    if (response.success) {
-                        showNotification('Task order updated successfully', 'success');
-                    } else {
-                        showNotification('Error updating task order', 'error');
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Error updating task order:', error);
-                    showNotification('Error updating task order', 'error');
+                    if (window.TaskTracker) TaskTracker.showNotification(response.success ? 'Task order updated' : 'Error updating order', response.success ? 'success' : 'error');
                 }
             });
         }
 
-        // ========== Delete Task Function ==========
         function deleteTask(id, name) {
-            if (confirm(`Are you sure you want to delete ${name}?`)) {
+            if (confirm(`Are you sure you want to delete "${name}"?`)) {
                 const token = $('#requestVerificationToken').val();
-                
                 $.ajax({
                     url: '@Url.Action("Delete", "Task")/' + id,
                     type: 'POST',
-                    headers: {
-                        'RequestVerificationToken': token
-                    },
+                    headers: { 'RequestVerificationToken': token },
                     success: function(response) {
-                        if (response.success) {
-                            showNotification(response.message, 'success');
-                            setTimeout(() => location.reload(), 1000);
-                        } else {
-                            showNotification(response.message, 'error');
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error deleting task:', error);
-                        showNotification('Error deleting task', 'error');
+                        if (window.TaskTracker) TaskTracker.showNotification(response.message, response.success ? 'success' : 'error');
+                        if (response.success) setTimeout(() => location.reload(), 1000);
                     }
                 });
             }
         }
 
-        // ========== Save Task Visibility ==========
         function saveTaskVisibility() {
             const updates = [];
             $('.task-visibility').each(function() {
-                updates.push({
-                    branchId: $(this).data('branch-id'),
-                    taskName: $(this).data('task-name'),
-                    visible: $(this).is(':checked')
-                });
+                updates.push({ branchId: $(this).data('branch-id'), taskName: $(this).data('task-name'), visible: $(this).is(':checked') });
             });
+            if (updates.length === 0) { if (window.TaskTracker) TaskTracker.showNotification('No changes to save', 'warning'); return; }
 
-            console.log('Saving visibility updates:', updates);
-
-            if (updates.length === 0) {
-                showNotification('No changes to save', 'warning');
-                return;
-            }
-
-            // Get the save button
             const saveBtn = $('button[onclick="saveTaskVisibility()"]');
-            const originalText = saveBtn.html();
+            const origHtml = saveBtn.html();
             saveBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>Saving...');
-
             const token = $('#requestVerificationToken').val();
 
             $.ajax({
@@ -283,106 +256,19 @@
                 type: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(updates),
-                headers: {
-                    'RequestVerificationToken': token
-                },
+                headers: { 'RequestVerificationToken': token },
                 success: function(response) {
-                    console.log('Visibility save response:', response);
-                    if (response.success) {
-                        showNotification('Visibility settings saved successfully!', 'success');
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showNotification(response.message || 'Error saving visibility', 'error');
-                        saveBtn.prop('disabled', false).html(originalText);
-                    }
+                    if (window.TaskTracker) TaskTracker.showNotification(response.success ? 'Visibility settings saved!' : (response.message || 'Error saving visibility'), response.success ? 'success' : 'error');
+                    if (response.success) setTimeout(() => location.reload(), 1500);
+                    else saveBtn.prop('disabled', false).html(origHtml);
                 },
-                error: function(xhr, status, error) {
-                    console.error('Error saving visibility:', error);
-                    console.error('Response:', xhr.responseText);
-                    
-                    let errorMessage = 'Error saving visibility settings';
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        errorMessage = response.message || errorMessage;
-                    } catch(e) {}
-                    
-                    showNotification(errorMessage, 'error');
-                    saveBtn.prop('disabled', false).html(originalText);
+                error: function(xhr) {
+                    let msg = 'Error saving visibility settings';
+                    try { msg = JSON.parse(xhr.responseText).message || msg; } catch(e) {}
+                    if (window.TaskTracker) TaskTracker.showNotification(msg, 'error');
+                    saveBtn.prop('disabled', false).html(origHtml);
                 }
             });
         }
-
-        // ========== Notification Function ==========
-        function showNotification(message, type = 'info') {
-            const colors = {
-                success: 'bg-green-500',
-                error: 'bg-red-500',
-                warning: 'bg-yellow-500',
-                info: 'bg-blue-500'
-            };
-            
-            $('.custom-notification').remove();
-            
-            const notification = $(`
-                <div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ${colors[type]} animate-slide-in flex items-center">
-                    <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i>
-                    <span>${message}</span>
-                </div>
-            `);
-            
-            $('body').append(notification);
-            
-            setTimeout(() => {
-                notification.fadeOut(300, function() { $(this).remove(); });
-            }, 3000);
-        }
     </script>
 }
-
-<style>
-    .animate-slide-in {
-        animation: slideIn 0.3s ease-out;
-    }
-    
-    @@keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    .task-visibility {
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    
-    .task-visibility:hover {
-        transform: scale(1.1);
-    }
-    
-    .fa-grip-vertical {
-        cursor: grab;
-    }
-    
-    .fa-grip-vertical:active {
-        cursor: grabbing;
-    }
-    
-    #sortable tr {
-        transition: background-color 0.2s ease;
-    }
-    
-    #sortable tr.sortable-ghost {
-        opacity: 0.4;
-        background-color: #f0f9ff;
-    }
-    
-    #sortable tr.sortable-drag {
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        cursor: grabbing;
-    }
-</style>

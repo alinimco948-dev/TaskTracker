@@ -190,7 +190,9 @@ class ApiService {
     }
 }
 
-const apiService = new ApiService();
+// Initialize Global API Service
+window.apiService = new ApiService();
+var apiService = window.apiService;
 
 // ========== UI UPDATE FUNCTIONS (DOM Manipulation Optimized) ==========
 function updateTaskCell(cell, data) {

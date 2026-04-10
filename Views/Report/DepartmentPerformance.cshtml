@@ -1,14 +1,25 @@
-﻿@model TaskTracker.Models.ViewModels.DepartmentPerformanceViewModel
+@model TaskTracker.Models.ViewModels.DepartmentPerformanceViewModel
 @{
     ViewData["Title"] = "Department Performance Report";
 }
 
-<div class="space-y-6">
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
+<div class="space-y-6 animate-fade-up">
+    <div>
+        <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">
+                <i class="fas fa-building text-white text-sm"></i>
+            </div>
+            Department Performance Report
+        </h1>
+        <p class="text-slate-400 mt-1">Analyze branch and employee performance by department</p>
+    </div>
+
+    <!-- Filter -->
+    <div class="glass-card p-5">
+        <form method="get" class="flex flex-wrap items-end gap-3">
             <div class="flex-1 min-w-[200px]">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Select Department</label>
-                <select name="departmentId" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Select Department</label>
+                <select name="departmentId" class="dark-input">
                     <option value="">Choose a department...</option>
                     @foreach (var dept in ViewBag.Departments)
                     {
@@ -17,110 +28,189 @@
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                <input type="date" name="startDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@ViewBag.StartDate">
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Start Date</label>
+                <input type="date" name="startDate" class="dark-input" value="@ViewBag.StartDate">
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                <input type="date" name="endDate" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="@ViewBag.EndDate">
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">End Date</label>
+                <input type="date" name="endDate" class="dark-input" value="@ViewBag.EndDate">
             </div>
-            <div>
-                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-                    <i class="fas fa-sync-alt mr-2"></i>Generate
-                </button>
-            </div>
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-sync-alt"></i>Generate
+            </button>
         </form>
     </div>
 
     @if (Model != null && Model.DepartmentId > 0)
     {
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-2xl font-bold">@Model.DepartmentName</h2>
-                    <p class="text-gray-500">@Model.DepartmentCode</p>
-                </div>
-                <div class="text-right">
-                    <div class="text-sm text-gray-500">Report Period</div>
-                    <div class="font-medium">@Model.StartDate.ToString("MMM dd, yyyy") - @Model.EndDate.ToString("MMM dd, yyyy")</div>
-                </div>
+        <!-- Department Header -->
+        <div class="glass-card p-5 flex items-center justify-between">
+            <div>
+                <h2 class="text-2xl font-bold text-white">@Model.DepartmentName</h2>
+                <p class="text-slate-400">@Model.DepartmentCode</p>
+            </div>
+            <div class="text-right">
+                <p class="text-xs text-slate-500">Report Period</p>
+                <p class="text-sm font-semibold text-slate-200">@Model.StartDate.ToString("MMM dd, yyyy") — @Model.EndDate.ToString("MMM dd, yyyy")</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-sm text-gray-500 mb-1">Total Branches</div>
-                <div class="text-3xl font-bold">@Model.TotalBranches</div>
+        <!-- Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass-card p-5 text-center">
+                <p class="text-3xl font-bold text-indigo-400">@Model.TotalBranches</p>
+                <p class="text-xs text-slate-500 mt-1">Total Branches</p>
             </div>
-            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-sm text-gray-500 mb-1">Active Branches</div>
-                <div class="text-3xl font-bold text-green-600">@Model.ActiveBranches</div>
+            <div class="glass-card p-5 text-center">
+                <p class="text-3xl font-bold text-emerald-400">@Model.ActiveBranches</p>
+                <p class="text-xs text-slate-500 mt-1">Active Branches</p>
             </div>
-            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-sm text-gray-500 mb-1">Total Employees</div>
-                <div class="text-3xl font-bold text-blue-600">@Model.TotalEmployees</div>
+            <div class="glass-card p-5 text-center">
+                <p class="text-3xl font-bold text-cyan-400">@Model.TotalEmployees</p>
+                <p class="text-xs text-slate-500 mt-1">Total Employees</p>
             </div>
-            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div class="text-sm text-gray-500 mb-1">Active Employees</div>
-                <div class="text-3xl font-bold text-purple-600">@Model.ActiveEmployees</div>
+            <div class="glass-card p-5 text-center">
+                <p class="text-3xl font-bold text-violet-400">@Model.ActiveEmployees</p>
+                <p class="text-xs text-slate-500 mt-1">Active Employees</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 class="font-semibold mb-4">Top Performing Branches</h3>
-                @if (Model.TopBranches.Any())
-                {
-                    <div class="space-y-3">
+        <!-- Branch Performance -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="glass-card overflow-hidden">
+                <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(16,185,129,0.08);">
+                    <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-star text-emerald-400"></i>Top Performing Branches</h3>
+                </div>
+                <div class="p-5 space-y-3">
+                    @if (Model.TopBranches.Any())
+                    {
                         @foreach (var branch in Model.TopBranches)
                         {
-                            <div class="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                                <span class="font-medium">@branch.BranchName</span>
-                                <span class="text-green-600 font-bold">@branch.CompletionRate%</span>
+                            <div class="flex justify-between items-center p-3 rounded-xl" style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2);">
+                                <span class="font-medium text-slate-200">@branch.BranchName</span>
+                                <span class="font-bold text-emerald-400">@branch.CompletionRate%</span>
                             </div>
                         }
-                    </div>
-                }
-                else
-                {
-                    <p class="text-gray-500 text-center py-4">No data available</p>
-                }
+                    }
+                    else
+                    {
+                        <p class="text-slate-500 text-center py-4">No data available</p>
+                    }
+                </div>
             </div>
 
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 class="font-semibold mb-4">Branches Needing Attention</h3>
-                @if (Model.BottomBranches.Any())
-                {
-                    <div class="space-y-3">
+            <div class="glass-card overflow-hidden">
+                <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(239,68,68,0.08);">
+                    <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-exclamation-triangle text-red-400"></i>Branches Needing Attention</h3>
+                </div>
+                <div class="p-5 space-y-3">
+                    @if (Model.BottomBranches.Any())
+                    {
                         @foreach (var branch in Model.BottomBranches)
                         {
-                            <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                                <span class="font-medium">@branch.BranchName</span>
-                                <span class="text-red-600 font-bold">@branch.CompletionRate%</span>
+                            <div class="flex justify-between items-center p-3 rounded-xl" style="background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15);">
+                                <span class="font-medium text-slate-200">@branch.BranchName</span>
+                                <span class="font-bold text-red-400">@branch.CompletionRate%</span>
                             </div>
                         }
-                    </div>
-                }
-                else
-                {
-                    <p class="text-gray-500 text-center py-4">No data available</p>
-                }
+                    }
+                    else
+                    {
+                        <p class="text-slate-500 text-center py-4">No data available</p>
+                    }
+                </div>
             </div>
         </div>
 
         @if (Model.Insights.Any())
         {
-            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg shadow-sm border border-blue-200 p-6">
-                <h3 class="text-lg font-semibold mb-3 flex items-center">
-                    <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>Department Insights
+            <div class="rounded-xl p-5 mt-5" style="background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(124,58,237,0.08)); border: 1px solid rgba(99,102,241,0.2);">
+                <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                    <i class="fas fa-lightbulb text-amber-400"></i>Department Insights
                 </h3>
                 <ul class="space-y-2">
                     @foreach (var insight in Model.Insights)
                     {
-                        <li class="flex items-start"><i class="fas fa-chevron-right text-blue-400 mt-1 mr-2 text-xs"></i><span>@insight</span></li>
+                        <li class="flex items-start gap-2 text-sm text-slate-400">
+                            <i class="fas fa-chevron-right text-indigo-400 mt-0.5 text-xs flex-shrink-0"></i>@insight
+                        </li>
                     }
                 </ul>
             </div>
         }
+        
+        <!-- Regional Branch Comparison Chart -->
+        @if (Model.BranchPerformance.Any())
+        {
+            <div class="glass-card overflow-hidden mt-5">
+                <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(99,102,241,0.08);">
+                    <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-chart-bar text-indigo-400"></i>Regional Branch Comparison</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Execution metrics across all branches in this department</p>
+                </div>
+                <div class="p-5" style="height: 350px;">
+                    <canvas id="branchComparisonChart"></canvas>
+                </div>
+            </div>
+        }
     }
 </div>
+
+@section Scripts {
+    @if (Model != null && Model.DepartmentId > 0 && Model.BranchPerformance.Any())
+    {
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const branchCtx = document.getElementById('branchComparisonChart');
+                if (branchCtx) {
+                    const branchNames = @Html.Raw(Json.Serialize(Model.BranchPerformance.Keys.ToList()));
+                    const completionRates = @Html.Raw(Json.Serialize(Model.BranchPerformance.Values.Select(v => v.CompletionRate).ToList()));
+                    const onTimeRates = @Html.Raw(Json.Serialize(Model.BranchPerformance.Values.Select(v => v.OnTimeRate).ToList()));
+                    
+                    new Chart(branchCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: branchNames,
+                            datasets: [
+                                {
+                                    label: 'Completion Rate (%)',
+                                    data: completionRates,
+                                    backgroundColor: 'rgba(16,185,129,0.8)',
+                                    borderRadius: 4
+                                },
+                                {
+                                    label: 'On-Time Rate (%)',
+                                    data: onTimeRates,
+                                    backgroundColor: 'rgba(6,182,212,0.8)',
+                                    borderRadius: 4
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: { color: '#94a3b8' }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    grid: { color: 'rgba(255,255,255,0.05)' },
+                                    ticks: { color: '#64748b', callback: function(value) { return value + '%' } }
+                                },
+                                x: {
+                                    grid: { display: false },
+                                    ticks: { color: '#64748b' }
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        </script>
+    }
+}

@@ -1,274 +1,420 @@
 ﻿@model TaskTracker.Models.ViewModels.TaskItemViewModel
 @{
     ViewData["Title"] = "Create Task";
-    
     var existingTasks = ViewBag.ExistingTasks as IEnumerable<TaskTracker.Models.ViewModels.TaskListViewModel> ?? new List<TaskTracker.Models.ViewModels.TaskListViewModel>();
 }
 
-<div class="mb-8">
-    <div class="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-xl p-6 text-white">
-        <div class="flex items-center space-x-4">
-            <div class="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
-                <i class="fas fa-plus-circle text-3xl"></i>
+<div class="animate-fade-up space-y-6">
+
+
+    <div class="glass-card overflow-hidden">
+        <div class="px-6 py-5 bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-transparent flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background: linear-gradient(135deg, #6366f1, #7c3aed); box-shadow: 0 4px 15px rgba(99,102,241,0.4);">
+                <i class="fas fa-plus-circle text-white text-lg"></i>
             </div>
             <div>
-                <h1 class="text-3xl font-bold">Create New Task</h1>
-                <p class="text-indigo-100 mt-1">Configure task with full scheduling options</p>
+                <div class="flex items-center gap-2 mb-0.5">
+                    <a href="@Url.Action("Index")" class="text-xs text-slate-500 hover:text-indigo-400 transition">Tasks</a>
+                    <i class="fas fa-chevron-right text-slate-600 text-[10px]"></i>
+                    <span class="text-xs text-slate-400 font-medium">Create</span>
+                </div>
+                <h1 class="text-2xl font-black text-white tracking-tight">Create New Task</h1>
+                <p class="text-slate-400 text-sm mt-0.5">Configure task with full scheduling options</p>
             </div>
         </div>
     </div>
-</div>
 
-<div class="max-w-4xl mx-auto">
-    <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
-                <i class="fas fa-calendar-alt text-indigo-600 mr-2"></i>
-                Task Configuration
-            </h3>
-        </div>
+    <div class="max-w-4xl mx-auto">
+        <div class="glass-card overflow-hidden">
+            <div class="px-6 py-4 flex items-center gap-3" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+                <i class="fas fa-calendar-alt text-indigo-400"></i>
+                <h3 class="text-base font-semibold text-white">Task Configuration</h3>
+            </div>
 
-        <form asp-action="Create" method="post" class="p-6" id="taskForm">
-            @Html.AntiForgeryToken()
+            <form asp-action="Create" method="post" class="p-6 space-y-5" id="taskForm">
+                @Html.AntiForgeryToken()
 
-            <div asp-validation-summary="ModelOnly" class="mb-6 p-4 bg-red-50 text-red-700 rounded-xl text-sm border border-red-200"></div>
+                <div asp-validation-summary="ModelOnly" class="alert-error rounded-xl p-4 text-sm"></div>
 
-            <!-- Basic Information -->
-            <div class="bg-gray-50 rounded-xl p-5 mb-6">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-info-circle text-indigo-500 mr-2"></i>
-                    Basic Information
-                </h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label asp-for="Name" class="block text-sm font-medium text-gray-700 mb-1">
-                            Task Name <span class="text-red-500">*</span>
+
+                <div class="form-section">
+                    <h4 class="section-heading">
+                        <i class="fas fa-info-circle text-indigo-400 mr-2"></i>Basic Information
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label asp-for="Name" class="field-label">Task Name <span class="text-red-400">*</span></label>
+                            <input asp-for="Name" class="dark-input" placeholder="e.g., Daily Report" />
+                            <span asp-validation-for="Name" class="text-xs text-red-400 mt-1 block"></span>
+                        </div>
+                        <div>
+                            <label asp-for="Description" class="field-label">Description <span class="text-slate-600">(Optional)</span></label>
+                            <textarea asp-for="Description" rows="1" class="dark-input" placeholder="Brief description..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-section">
+                    <h4 class="section-heading">
+                        <i class="fas fa-tasks text-violet-400 mr-2"></i>Task Type
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <label class="cursor-pointer group">
+                            <input type="radio" name="ExecutionType" value="RecurringDaily" class="sr-only peer" checked onchange="toggleTaskType(); updateCombinedPreview();">
+                            <div class="type-card peer-checked:type-card-active">
+                                <div class="flex items-center justify-between mb-2">
+                                    <i class="fas fa-calendar-day text-xl text-blue-400"></i>
+                                    <span class="type-badge bg-blue-500/20 text-blue-400">Daily</span>
+                                </div>
+                                <h5 class="font-semibold text-white text-sm">Recurring Daily</h5>
+                                <p class="text-xs text-slate-500 mt-1">Complete each day</p>
+                            </div>
                         </label>
-                        <input asp-for="Name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="e.g., Daily Report" />
-                        <span asp-validation-for="Name" class="text-xs text-red-600 mt-1 block"></span>
+                        <label class="cursor-pointer group">
+                            <input type="radio" name="ExecutionType" value="MultiDay" class="sr-only peer" onchange="toggleTaskType(); updateCombinedPreview();">
+                            <div class="type-card peer-checked:type-card-active">
+                                <div class="flex items-center justify-between mb-2">
+                                    <i class="fas fa-calendar-range text-xl text-emerald-400"></i>
+                                    <span class="type-badge bg-emerald-500/20 text-emerald-400">Multi-Day</span>
+                                </div>
+                                <h5 class="font-semibold text-white text-sm">Multi-Day Task</h5>
+                                <p class="text-xs text-slate-500 mt-1">Complete once in range</p>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer group">
+                            <input type="radio" name="ExecutionType" value="RecurringWeekly" class="sr-only peer" onchange="toggleTaskType(); updateCombinedPreview();">
+                            <div class="type-card peer-checked:type-card-active">
+                                <div class="flex items-center justify-between mb-2">
+                                    <i class="fas fa-calendar-week text-xl text-violet-400"></i>
+                                    <span class="type-badge bg-violet-500/20 text-violet-400">Weekly</span>
+                                </div>
+                                <h5 class="font-semibold text-white text-sm">Recurring Weekly</h5>
+                                <p class="text-xs text-slate-500 mt-1">Complete each week</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label class="cursor-pointer group">
+                            <input type="radio" name="ExecutionType" value="RecurringMonthly" class="sr-only peer" onchange="toggleTaskType(); updateCombinedPreview();">
+                            <div class="type-card peer-checked:type-card-active">
+                                <div class="flex items-center justify-between mb-2">
+                                    <i class="fas fa-calendar-alt text-xl text-amber-400"></i>
+                                    <span class="type-badge bg-amber-500/20 text-amber-400">Monthly</span>
+                                </div>
+                                <h5 class="font-semibold text-white text-sm">Recurring Monthly</h5>
+                                <p class="text-xs text-slate-500 mt-1">Complete each month</p>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer group">
+                            <input type="radio" name="ExecutionType" value="OneTime" class="sr-only peer" onchange="toggleTaskType(); updateCombinedPreview();">
+                            <div class="type-card peer-checked:type-card-active">
+                                <div class="flex items-center justify-between mb-2">
+                                    <i class="fas fa-hourglass-start text-xl text-red-400"></i>
+                                    <span class="type-badge bg-red-500/20 text-red-400">One-Time</span>
+                                </div>
+                                <h5 class="font-semibold text-white text-sm">One-Time Task</h5>
+                                <p class="text-xs text-slate-500 mt-1">Complete once</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+
+                <div id="commonScheduleSection" class="form-section">
+                    <h4 class="section-heading"><i class="fas fa-calendar-alt text-blue-400 mr-2"></i>Schedule Settings</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="field-label">Task Start Date</label>
+                            <input type="date" name="StartDate" id="startDate" class="dark-input" />
+                        </div>
+                        <div>
+                            <label class="field-label">Task End Date</label>
+                            <div class="flex items-center gap-2">
+                                <input type="date" name="EndDate" id="endDate" class="dark-input flex-1" />
+                                <label class="flex items-center cursor-pointer whitespace-nowrap gap-1.5">
+                                    <input type="checkbox" id="noTaskEndDate" class="w-4 h-4 accent-indigo-500" onchange="toggleTaskEndDate(); updateCombinedPreview();" />
+                                    <span class="text-xs text-slate-400">No End</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="foreverTaskIndicator" class="hidden mb-4 p-3 rounded-lg" style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2);">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-infinity text-emerald-400"></i>
+                            <span class="text-sm text-emerald-400">This task will repeat forever with no end date.</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="field-label">Available From</label>
+                            <input type="date" name="AvailableFrom" id="availableFrom" class="dark-input" />
+                        </div>
+                        <div>
+                            <label class="field-label">Available To</label>
+                            <div class="flex items-center gap-2">
+                                <input type="date" name="AvailableTo" id="availableTo" class="dark-input flex-1" />
+                                <label class="flex items-center cursor-pointer whitespace-nowrap gap-1.5">
+                                    <input type="checkbox" id="noAvailableEndDate" class="w-4 h-4 accent-indigo-500" onchange="toggleAvailableEndDate(); updateCombinedPreview();" />
+                                    <span class="text-xs text-slate-400">No End</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="foreverAvailableIndicator" class="hidden mb-4 p-3 rounded-lg" style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-infinity text-blue-400"></i>
+                            <span class="text-sm text-blue-400">This task is available forever with no end date.</span>
+                        </div>
                     </div>
                     <div>
-                        <label asp-for="Description" class="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-                        <textarea asp-for="Description" rows="1" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Brief description..."></textarea>
+                        <label class="field-label">Max Occurrences</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="MaxOccurrences" id="maxOccurrences" class="dark-input flex-1" placeholder="Leave empty for unlimited" min="1" />
+                            <label class="flex items-center cursor-pointer whitespace-nowrap gap-1.5">
+                                <input type="checkbox" id="unlimitedOccurrences" class="w-4 h-4 accent-indigo-500" checked onchange="toggleMaxOccurrences(); updateCombinedPreview();" />
+                                <span class="text-xs text-slate-400">Unlimited</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Task Type Selection -->
-            <div class="bg-gray-50 rounded-xl p-5 mb-6">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-tasks text-indigo-500 mr-2"></i>
-                    Task Type
-                </h4>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <label class="cursor-pointer">
-                        <input type="radio" name="ExecutionType" value="RecurringDaily" class="sr-only peer" checked onchange="toggleTaskType(); updateCombinedPreview();">
-                        <div class="p-4 border-2 rounded-xl peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition">
-                            <div class="flex items-center justify-between mb-2"><i class="fas fa-calendar-day text-2xl text-blue-500"></i><span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Daily</span></div>
-                            <h5 class="font-semibold text-gray-900">Recurring Daily</h5>
-                            <p class="text-xs text-gray-500 mt-1">Complete each day</p>
-                        </div>
-                    </label>
-                    <label class="cursor-pointer">
-                        <input type="radio" name="ExecutionType" value="MultiDay" class="sr-only peer" onchange="toggleTaskType(); updateCombinedPreview();">
-                        <div class="p-4 border-2 rounded-xl peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition">
-                            <div class="flex items-center justify-between mb-2"><i class="fas fa-calendar-range text-2xl text-green-500"></i><span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Multi-Day</span></div>
-                            <h5 class="font-semibold text-gray-900">Multi-Day Task</h5>
-                            <p class="text-xs text-gray-500 mt-1">Complete once</p>
-                        </div>
-                    </label>
-                    <label class="cursor-pointer">
-                        <input type="radio" name="ExecutionType" value="RecurringWeekly" class="sr-only peer" onchange="toggleTaskType(); updateCombinedPreview();">
-                        <div class="p-4 border-2 rounded-xl peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition">
-                            <div class="flex items-center justify-between mb-2"><i class="fas fa-calendar-week text-2xl text-purple-500"></i><span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Weekly</span></div>
-                            <h5 class="font-semibold text-gray-900">Recurring Weekly</h5>
-                            <p class="text-xs text-gray-500 mt-1">Complete each week</p>
-                        </div>
-                    </label>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label class="cursor-pointer">
-                        <input type="radio" name="ExecutionType" value="RecurringMonthly" class="sr-only peer" onchange="toggleTaskType(); updateCombinedPreview();">
-                        <div class="p-4 border-2 rounded-xl peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition">
-                            <div class="flex items-center justify-between mb-2"><i class="fas fa-calendar-alt text-2xl text-yellow-500"></i><span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">Monthly</span></div>
-                            <h5 class="font-semibold text-gray-900">Recurring Monthly</h5>
-                            <p class="text-xs text-gray-500 mt-1">Complete each month</p>
-                        </div>
-                    </label>
-                    <label class="cursor-pointer">
-                        <input type="radio" name="ExecutionType" value="OneTime" class="sr-only peer" onchange="toggleTaskType(); updateCombinedPreview();">
-                        <div class="p-4 border-2 rounded-xl peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition">
-                            <div class="flex items-center justify-between mb-2"><i class="fas fa-hourglass-start text-2xl text-red-500"></i><span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">One-Time</span></div>
-                            <h5 class="font-semibold text-gray-900">One-Time Task</h5>
-                            <p class="text-xs text-gray-500 mt-1">Complete once</p>
-                        </div>
-                    </label>
-                </div>
-            </div>
 
-            <!-- Common Scheduling Section -->
-            <div id="commonScheduleSection" class="bg-gray-50 rounded-xl p-5 mb-6">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center"><i class="fas fa-calendar-alt text-blue-500 mr-2"></i>Schedule Settings</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Task Start Date</label><input type="date" name="StartDate" id="startDate" class="w-full px-4 py-2 border rounded-lg" /></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Task End Date</label><div class="flex items-center gap-2"><input type="date" name="EndDate" id="endDate" class="flex-1 px-4 py-2 border rounded-lg" /><label class="flex items-center cursor-pointer whitespace-nowrap"><input type="checkbox" id="noTaskEndDate" class="mr-2 w-4 h-4 text-indigo-600" onchange="toggleTaskEndDate(); updateCombinedPreview();" /><span class="text-sm text-gray-600">No End Date</span></label></div></div>
-                </div>
-                <div id="foreverTaskIndicator" class="hidden mb-4 p-3 bg-green-50 border border-green-200 rounded-lg"><div class="flex items-center"><i class="fas fa-infinity text-green-600 mr-2"></i><span class="text-sm text-green-700">This task will repeat forever with no end date.</span></div></div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Available From</label><input type="date" name="AvailableFrom" id="availableFrom" class="w-full px-4 py-2 border rounded-lg" /></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Available To</label><div class="flex items-center gap-2"><input type="date" name="AvailableTo" id="availableTo" class="flex-1 px-4 py-2 border rounded-lg" /><label class="flex items-center cursor-pointer whitespace-nowrap"><input type="checkbox" id="noAvailableEndDate" class="mr-2 w-4 h-4 text-indigo-600" onchange="toggleAvailableEndDate(); updateCombinedPreview();" /><span class="text-sm text-gray-600">No End Date</span></label></div></div>
-                </div>
-                <div id="foreverAvailableIndicator" class="hidden mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg"><div class="flex items-center"><i class="fas fa-infinity text-blue-600 mr-2"></i><span class="text-sm text-blue-700">This task is available forever with no end date.</span></div></div>
-                <div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-1">Max Occurrences</label><div class="flex items-center gap-2"><input type="number" name="MaxOccurrences" id="maxOccurrences" class="flex-1 px-4 py-2 border rounded-lg" placeholder="Leave empty for unlimited" min="1" /><label class="flex items-center cursor-pointer whitespace-nowrap"><input type="checkbox" id="unlimitedOccurrences" class="mr-2 w-4 h-4 text-indigo-600" checked onchange="toggleMaxOccurrences(); updateCombinedPreview();" /><span class="text-sm text-gray-600">Unlimited</span></label></div></div>
-            </div>
-
-            <!-- Weekly Task Section -->
-            <div id="weeklyTaskSection" class="bg-gray-50 rounded-xl p-5 mb-6 hidden">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center"><i class="fas fa-calendar-week text-purple-500 mr-2"></i>Weekly Schedule</h4>
-                <div><label class="block text-sm font-medium text-gray-700 mb-2">Repeat On</label><div class="grid grid-cols-7 gap-2">@for (int i=0;i<7;i++){<label class="flex flex-col items-center cursor-pointer"><input type="checkbox" name="WeeklyDays" value="@i" class="weekly-day-checkbox w-6 h-6" onchange="updateCombinedPreview();" /><span class="text-xs mt-1">@(new[]{"Su","Mo","Tu","We","Th","Fr","Sa"}[i])</span></label>}</div></div>
-            </div>
-
-            <!-- Monthly Task Section (with First 4 Days) -->
-            <div id="monthlyTaskSection" class="bg-gray-50 rounded-xl p-5 mb-6 hidden">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center"><i class="fas fa-calendar-alt text-yellow-500 mr-2"></i>Monthly Schedule</h4>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Monthly Pattern</label>
-                    <div class="grid grid-cols-3 gap-2 mb-3">
-                        <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="MonthlyPatternType" value="day" class="mr-2" checked onchange="toggleMonthlyPattern(); updateCombinedPreview();">
-                            <span>Specific Day</span>
-                        </label>
-                        <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="MonthlyPatternType" value="weekday" class="mr-2" onchange="toggleMonthlyPattern(); updateCombinedPreview();">
-                            <span>Nth Weekday</span>
-                        </label>
-                        <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="MonthlyPatternType" value="first4days" class="mr-2" onchange="toggleMonthlyPattern(); updateCombinedPreview();">
-                            <span>First 4 Days</span>
-                        </label>
+                <div id="weeklyTaskSection" class="form-section hidden">
+                    <h4 class="section-heading"><i class="fas fa-calendar-week text-violet-400 mr-2"></i>Weekly Schedule</h4>
+                    <label class="field-label">Repeat On</label>
+                    <div class="grid grid-cols-7 gap-2 mt-2">
+                        @for (int i = 0; i < 7; i++) {
+                            <label class="flex flex-col items-center cursor-pointer">
+                                <input type="checkbox" name="WeeklyDays" value="@i" class="weekly-day-checkbox w-5 h-5 accent-indigo-500" onchange="updateCombinedPreview();" />
+                                <span class="text-xs text-slate-400 mt-1">@(new[]{"Su","Mo","Tu","We","Th","Fr","Sa"}[i])</span>
+                            </label>
+                        }
                     </div>
-                    
-                    <div id="monthlyDayPattern">
-                        <select name="MonthlyDay" class="w-full px-4 py-2 border rounded-lg" onchange="updateCombinedPreview();">
-                            @for (int d = 1; d <= 31; d++)
-                            {
-                                <option value="@d">Day @d</option>
-                            }
-                        </select>
-                        <p class="text-xs text-gray-500 mt-1">Task appears on this specific day each month</p>
-                    </div>
-                    
-                    <div id="monthlyWeekdayPattern" class="hidden">
-                        <div class="flex gap-2">
-                            <select name="MonthlyOrdinal" class="flex-1 px-4 py-2 border rounded-lg" onchange="updateMonthlyPattern(); updateCombinedPreview();">
-                                <option value="first">First</option>
-                                <option value="second">Second</option>
-                                <option value="third">Third</option>
-                                <option value="fourth">Fourth</option>
-                                <option value="last">Last</option>
+                </div>
+
+
+                <div id="monthlyTaskSection" class="form-section hidden">
+                    <h4 class="section-heading"><i class="fas fa-calendar-alt text-amber-400 mr-2"></i>Monthly Schedule</h4>
+                    <div>
+                        <label class="field-label mb-2">Monthly Pattern</label>
+                        <div class="grid grid-cols-3 gap-2 mb-3">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="MonthlyPatternType" value="day" class="w-4 h-4 accent-indigo-500" checked onchange="toggleMonthlyPattern(); updateCombinedPreview();">
+                                <span class="text-sm text-slate-300">Specific Day</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="MonthlyPatternType" value="weekday" class="w-4 h-4 accent-indigo-500" onchange="toggleMonthlyPattern(); updateCombinedPreview();">
+                                <span class="text-sm text-slate-300">Nth Weekday</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="MonthlyPatternType" value="first4days" class="w-4 h-4 accent-indigo-500" onchange="toggleMonthlyPattern(); updateCombinedPreview();">
+                                <span class="text-sm text-slate-300">First 4 Days</span>
+                            </label>
+                        </div>
+                        <div id="monthlyDayPattern">
+                            <select name="MonthlyDay" class="dark-input" onchange="updateCombinedPreview();">
+                                @for (int d = 1; d <= 31; d++) { <option value="@d">Day @d</option> }
                             </select>
-                            <select name="MonthlyWeekday" class="flex-1 px-4 py-2 border rounded-lg" onchange="updateMonthlyPattern(); updateCombinedPreview();">
-                                <option value="sunday">Sunday</option>
-                                <option value="monday">Monday</option>
-                                <option value="tuesday">Tuesday</option>
-                                <option value="wednesday">Wednesday</option>
-                                <option value="thursday">Thursday</option>
-                                <option value="friday">Friday</option>
-                                <option value="saturday">Saturday</option>
-                            </select>
+                            <p class="text-xs text-slate-500 mt-1.5">Task appears on this specific day each month</p>
                         </div>
-                        <input type="hidden" id="MonthlyPattern" name="MonthlyPattern" value="15" />
-                        <p class="text-xs text-gray-500 mt-1">Example: "First Monday" or "Last Friday"</p>
-                    </div>
-                    
-                    <div id="monthlyFirst4DaysPattern" class="hidden">
-                        <div class="bg-blue-50 p-3 rounded-lg mt-2">
-                            <p class="text-sm text-blue-700">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                This task will appear on days 1, 2, 3, and 4 of every month.
-                            </p>
+                        <div id="monthlyWeekdayPattern" class="hidden">
+                            <div class="flex gap-2">
+                                <select name="MonthlyOrdinal" class="dark-input flex-1" onchange="updateMonthlyPattern(); updateCombinedPreview();">
+                                    <option value="first">First</option><option value="second">Second</option>
+                                    <option value="third">Third</option><option value="fourth">Fourth</option>
+                                    <option value="last">Last</option>
+                                </select>
+                                <select name="MonthlyWeekday" class="dark-input flex-1" onchange="updateMonthlyPattern(); updateCombinedPreview();">
+                                    <option value="sunday">Sunday</option><option value="monday">Monday</option>
+                                    <option value="tuesday">Tuesday</option><option value="wednesday">Wednesday</option>
+                                    <option value="thursday">Thursday</option><option value="friday">Friday</option>
+                                    <option value="saturday">Saturday</option>
+                                </select>
+                            </div>
+                            <input type="hidden" id="MonthlyPattern" name="MonthlyPattern" value="15" />
+                            <p class="text-xs text-slate-500 mt-1.5">Example: "First Monday" or "Last Friday"</p>
                         </div>
-                        <input type="hidden" id="MonthlyPatternFirst4Days" name="MonthlyPattern" value="first4days" />
+                        <div id="monthlyFirst4DaysPattern" class="hidden">
+                            <div class="p-3 rounded-lg mt-2" style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-info-circle text-blue-400"></i>
+                                    <span class="text-sm text-blue-400">This task will appear on days 1, 2, 3, and 4 of every month.</span>
+                                </div>
+                            </div>
+                            <input type="hidden" id="MonthlyPatternFirst4Days" name="MonthlyPattern" value="first4days" />
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Multi-Day Task Section -->
-            <div id="multiDayTaskSection" class="bg-gray-50 rounded-xl p-5 mb-6 hidden">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center"><i class="fas fa-calendar-range text-green-500 mr-2"></i>Multi-Day Settings</h4>
-                <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-4"><div class="flex items-center mb-2"><i class="fas fa-info-circle text-blue-600 mr-2"></i><span class="text-sm font-medium text-blue-800">Multi-Day Task Information</span></div><p class="text-xs text-blue-700">This task will appear on the dashboard from the start date until the end date. You only need to complete it ONCE by the deadline (end date + deadline time).</p></div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label><input type="date" id="multiDayStartDate" class="w-full px-4 py-2 border rounded-lg" onchange="updateCombinedPreview();" /></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Duration (Days)</label><input type="number" id="multiDayDuration" class="w-full px-4 py-2 border rounded-lg" placeholder="e.g., 3" min="1" oninput="updateCombinedPreview();" /></div></div>
-                <div class="mt-3 p-3 bg-gray-100 rounded-lg"><div class="text-sm text-gray-700"><span class="font-medium">Task Period:</span> <span id="taskPeriodPreview" class="ml-2 text-indigo-600">Select dates to see preview</span></div><div class="text-sm text-gray-700 mt-1"><span class="font-medium">Final Deadline:</span> <span id="finalDeadlinePreview" class="ml-2 text-amber-600">Will be calculated</span></div></div>
-            </div>
 
-            <!-- One-Time Task Section -->
-            <div id="oneTimeTaskSection" class="bg-gray-50 rounded-xl p-5 mb-6 hidden">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center"><i class="fas fa-hourglass-start text-red-500 mr-2"></i>One-Time Schedule</h4>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">Task Date</label><input type="date" id="oneTimeDate" class="w-full px-4 py-2 border rounded-lg" onchange="updateCombinedPreview();" /></div>
-            </div>
+                <div id="multiDayTaskSection" class="form-section hidden">
+                    <h4 class="section-heading"><i class="fas fa-calendar-range text-emerald-400 mr-2"></i>Multi-Day Settings</h4>
+                    <div class="p-4 rounded-lg mb-4" style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="fas fa-info-circle text-blue-400"></i>
+                            <span class="text-sm font-semibold text-blue-300">Multi-Day Task Information</span>
+                        </div>
+                        <p class="text-xs text-blue-400">This task appears from the start date until the end date. Complete it ONCE by the deadline.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="field-label">Start Date</label>
+                            <input type="date" id="multiDayStartDate" class="dark-input" onchange="updateCombinedPreview();" />
+                        </div>
+                        <div>
+                            <label class="field-label">Duration (Days)</label>
+                            <input type="number" id="multiDayDuration" class="dark-input" placeholder="e.g., 3" min="1" oninput="updateCombinedPreview();" />
+                        </div>
+                    </div>
+                    <div class="p-3 rounded-lg" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                        <div class="text-sm text-slate-400"><span class="font-medium text-slate-300">Task Period:</span> <span id="taskPeriodPreview" class="ml-1 text-indigo-400">Select dates to see preview</span></div>
+                        <div class="text-sm text-slate-400 mt-1"><span class="font-medium text-slate-300">Final Deadline:</span> <span id="finalDeadlinePreview" class="ml-1 text-amber-400">Will be calculated</span></div>
+                    </div>
+                </div>
 
-            <!-- Combined Preview -->
-            <div id="combinedPreview" class="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg hidden mb-6">
-                <div class="flex items-start"><i class="fas fa-chart-line text-indigo-500 mt-0.5 mr-3 text-lg"></i><div class="flex-1"><span class="text-sm font-semibold text-indigo-800">📋 Task Schedule Preview</span><div id="combinedPreviewContent" class="text-sm text-indigo-700 mt-1 font-medium">Select options to see preview</div></div></div>
-            </div>
 
-            <!-- Deadline Configuration -->
-            <div class="bg-gray-50 rounded-xl p-5 mb-6">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center"><i class="fas fa-hourglass-half text-blue-500 mr-2"></i>Deadline Configuration</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div id="oneTimeTaskSection" class="form-section hidden">
+                    <h4 class="section-heading"><i class="fas fa-hourglass-start text-red-400 mr-2"></i>One-Time Schedule</h4>
                     <div>
-                        <label asp-for="Deadline" class="block text-sm font-medium text-gray-700 mb-1">Deadline Time <span class="text-red-500">*</span></label>
-                        <input asp-for="Deadline" type="time" id="deadlineTime" class="w-full px-4 py-2 border rounded-lg" value="@DateTime.Today.AddHours(21).ToString("HH:mm")" onchange="updateCombinedPreview();" />
+                        <label class="field-label">Task Date</label>
+                        <input type="date" id="oneTimeDate" class="dark-input" onchange="updateCombinedPreview();" />
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Deadline Type</label>
-                        <div class="flex space-x-4 mt-2">
-                            <label class="flex items-center"><input type="radio" name="deadlineType" value="same-day" class="mr-2" checked onchange="updateCombinedPreview(); syncIsSameDay();" /><span>Same Day</span></label>
-                            <label class="flex items-center"><input type="radio" name="deadlineType" value="next-day" class="mr-2" onchange="updateCombinedPreview(); syncIsSameDay();" /><span>Next Day</span></label>
+                </div>
+
+
+                <div id="combinedPreview" class="p-4 rounded-xl hidden" style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2);">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-chart-line text-indigo-400 mt-0.5"></i>
+                        <div class="flex-1">
+                            <span class="text-sm font-semibold text-indigo-300">ðŸ“‹ Task Schedule Preview</span>
+                            <div id="combinedPreviewContent" class="text-sm text-indigo-400 mt-1">Select options to see preview</div>
                         </div>
-                        <input type="hidden" asp-for="IsSameDay" id="IsSameDayHidden" value="true" />
                     </div>
                 </div>
-            </div>
 
-            <!-- Organization -->
-            <div class="bg-gray-50 rounded-xl p-5 mb-6">
-                <h4 class="text-md font-semibold text-gray-800 mb-4 flex items-center"><i class="fas fa-chart-line text-purple-500 mr-2"></i>Organization</h4>
-                <div>
-                    <label asp-for="DisplayOrder" class="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
-                    <input asp-for="DisplayOrder" type="number" min="0" class="w-full px-4 py-2 border rounded-lg" value="0" />
-                    <p class="text-xs text-gray-500 mt-2">Order in which tasks appear on the dashboard (0 = auto)</p>
+
+                <div class="form-section">
+                    <h4 class="section-heading"><i class="fas fa-hourglass-half text-cyan-400 mr-2"></i>Deadline Configuration</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label asp-for="Deadline" class="field-label">Deadline Time <span class="text-red-400">*</span></label>
+                            <input asp-for="Deadline" type="time" id="deadlineTime" class="dark-input" value="@DateTime.Today.AddHours(21).ToString("HH:mm")" onchange="updateCombinedPreview();" />
+                        </div>
+                        <div>
+                            <label class="field-label">Deadline Type</label>
+                            <div class="flex gap-4 mt-2">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="deadlineType" value="same-day" class="w-4 h-4 accent-indigo-500" checked onchange="updateCombinedPreview(); syncIsSameDay();" />
+                                    <span class="text-sm text-slate-300">Same Day</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="deadlineType" value="next-day" class="w-4 h-4 accent-indigo-500" onchange="updateCombinedPreview(); syncIsSameDay();" />
+                                    <span class="text-sm text-slate-300">Next Day</span>
+                                </label>
+                            </div>
+                            <input type="hidden" asp-for="IsSameDay" id="IsSameDayHidden" value="true" />
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Active Status Toggle -->
-            <div class="bg-gradient-to-r from-gray-50 to-white p-5 rounded-xl border border-gray-200 mb-6">
-                <label class="flex items-center justify-between cursor-pointer">
-                    <div><span class="text-sm font-medium text-gray-700">Active Task</span><p class="text-xs text-gray-500 mt-1">Inactive tasks won't appear in daily task boards</p></div>
+
+                <div class="form-section">
+                    <h4 class="section-heading"><i class="fas fa-sort-numeric-up text-slate-400 mr-2"></i>Organization</h4>
+                    <div>
+                        <label asp-for="DisplayOrder" class="field-label">Display Order</label>
+                        <input asp-for="DisplayOrder" type="number" min="0" class="dark-input" value="0" />
+                        <p class="text-xs text-slate-500 mt-1.5">Order tasks appear on the dashboard (0 = auto)</p>
+                    </div>
+                </div>
+
+
+                <div class="form-section flex items-center justify-between">
+                    <div>
+                        <span class="text-sm font-semibold text-white">Active Task</span>
+                        <p class="text-xs text-slate-500 mt-0.5">Inactive tasks won't appear in daily boards</p>
+                    </div>
                     <div class="relative">
-                        @{ var isActiveChecked = "checked"; }
-                        
-                        <div class="w-14 h-8 bg-gray-300 rounded-full transition cursor-pointer toggle-indicator" onclick="toggleCheckbox('IsActive')">
-                            <div class="absolute w-6 h-6 bg-white rounded-full shadow-md transform transition translate-x-1"></div>
+                        <input type="checkbox" asp-for="IsActive" id="IsActive" class="sr-only" onchange="updateToggleDisplay('IsActive');" checked />
+                        <div class="w-14 h-8 rounded-full transition cursor-pointer toggle-indicator bg-emerald-500" onclick="toggleCheckbox('IsActive')">
+                            <div class="absolute w-6 h-6 bg-white rounded-full shadow-md transform transition" style="top:0.25rem; left:0.25rem; transform: translateX(24px);"></div>
                         </div>
                     </div>
-                </label>
-            </div>
+                </div>
 
-            <div class="flex justify-end space-x-3 pt-4 border-t">
-                <a href="@Url.Action("Index")" class="px-6 py-3 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</a>
-                <button type="submit" class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:from-indigo-700 hover:to-purple-700 transition shadow-md flex items-center">Create Task</button>
-            </div>
-        </form>
+                <div class="flex justify-end gap-3 pt-4" style="border-top: 1px solid rgba(255,255,255,0.06);">
+                    <a href="@Url.Action("Index")" class="px-5 py-2.5 rounded-xl text-sm font-medium text-slate-300 border border-white/10 hover:bg-white/5 transition">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-plus-circle"></i>Create Task
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
+
+@section Styles {
+<style>
+    .form-section {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 0.875rem;
+        padding: 1.25rem;
+    }
+    .section-heading {
+        font-size: 0.8125rem;
+        font-weight: 700;
+        color: #e2e8f0;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .field-label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #94a3b8;
+        margin-bottom: 0.375rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .type-card {
+        padding: 1rem;
+        border: 2px solid rgba(255,255,255,0.08);
+        border-radius: 0.875rem;
+        background: rgba(255,255,255,0.03);
+        transition: all 0.2s;
+    }
+    .type-card:hover { border-color: rgba(99,102,241,0.3); background: rgba(255,255,255,0.05); }
+    .type-card-active { border-color: #6366f1 !important; background: rgba(99,102,241,0.1) !important; }
+    .type-badge {
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .weekly-day-checkbox { cursor: pointer; }
+    .weekly-day-checkbox:hover { transform: scale(1.15); }
+    .toggle-indicator { transition: background-color 0.2s ease; }
+    .toggle-indicator .absolute { transition: transform 0.2s ease; }
+    input:disabled, select:disabled { background: rgba(255,255,255,0.02) !important; cursor: not-allowed; opacity: 0.35; }
+    select.dark-input option { background: #1a1a2e; color: #e2e8f0; }
+    .dark-input[type="date"]::-webkit-calendar-picker-indicator,
+    .dark-input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+</style>
+}
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
         $(document).ready(function() {
-            updateToggleDisplay('IsSameDay');
-            updateToggleDisplay('IsActive');
             toggleTaskType();
             toggleMonthlyPattern();
             toggleTaskEndDate();
@@ -279,340 +425,172 @@
             document.getElementById('startDate').value = today;
             document.getElementById('multiDayStartDate').value = today;
             document.getElementById('oneTimeDate').value = today;
-            setupDisplayOrderSuggestion();
             setTimeout(updateCombinedPreview, 100);
         });
 
-        function setupDisplayOrderSuggestion() {
-            const orderInput = document.getElementById('DisplayOrderText');
-            if (!orderInput) return;
-            orderInput.addEventListener('input', function() {
-                const value = this.value.trim();
-                const suggestionDiv = document.getElementById('orderSuggestion');
-                if (!value) { suggestionDiv.classList.add('hidden'); return; }
-                const parsed = parseDisplayOrder(value);
-                if (parsed) {
-                    suggestionDiv.classList.remove('hidden');
-                    suggestionDiv.innerHTML = `<i class="fas fa-check-circle text-green-500 mr-1"></i> Will be placed: ${parsed.description}`;
-                    suggestionDiv.className = 'text-xs text-green-600 mt-1';
-                } else {
-                    suggestionDiv.classList.remove('hidden');
-                    suggestionDiv.innerHTML = `<i class="fas fa-exclamation-triangle text-yellow-500 mr-1"></i> Invalid format. Use number, "top", "bottom", or "before:TaskName"`;
-                    suggestionDiv.className = 'text-xs text-yellow-600 mt-1';
-                }
-            });
-        }
-        
-        function parseDisplayOrder(value) {
-            const lowerValue = value.toLowerCase().trim();
-            if (/^\d+$/.test(lowerValue)) { const num = parseInt(lowerValue); return { type: 'number', value: num, description: `at position ${num}` }; }
-            if (lowerValue === 'top' || lowerValue === 'first') { return { type: 'top', value: 1, description: `at the top (position 1)` }; }
-            if (lowerValue === 'bottom' || lowerValue === 'last') { return { type: 'bottom', value: null, description: `at the bottom (after all existing tasks)` }; }
-            const afterMatch = lowerValue.match(/^after:(.+)$/);
-            if (afterMatch) { return { type: 'after', afterTask: afterMatch[1], description: `after "${afterMatch[1]}"` }; }
-            const beforeMatch = lowerValue.match(/^before:(.+)$/);
-            if (beforeMatch) { return { type: 'before', beforeTask: beforeMatch[1], description: `before "${beforeMatch[1]}"` }; }
-            return null;
-        }
-        
-        async function suggestOrder() {
-            const orderInput = document.getElementById('DisplayOrderText');
-            const currentValue = orderInput.value.trim();
-            if (currentValue) {
-                const parsed = parseDisplayOrder(currentValue);
-                if (parsed) { showNotification(`Task will be placed ${parsed.description}`, 'info'); }
-                else { showNotification('Please enter a valid order', 'warning'); }
-                return;
-            }
-            try {
-                const response = await $.ajax({ url: '@Url.Action("GetNextDisplayOrder", "Task")', type: 'GET' });
-                if (response.success) {
-                    orderInput.value = response.nextOrder;
-                    showNotification(`Suggested order: ${response.nextOrder}`, 'success');
-                    triggerInputEvent(orderInput);
-                }
-            } catch (error) { showNotification('Could not suggest order.', 'error'); }
-        }
-        
-        function triggerInputEvent(element) { const event = new Event('input', { bubbles: true }); element.dispatchEvent(event); }
-        
-        $('#taskForm').on('submit', function(e) {
-            const orderInput = document.getElementById('DisplayOrderText');
-            const orderValue = orderInput.value.trim();
-            const hiddenOrderInput = document.getElementById('DisplayOrder');
-            if (!orderValue) { hiddenOrderInput.value = '0'; return; }
-            const parsed = parseDisplayOrder(orderValue);
-            if (parsed && parsed.type === 'number') { hiddenOrderInput.value = parsed.value; }
-            else if (parsed && (parsed.type === 'top' || parsed.type === 'bottom')) {
-                hiddenOrderInput.value = '0';
-                if (!$('#textOrder').length) { $('<input>').attr({ type: 'hidden', id: 'textOrder', name: 'TextOrder', value: orderValue }).appendTo('#taskForm'); }
-                else { $('#textOrder').val(orderValue); }
-            } else if (parsed && (parsed.type === 'after' || parsed.type === 'before')) {
-                hiddenOrderInput.value = '0';
-                if (!$('#textOrder').length) { $('<input>').attr({ type: 'hidden', id: 'textOrder', name: 'TextOrder', value: orderValue }).appendTo('#taskForm'); }
-                else { $('#textOrder').val(orderValue); }
-            }
-        });
-
         function toggleCheckbox(id) {
-            var checkbox = document.getElementById(id);
-            checkbox.checked = !checkbox.checked;
+            var cb = document.getElementById(id);
+            cb.checked = !cb.checked;
             updateToggleDisplay(id);
         }
-        
+
         function updateToggleDisplay(id) {
-            var checkbox = document.getElementById(id);
-            var toggleDiv = checkbox.nextElementSibling;
-            var circle = toggleDiv.querySelector('.absolute');
-            if (checkbox.checked) {
-                if (id === 'IsActive') { toggleDiv.classList.remove('bg-gray-300'); toggleDiv.classList.add('bg-green-600'); }
-                else { toggleDiv.classList.remove('bg-gray-300'); toggleDiv.classList.add('bg-indigo-600'); }
-                circle.style.transform = 'translateX(28px)';
+            var cb = document.getElementById(id);
+            var tog = cb.nextElementSibling;
+            var circle = tog.querySelector('.absolute');
+            if (cb.checked) {
+                tog.classList.remove('bg-white/10');
+                tog.classList.add(id === 'IsActive' ? 'bg-emerald-500' : 'bg-indigo-500');
+                circle.style.transform = 'translateX(24px)';
             } else {
-                toggleDiv.classList.remove('bg-indigo-600', 'bg-green-600');
-                toggleDiv.classList.add('bg-gray-300');
-                circle.style.transform = 'translateX(4px)';
+                tog.classList.remove('bg-emerald-500', 'bg-indigo-500');
+                tog.classList.add('bg-white/10');
+                circle.style.transform = 'translateX(0px)';
             }
         }
 
         function syncIsSameDay() {
-            var deadlineType = document.querySelector('input[name="deadlineType"]:checked');
-            if (deadlineType) { document.getElementById('IsSameDayHidden').value = (deadlineType.value === 'same-day'); }
+            var dt = document.querySelector('input[name="deadlineType"]:checked');
+            if (dt) document.getElementById('IsSameDayHidden').value = (dt.value === 'same-day');
         }
 
         function toggleTaskEndDate() {
-            var noEndDateCheckbox = document.getElementById('noTaskEndDate');
-            var endDateInput = document.getElementById('endDate');
-            var foreverTaskIndicator = document.getElementById('foreverTaskIndicator');
-            if (noEndDateCheckbox.checked) {
-                endDateInput.disabled = true;
-                endDateInput.value = '';
-                foreverTaskIndicator.classList.remove('hidden');
-            } else {
-                endDateInput.disabled = false;
-                foreverTaskIndicator.classList.add('hidden');
-            }
-            updateCombinedPreview();
+            var noEnd = document.getElementById('noTaskEndDate').checked;
+            var endIn = document.getElementById('endDate');
+            endIn.disabled = noEnd;
+            if (noEnd) endIn.value = '';
+            document.getElementById('foreverTaskIndicator').classList.toggle('hidden', !noEnd);
         }
-        
+
         function toggleAvailableEndDate() {
-            var noAvailableEndDate = document.getElementById('noAvailableEndDate');
-            var availableToInput = document.getElementById('availableTo');
-            var foreverAvailableIndicator = document.getElementById('foreverAvailableIndicator');
-            if (noAvailableEndDate.checked) {
-                availableToInput.disabled = true;
-                availableToInput.value = '';
-                foreverAvailableIndicator.classList.remove('hidden');
-            } else {
-                availableToInput.disabled = false;
-                foreverAvailableIndicator.classList.add('hidden');
-            }
-            updateCombinedPreview();
+            var noEnd = document.getElementById('noAvailableEndDate').checked;
+            var endIn = document.getElementById('availableTo');
+            endIn.disabled = noEnd;
+            if (noEnd) endIn.value = '';
+            document.getElementById('foreverAvailableIndicator').classList.toggle('hidden', !noEnd);
         }
-        
+
         function toggleMaxOccurrences() {
-            var unlimitedCheckbox = document.getElementById('unlimitedOccurrences');
-            var maxOccurrencesInput = document.getElementById('maxOccurrences');
-            if (unlimitedCheckbox.checked) {
-                maxOccurrencesInput.disabled = true;
-                maxOccurrencesInput.value = '';
-            } else {
-                maxOccurrencesInput.disabled = false;
-            }
-            updateCombinedPreview();
+            var unlimited = document.getElementById('unlimitedOccurrences').checked;
+            var maxIn = document.getElementById('maxOccurrences');
+            maxIn.disabled = unlimited;
+            if (unlimited) maxIn.value = '';
         }
 
         function toggleTaskType() {
             var type = document.querySelector('input[name="ExecutionType"]:checked').value;
-            document.getElementById('weeklyTaskSection').classList.add('hidden');
-            document.getElementById('monthlyTaskSection').classList.add('hidden');
-            document.getElementById('multiDayTaskSection').classList.add('hidden');
-            document.getElementById('oneTimeTaskSection').classList.add('hidden');
-            switch(type) {
-                case 'RecurringWeekly': document.getElementById('weeklyTaskSection').classList.remove('hidden'); break;
-                case 'RecurringMonthly': document.getElementById('monthlyTaskSection').classList.remove('hidden'); break;
-                case 'MultiDay': document.getElementById('multiDayTaskSection').classList.remove('hidden'); setupMultiDayPreview(); break;
-                case 'OneTime': document.getElementById('oneTimeTaskSection').classList.remove('hidden'); break;
-            }
+            ['weeklyTaskSection','monthlyTaskSection','multiDayTaskSection','oneTimeTaskSection'].forEach(function(id) {
+                document.getElementById(id).classList.add('hidden');
+            });
+            if (type === 'RecurringWeekly') document.getElementById('weeklyTaskSection').classList.remove('hidden');
+            if (type === 'RecurringMonthly') document.getElementById('monthlyTaskSection').classList.remove('hidden');
+            if (type === 'MultiDay') { document.getElementById('multiDayTaskSection').classList.remove('hidden'); setupMultiDayPreview(); }
+            if (type === 'OneTime') document.getElementById('oneTimeTaskSection').classList.remove('hidden');
             updateCombinedPreview();
         }
-        
+
         function toggleMonthlyPattern() {
             var type = document.querySelector('input[name="MonthlyPatternType"]:checked').value;
-            var dayPattern = document.getElementById('monthlyDayPattern');
-            var weekdayPattern = document.getElementById('monthlyWeekdayPattern');
-            var first4DaysPattern = document.getElementById('monthlyFirst4DaysPattern');
-            var monthlyPatternHidden = document.getElementById('MonthlyPattern');
-            
-            dayPattern.classList.add('hidden');
-            weekdayPattern.classList.add('hidden');
-            if (first4DaysPattern) first4DaysPattern.classList.add('hidden');
-            
+            var mp = document.getElementById('MonthlyPattern');
+            ['monthlyDayPattern','monthlyWeekdayPattern','monthlyFirst4DaysPattern'].forEach(function(id) {
+                var el = document.getElementById(id); if (el) el.classList.add('hidden');
+            });
             if (type === 'day') {
-                dayPattern.classList.remove('hidden');
-                monthlyPatternHidden.value = document.querySelector('select[name="MonthlyDay"]').value;
+                document.getElementById('monthlyDayPattern').classList.remove('hidden');
+                if (mp) mp.value = document.querySelector('select[name="MonthlyDay"]').value;
             } else if (type === 'weekday') {
-                weekdayPattern.classList.remove('hidden');
+                document.getElementById('monthlyWeekdayPattern').classList.remove('hidden');
                 updateMonthlyPattern();
             } else if (type === 'first4days') {
-                if (first4DaysPattern) first4DaysPattern.classList.remove('hidden');
-                monthlyPatternHidden.value = 'first4days';
+                var f4 = document.getElementById('monthlyFirst4DaysPattern');
+                if (f4) f4.classList.remove('hidden');
+                if (mp) mp.value = 'first4days';
             }
             updateCombinedPreview();
         }
-        
+
         function updateMonthlyPattern() {
             var ordinal = document.querySelector('select[name="MonthlyOrdinal"]').value;
             var weekday = document.querySelector('select[name="MonthlyWeekday"]').value;
-            var monthlyPatternHidden = document.getElementById('MonthlyPattern');
-            if (ordinal && weekday) { monthlyPatternHidden.value = ordinal + '-' + weekday; }
+            var mp = document.getElementById('MonthlyPattern');
+            if (mp && ordinal && weekday) mp.value = ordinal + '-' + weekday;
         }
-        
+
         function setupMultiDayPreview() {
-            var startDateInput = document.getElementById('multiDayStartDate');
-            var durationInput = document.getElementById('multiDayDuration');
-            var deadlineTime = document.getElementById('deadlineTime');
-            var isSameDay = document.getElementById('IsSameDay').checked;
-            
-            function updatePreview() {
-                var startDate = startDateInput.value;
-                var duration = parseInt(durationInput.value);
-                var deadlineTimeValue = deadlineTime ? deadlineTime.value : '21:00';
+            function update() {
+                var startDate = document.getElementById('multiDayStartDate').value;
+                var duration = parseInt(document.getElementById('multiDayDuration').value) || 0;
+                var deadlineTime = document.getElementById('deadlineTime').value || '21:00';
                 if (startDate && duration > 0) {
                     var start = new Date(startDate);
                     var end = new Date(start);
                     end.setDate(end.getDate() + duration - 1);
-                    var startFormatted = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                    var endFormatted = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                    document.getElementById('taskPeriodPreview').innerHTML = `${startFormatted} → ${endFormatted} (${duration} days)`;
-                    var deadlineDate = new Date(end);
-                    var deadlineTimeObj = new Date(`2000-01-01T${deadlineTimeValue}`);
-                    if (isSameDay) {
-                        var deadline = new Date(end);
-                        deadline.setHours(deadlineTimeObj.getHours(), deadlineTimeObj.getMinutes());
-                        document.getElementById('finalDeadlinePreview').innerHTML = deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + deadlineTimeValue;
-                    } else {
-                        var nextDay = new Date(end);
-                        nextDay.setDate(nextDay.getDate() + 1);
-                        nextDay.setHours(deadlineTimeObj.getHours(), deadlineTimeObj.getMinutes());
-                        document.getElementById('finalDeadlinePreview').innerHTML = nextDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + deadlineTimeValue + ' (next day)';
-                    }
+                    document.getElementById('taskPeriodPreview').textContent =
+                        start.toLocaleDateString() + ' â†’ ' + end.toLocaleDateString() + ' (' + duration + ' days)';
+                    var isSameDay = document.querySelector('input[name="deadlineType"]:checked').value === 'same-day';
+                    var tObj = new Date('2000-01-01T' + deadlineTime);
+                    var target = isSameDay ? new Date(end) : new Date(end);
+                    if (!isSameDay) target.setDate(target.getDate() + 1);
+                    target.setHours(tObj.getHours(), tObj.getMinutes());
+                    document.getElementById('finalDeadlinePreview').textContent =
+                        target.toLocaleDateString() + ' at ' + deadlineTime + (!isSameDay ? ' (next day)' : '');
                 }
             }
-            if (startDateInput) startDateInput.addEventListener('change', updatePreview);
-            if (durationInput) durationInput.addEventListener('input', updatePreview);
-            if (deadlineTime) deadlineTime.addEventListener('change', updatePreview);
-            document.getElementById('IsSameDay').addEventListener('change', updatePreview);
-            updatePreview();
+            document.getElementById('multiDayStartDate').addEventListener('change', update);
+            document.getElementById('multiDayDuration').addEventListener('input', update);
+            document.getElementById('deadlineTime').addEventListener('change', update);
+            document.querySelectorAll('input[name="deadlineType"]').forEach(function(r) { r.addEventListener('change', update); });
+            update();
         }
-        
+
         function updateCombinedPreview() {
+            var startDate = document.getElementById('startDate').value;
             var previewDiv = document.getElementById('combinedPreview');
-            var previewContent = document.getElementById('combinedPreviewContent');
-            var taskType = document.querySelector('input[name="ExecutionType"]:checked').value;
-            var taskStartDate = document.getElementById('startDate').value;
-            var noTaskEndDate = document.getElementById('noTaskEndDate').checked;
-            var taskEndDate = document.getElementById('endDate').value;
-            var availableFrom = document.getElementById('availableFrom').value;
-            var noAvailableEndDate = document.getElementById('noAvailableEndDate').checked;
-            var availableTo = document.getElementById('availableTo').value;
-            var unlimitedOccurrences = document.getElementById('unlimitedOccurrences').checked;
-            var maxOccurrences = document.getElementById('maxOccurrences').value;
-            
-            if (!taskStartDate) { previewDiv.classList.add('hidden'); return; }
+            if (!startDate) { previewDiv.classList.add('hidden'); return; }
             previewDiv.classList.remove('hidden');
-            var start = new Date(taskStartDate);
-            var startFormatted = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            var taskScheduleText = '';
-            if (noTaskEndDate) { taskScheduleText = `📅 Task Schedule: From ${startFormatted} → FOREVER`; }
-            else if (taskEndDate) { var end = new Date(taskEndDate); taskScheduleText = `📅 Task Schedule: From ${startFormatted} → ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`; }
-            else { taskScheduleText = `📅 Task Schedule: From ${startFormatted}`; }
-            
-            var availabilityText = ''; var hasAvailability = false;
-            if (availableFrom && noAvailableEndDate) { availabilityText = `✅ Available: From ${new Date(availableFrom).toLocaleDateString()} → FOREVER`; hasAvailability = true; }
-            else if (availableFrom && availableTo) { availabilityText = `✅ Available: From ${new Date(availableFrom).toLocaleDateString()} → ${new Date(availableTo).toLocaleDateString()}`; hasAvailability = true; }
-            else if (availableFrom) { availabilityText = `✅ Available: From ${new Date(availableFrom).toLocaleDateString()}`; hasAvailability = true; }
-            else if (availableTo && !noAvailableEndDate) { availabilityText = `✅ Available: Until ${new Date(availableTo).toLocaleDateString()}`; hasAvailability = true; }
-            else if (noAvailableEndDate) { availabilityText = `✅ Available: FOREVER`; hasAvailability = true; }
-            
-            var occurrenceText = '';
-            if (!unlimitedOccurrences && maxOccurrences) { occurrenceText = `📊 Max Occurrences: ${maxOccurrences}`; }
-            else if (unlimitedOccurrences) { occurrenceText = `📊 Occurrences: Unlimited`; }
-            
-            var typeText = getTaskTypeDescription(taskType);
-            var fullText = `${typeText} • ${taskScheduleText}`;
-            if (hasAvailability) fullText += ` • ${availabilityText}`;
-            if (occurrenceText) fullText += ` • ${occurrenceText}`;
-            previewContent.innerHTML = fullText;
+            var type = document.querySelector('input[name="ExecutionType"]:checked').value;
+            var noEnd = document.getElementById('noTaskEndDate').checked;
+            var endDate = document.getElementById('endDate').value;
+            var schedText = 'ðŸ“… From ' + new Date(startDate).toLocaleDateString();
+            if (noEnd) schedText += ' â†’ FOREVER';
+            else if (endDate) schedText += ' â†’ ' + new Date(endDate).toLocaleDateString();
+            document.getElementById('combinedPreviewContent').textContent = getTaskTypeDescription(type) + ' â€¢ ' + schedText;
         }
-        
-        function getTaskTypeDescription(taskType) {
-            switch(taskType) {
-                case 'RecurringDaily': return '📅 Daily Task';
+
+        function getTaskTypeDescription(type) {
+            switch(type) {
+                case 'RecurringDaily': return 'ðŸ“… Daily Task';
                 case 'RecurringWeekly':
-                    var selectedDays = [];
+                    var days = [];
                     document.querySelectorAll('input[name="WeeklyDays"]:checked').forEach(function(cb) {
-                        var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                        selectedDays.push(dayNames[parseInt(cb.value)]);
+                        days.push(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parseInt(cb.value)]);
                     });
-                    return `📆 Weekly on ${selectedDays.length ? selectedDays.join(', ') : 'no days'}`;
+                    return 'ðŸ“† Weekly on ' + (days.length ? days.join(', ') : 'no days');
                 case 'RecurringMonthly':
-                    var patternType = document.querySelector('input[name="MonthlyPatternType"]:checked').value;
-                    if (patternType === 'day') { return `📅 Monthly on day ${document.querySelector('select[name="MonthlyDay"]').value}`; }
-                    else if (patternType === 'weekday') { return `📅 Monthly on ${document.querySelector('select[name="MonthlyOrdinal"]').value} ${document.querySelector('select[name="MonthlyWeekday"]').value}`; }
-                    else { return `📅 Monthly on first 4 days (Days 1-4)`; }
+                    var pt = document.querySelector('input[name="MonthlyPatternType"]:checked').value;
+                    if (pt === 'day') return 'ðŸ“… Monthly on day ' + document.querySelector('select[name="MonthlyDay"]').value;
+                    if (pt === 'weekday') return 'ðŸ“… Monthly on ' + document.querySelector('select[name="MonthlyOrdinal"]').value + ' ' + document.querySelector('select[name="MonthlyWeekday"]').value;
+                    return 'ðŸ“… Monthly on first 4 days';
                 case 'MultiDay':
-                    var duration = document.getElementById('multiDayDuration').value;
-                    return duration ? `⏱️ Multi-Day (${duration} days)` : '⏱️ Multi-Day Task';
-                case 'OneTime': return '🎯 One-Time Task';
-                default: return '📋 Task';
+                    var dur = document.getElementById('multiDayDuration').value;
+                    return dur ? 'â±ï¸ Multi-Day (' + dur + ' days)' : 'â±ï¸ Multi-Day Task';
+                case 'OneTime': return 'ðŸŽ¯ One-Time Task';
+                default: return 'ðŸ“‹ Task';
             }
         }
-        
+
         function setupCombinedPreviewListeners() {
-            document.getElementById('startDate').addEventListener('change', updateCombinedPreview);
-            document.getElementById('endDate').addEventListener('change', updateCombinedPreview);
-            document.getElementById('noTaskEndDate').addEventListener('change', updateCombinedPreview);
-            document.getElementById('availableFrom').addEventListener('change', updateCombinedPreview);
-            document.getElementById('availableTo').addEventListener('change', updateCombinedPreview);
-            document.getElementById('noAvailableEndDate').addEventListener('change', updateCombinedPreview);
-            document.getElementById('unlimitedOccurrences').addEventListener('change', updateCombinedPreview);
-            document.getElementById('maxOccurrences').addEventListener('input', updateCombinedPreview);
-            document.querySelectorAll('input[name="ExecutionType"]').forEach(function(radio) { radio.addEventListener('change', updateCombinedPreview); });
-            document.querySelectorAll('input[name="WeeklyDays"]').forEach(function(cb) { cb.addEventListener('change', updateCombinedPreview); });
-            document.querySelector('select[name="MonthlyDay"]')?.addEventListener('change', updateCombinedPreview);
-            document.querySelector('select[name="MonthlyOrdinal"]')?.addEventListener('change', updateCombinedPreview);
-            document.querySelector('select[name="MonthlyWeekday"]')?.addEventListener('change', updateCombinedPreview);
-            document.querySelectorAll('input[name="MonthlyPatternType"]').forEach(function(radio) { radio.addEventListener('change', updateCombinedPreview); });
-            document.getElementById('multiDayDuration')?.addEventListener('input', updateCombinedPreview);
-            document.getElementById('multiDayStartDate')?.addEventListener('change', updateCombinedPreview);
-            document.getElementById('oneTimeDate')?.addEventListener('change', updateCombinedPreview);
-            document.getElementById('deadlineTime').addEventListener('change', updateCombinedPreview);
-            document.querySelectorAll('input[name="deadlineType"]').forEach(function(radio) { radio.addEventListener('change', updateCombinedPreview); });
-            document.getElementById('IsSameDay').addEventListener('change', updateCombinedPreview);
+            var ids = ['startDate','endDate','noTaskEndDate','availableFrom','availableTo','noAvailableEndDate','unlimitedOccurrences','maxOccurrences','deadlineTime','multiDayDuration','multiDayStartDate','oneTimeDate'];
+            ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.addEventListener('change', updateCombinedPreview); el && el.addEventListener('input', updateCombinedPreview); });
+            document.querySelectorAll('input[name="ExecutionType"], input[name="WeeklyDays"], input[name="deadlineType"], input[name="MonthlyPatternType"]').forEach(function(el) { el.addEventListener('change', updateCombinedPreview); });
         }
-        
-        function showNotification(message, type) {
-            const colors = { success: 'bg-green-500', error: 'bg-red-500', warning: 'bg-yellow-500', info: 'bg-blue-500' };
-            $('.custom-notification').remove();
-            const notification = $(`<div class="custom-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ${colors[type]} animate-slide-in flex items-center"><i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i><span>${message}</span></div>`);
-            $('body').append(notification);
-            setTimeout(() => notification.fadeOut(300, () => notification.remove()), 3000);
-        }
-        
-        document.querySelectorAll('input[name="MonthlyPatternType"]').forEach(function(radio) { radio.addEventListener('change', toggleMonthlyPattern); });
-        document.querySelector('select[name="MonthlyDay"]')?.addEventListener('change', function() { document.getElementById('MonthlyPattern').value = this.value; });
-        document.querySelector('select[name="MonthlyOrdinal"]')?.addEventListener('change', updateMonthlyPattern);
-        document.querySelector('select[name="MonthlyWeekday"]')?.addEventListener('change', updateMonthlyPattern);
+
+        document.querySelectorAll('input[name="MonthlyPatternType"]').forEach(function(r) { r.addEventListener('change', toggleMonthlyPattern); });
+        var monthlyDay = document.querySelector('select[name="MonthlyDay"]');
+        if (monthlyDay) monthlyDay.addEventListener('change', function() { var mp = document.getElementById('MonthlyPattern'); if (mp) mp.value = this.value; });
+        var ordinal = document.querySelector('select[name="MonthlyOrdinal"]');
+        var weekday = document.querySelector('select[name="MonthlyWeekday"]');
+        if (ordinal) ordinal.addEventListener('change', updateMonthlyPattern);
+        if (weekday) weekday.addEventListener('change', updateMonthlyPattern);
     </script>
 }
-<style>
-    .toggle-indicator { transition: background-color 0.2s ease; cursor: pointer; }
-    .toggle-indicator .absolute { transition: transform 0.2s ease; top: 0.25rem; left: 0.25rem; }
-    input[type="radio"]:checked + div { border-color: #6366f1; background-color: #eef2ff; }
-    input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2); }
-    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
-    .weekly-day-checkbox { cursor: pointer; accent-color: #6366f1; }
-    .weekly-day-checkbox:hover { transform: scale(1.1); }
-    input:disabled, select:disabled { background-color: #f3f4f6; cursor: not-allowed; opacity: 0.6; }
-</style>

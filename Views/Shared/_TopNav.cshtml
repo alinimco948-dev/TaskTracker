@@ -1,208 +1,213 @@
-﻿@{
+@{
     var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+    var action     = ViewContext.RouteData.Values["action"]?.ToString();
+
+    // Build breadcrumb label
+    var pageLabel = controller switch {
+        "Home"       => "Dashboard",
+        "Employee"   => "Employees",
+        "Branch"     => "Branches",
+        "Department" => "Departments",
+        "Task"       => "Tasks",
+        "Holiday"    => "Holidays",
+        "Report"     => "Reports",
+        _            => controller ?? "App"
+    };
 }
 
-<header class="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200 sticky top-0 z-30">
-    <div class="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-        <!-- Mobile Menu Button -->
-        <div class="flex items-center space-x-3 lg:hidden">
-            <button onclick="openMobileSidebar()" class="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200">
-                <i class="fas fa-bars text-xl"></i>
+<header class="flex-shrink-0 border-b sticky top-0 z-30"
+        style="background: rgba(11,11,24,0.85); border-color: rgba(255,255,255,0.06); backdrop-filter: blur(20px);">
+    <div class="px-5 h-14 flex items-center justify-between gap-4">
+
+        <!-- Left: mobile menu + breadcrumb -->
+        <div class="flex items-center gap-4">
+            <!-- Mobile hamburger -->
+            <button onclick="openMobileSidebar()"
+                    class="lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition">
+                <i class="fas fa-bars"></i>
             </button>
-            <div class="flex items-center space-x-2">
-                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
-                    <i class="fas fa-tasks text-white text-sm"></i>
+
+            <!-- Mobile logo -->
+            <div class="lg:hidden flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg flex items-center justify-center"
+                     style="background: linear-gradient(135deg, #6366f1, #7c3aed);">
+                    <i class="fas fa-tasks text-white text-xs"></i>
                 </div>
-                <span class="font-bold text-gray-800">TaskTracker</span>
+                <span class="font-bold text-white text-sm">TaskTracker</span>
+            </div>
+
+            <!-- Desktop breadcrumb -->
+            <div class="hidden lg:flex items-center gap-2 text-sm">
+                <span class="text-slate-500">TaskTracker</span>
+                <i class="fas fa-chevron-right text-slate-600 text-xs"></i>
+                <span class="font-semibold text-white">@pageLabel</span>
             </div>
         </div>
-        
-        <!-- Search Bar - Desktop -->
-        <div class="hidden lg:flex items-center flex-1 max-w-md ml-4">
+
+        <!-- Center: search bar (desktop) -->
+        <div class="hidden lg:flex flex-1 max-w-sm">
             <div class="relative w-full">
-                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
-                <input type="text" id="globalSearch" placeholder="Search employees, branches, tasks..." 
-                       class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:bg-white transition-all duration-200">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none"></i>
+                <input type="text" id="globalSearch"
+                       placeholder="Search employees, branches, tasks..."
+                       class="w-full pl-9 pr-4 py-2 text-sm rounded-xl border text-slate-200 placeholder-slate-500 transition-all duration-200"
+                       style="background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08);"
+                       onfocus="this.style.borderColor='rgba(99,102,241,0.5)'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.15)';"
+                       onblur="this.style.borderColor='rgba(255,255,255,0.08)'; this.style.boxShadow='none';">
             </div>
         </div>
-        
-        <div class="flex items-center space-x-2 sm:space-x-4">
-            <!-- Quick Actions Dropdown -->
+
+        <!-- Right: actions -->
+        <div class="flex items-center gap-1 sm:gap-2">
+
+            <!-- Quick Actions -->
             <div class="relative">
-                <button onclick="toggleQuickActions()" 
-                        class="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 relative group">
-                    <i class="fas fa-plus-circle text-xl"></i>
-                    <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                <button onclick="toggleQuickActions()"
+                        class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 transition relative"
+                        title="Quick Actions">
+                    <i class="fas fa-plus-circle"></i>
+                    <span class="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
                 </button>
-                <div id="quick-actions-dropdown" class="dropdown-menu hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                    <div class="p-2 space-y-1">
-                        <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Quick Actions</div>
-                        <a href="@Url.Action("Create", "Employee")" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200">
-                            <i class="fas fa-user-plus mr-3 w-4 text-blue-500"></i>Add Employee
+                <div id="quick-actions-dropdown"
+                     class="dropdown-menu hidden absolute right-0 mt-2 w-56 rounded-xl shadow-2xl z-50 overflow-hidden border"
+                     style="background: #1a1a2e; border-color: rgba(255,255,255,0.1);">
+                    <div class="p-2">
+                        <div class="px-3 py-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Quick Actions</div>
+                        <a href="@Url.Action("Create", "Employee")"
+                           class="flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition">
+                            <div class="w-7 h-7 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                                <i class="fas fa-user-plus text-indigo-400 text-xs"></i>
+                            </div>Add Employee
                         </a>
-                        <a href="@Url.Action("Create", "Branch")" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200">
-                            <i class="fas fa-store mr-3 w-4 text-green-500"></i>Add Branch
+                        <a href="@Url.Action("Create", "Branch")"
+                           class="flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition">
+                            <div class="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                <i class="fas fa-store text-emerald-400 text-xs"></i>
+                            </div>Add Branch
                         </a>
-                        <a href="@Url.Action("Create", "Department")" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200">
-                            <i class="fas fa-building mr-3 w-4 text-purple-500"></i>Add Department
+                        <a href="@Url.Action("Create", "Department")"
+                           class="flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition">
+                            <div class="w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center">
+                                <i class="fas fa-building text-violet-400 text-xs"></i>
+                            </div>Add Department
                         </a>
-                        <a href="@Url.Action("Create", "Task")" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200">
-                            <i class="fas fa-tasks mr-3 w-4 text-yellow-500"></i>Add Task
+                        <a href="@Url.Action("Create", "Task")"
+                           class="flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition">
+                            <div class="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                <i class="fas fa-tasks text-amber-400 text-xs"></i>
+                            </div>Add Task
                         </a>
-                        <div class="border-t border-gray-100 my-1"></div>
-                        <a href="@Url.Action("EmployeeRanking", "Report")" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200">
-                            <i class="fas fa-chart-line mr-3 w-4 text-indigo-500"></i>View Rankings
+                        <div class="my-1 border-t" style="border-color: rgba(255,255,255,0.06);"></div>
+                        <a href="@Url.Action("EmployeeRanking", "Report")"
+                           class="flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition">
+                            <div class="w-7 h-7 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                                <i class="fas fa-chart-line text-cyan-400 text-xs"></i>
+                            </div>View Rankings
                         </a>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Notifications -->
             <div class="relative">
-                <button onclick="toggleNotifications()" class="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200">
-                    <i class="fas fa-bell text-xl"></i>
+                <button onclick="toggleNotifications()"
+                        class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 transition"
+                        title="Notifications">
+                    <i class="fas fa-bell"></i>
                 </button>
-                <div id="notifications-dropdown" class="dropdown-menu hidden absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                    <div class="p-3 border-b border-gray-100">
-                        <h3 class="font-semibold text-gray-800">Notifications</h3>
+                <div id="notifications-dropdown"
+                     class="dropdown-menu hidden absolute right-0 mt-2 w-80 rounded-xl shadow-2xl z-50 overflow-hidden border"
+                     style="background: #1a1a2e; border-color: rgba(255,255,255,0.1);">
+                    <div class="px-4 py-3 border-b" style="border-color: rgba(255,255,255,0.06);">
+                        <h3 class="font-semibold text-white text-sm">Notifications</h3>
                     </div>
-                    <div class="max-h-96 overflow-y-auto">
-                        <div class="p-4 text-center text-gray-500 text-sm">
-                            <i class="fas fa-bell-slash text-2xl mb-2 text-gray-300"></i>
-                            <p>No new notifications</p>
+                    <div class="max-h-80 overflow-y-auto">
+                        <div class="p-8 text-center">
+                            <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mx-auto mb-3">
+                                <i class="fas fa-bell-slash text-slate-500 text-xl"></i>
+                            </div>
+                            <p class="text-sm text-slate-500">No new notifications</p>
                         </div>
                     </div>
-                    <div class="p-2 border-t border-gray-100">
-                        <a href="#" class="block text-center text-xs text-blue-600 hover:text-blue-700">View all</a>
+                    <div class="px-4 py-2 border-t" style="border-color: rgba(255,255,255,0.06);">
+                        <a href="#" class="block text-center text-xs text-indigo-400 hover:text-indigo-300 transition">View all</a>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Divider -->
+            <div class="w-px h-6 mx-1 bg-white/10 hidden sm:block"></div>
+
             <!-- User Menu -->
             <div class="relative">
-                <button onclick="toggleUserMenu()" class="flex items-center space-x-2 focus:outline-none group">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-md transition-transform duration-200 group-hover:scale-105">
-                        <span class="text-sm font-bold">AD</span>
+                <button onclick="toggleUserMenu()" class="flex items-center gap-2 p-1 rounded-xl hover:bg-white/5 transition focus:outline-none">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold"
+                         style="background: linear-gradient(135deg, #6366f1, #06b6d4); box-shadow: 0 2px 10px rgba(99,102,241,0.3);">
+                        AD
                     </div>
                     <div class="hidden sm:block text-left">
-                        <p class="text-sm font-medium text-gray-700">Admin User</p>
-                        <p class="text-xs text-gray-400">Administrator</p>
+                        <p class="text-xs font-semibold text-white leading-tight">Admin User</p>
+                        <p class="text-[10px] text-slate-500 leading-tight">Administrator</p>
                     </div>
-                    <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200 hidden sm:block" id="user-menu-chevron"></i>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-500 transition-transform hidden sm:block" id="user-menu-chevron"></i>
                 </button>
-                <div id="user-menu-dropdown" class="dropdown-menu hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                    <div class="p-3 border-b border-gray-100 flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white">
-                            <span class="text-sm font-bold">AD</span>
-                        </div>
-                        <div>
-                            <p class="text-sm font-medium text-gray-800">Admin User</p>
-                            <p class="text-xs text-gray-500">admin@tasktracker.com</p>
+
+                <div id="user-menu-dropdown"
+                     class="dropdown-menu hidden absolute right-0 mt-2 w-56 rounded-xl shadow-2xl z-50 overflow-hidden border"
+                     style="background: #1a1a2e; border-color: rgba(255,255,255,0.1);">
+                    <div class="p-3 border-b" style="border-color: rgba(255,255,255,0.06);">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold"
+                                 style="background: linear-gradient(135deg, #6366f1, #06b6d4);">AD</div>
+                            <div>
+                                <p class="text-sm font-semibold text-white">Admin User</p>
+                                <p class="text-xs text-slate-500">admin@tasktracker.com</p>
+                            </div>
                         </div>
                     </div>
-                    <div class="p-2 space-y-1">
-                        <a href="#" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200">
-                            <i class="fas fa-user mr-3 w-4 text-gray-400"></i>Profile
+                    <div class="p-2 space-y-0.5">
+                        <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition">
+                            <i class="fas fa-user text-slate-400 w-4"></i>Profile
                         </a>
-                        <a href="#" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200">
-                            <i class="fas fa-cog mr-3 w-4 text-gray-400"></i>Settings
+                        <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition">
+                            <i class="fas fa-cog text-slate-400 w-4"></i>Settings
                         </a>
-                        <div class="border-t border-gray-100 my-1"></div>
-                        <a href="#" class="flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200">
-                            <i class="fas fa-sign-out-alt mr-3 w-4"></i>Sign Out
+                        <div class="my-1 border-t" style="border-color: rgba(255,255,255,0.06);"></div>
+                        <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition">
+                            <i class="fas fa-sign-out-alt w-4"></i>Sign Out
                         </a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- Mobile Search Bar -->
+
+    <!-- Mobile search -->
     <div class="lg:hidden px-4 pb-3">
         <div class="relative">
-            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
-            <input type="text" id="mobileGlobalSearch" placeholder="Search..." 
-                   class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none"></i>
+            <input type="text" id="mobileGlobalSearch" placeholder="Search..."
+                   class="w-full pl-9 pr-4 py-2 text-sm rounded-xl border text-slate-200 placeholder-slate-500"
+                   style="background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08);">
         </div>
     </div>
 </header>
 
 <script>
-    function toggleQuickActions() {
-        $('#quick-actions-dropdown').slideToggle(200);
-        $('#user-menu-dropdown').slideUp(200);
-        $('#notifications-dropdown').slideUp(200);
-    }
-    
-    function toggleUserMenu() {
-        $('#user-menu-dropdown').slideToggle(200);
-        $('#quick-actions-dropdown').slideUp(200);
-        $('#notifications-dropdown').slideUp(200);
-        $('#user-menu-chevron').toggleClass('rotate-180');
-    }
-    
-    function toggleNotifications() {
-        $('#notifications-dropdown').slideToggle(200);
-        $('#quick-actions-dropdown').slideUp(200);
-        $('#user-menu-dropdown').slideUp(200);
-    }
-    
-    // Close dropdowns when clicking outside
-    $(document).click(function(event) {
-        if (!$(event.target).closest('.relative').length) {
-            $('#quick-actions-dropdown').slideUp(200);
-            $('#user-menu-dropdown').slideUp(200);
-            $('#notifications-dropdown').slideUp(200);
+    // Close dropdowns on outside click
+    $(document).click(function(e) {
+        if (!$(e.target).closest('.relative').length) {
+            $('#quick-actions-dropdown, #user-menu-dropdown, #notifications-dropdown').slideUp(150);
+            $('#user-menu-chevron').removeClass('rotate-180');
         }
     });
-    
-    // Global search functionality
-    function performSearch(searchTerm) {
-        if (!$('#employeeTableBody').length) return;
-        
-        $('#employeeTableBody tr').each(function() {
-            var text = $(this).text().toLowerCase();
-            if (text.indexOf(searchTerm) > -1) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
-        });
-        
-        // Update stats if filterTable function exists
-        if (typeof filterTable === 'function') {
-            filterTable();
-        }
-    }
-    
+
+    // Global search filtering
     $('#globalSearch, #mobileGlobalSearch').on('keyup', function() {
-        var searchTerm = $(this).val().toLowerCase();
-        performSearch(searchTerm);
+        var term = $(this).val().toLowerCase();
+        $('#employeeTableBody tr').each(function() {
+            $(this).toggle($(this).text().toLowerCase().indexOf(term) > -1);
+        });
+        if (typeof filterTable === 'function') filterTable();
     });
 </script>
-
-<style>
-    .rotate-180 {
-        transform: rotate(180deg);
-    }
-    
-    .dropdown-menu {
-        animation: fadeInDown 0.2s ease-out;
-    }
-    
-    @@keyframes fadeInDown {
-        from {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    /* Backdrop blur support */
-    .backdrop-blur-md {
-        backdrop-filter: blur(12px);
-    }
-</style>

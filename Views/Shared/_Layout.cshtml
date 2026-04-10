@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -12,236 +12,290 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- Global Styles -->
     <style>
-        * { font-family: 'Inter', sans-serif; }
-        body { background-color: #f3f4f6; }
-        
-        /* Sidebar transitions */
-        .sidebar {
-            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        :root {
+            --bg-base:       #0b0b18;
+            --bg-surface:    #12121f;
+            --bg-card:       rgba(255,255,255,0.04);
+            --bg-card-hover: rgba(255,255,255,0.07);
+            --border:        rgba(255,255,255,0.08);
+            --border-hover:  rgba(99,102,241,0.5);
+            --primary:       #6366f1;
+            --primary-dark:  #4f46e5;
+            --primary-light: #818cf8;
+            --accent:        #06b6d4;
+            --accent2:       #7c3aed;
+            --success:       #10b981;
+            --warning:       #f59e0b;
+            --danger:        #ef4444;
+            --text-primary:  #e2e8f0;
+            --text-muted:    #64748b;
+            --text-subtle:   #94a3b8;
         }
-        
-        .sidebar-text {
-            transition: opacity 0.2s ease-in-out;
+
+        * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+
+        html {
+            color-scheme: dark;
         }
-        
-        /* Main content transition */
-        #main-content {
-            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
         }
-        
-        /* Animation for notifications */
-        .animate-slide-in {
-            animation: slideIn 0.3s ease-out;
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-surface); }
+        ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.4); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        /* ── Sidebar transitions ── */
+        .sidebar { transition: width 0.3s cubic-bezier(0.4,0,0.2,1); }
+        .sidebar-text { transition: opacity 0.2s ease-in-out; }
+        #main-content { transition: margin-left 0.3s cubic-bezier(0.4,0,0.2,1); }
+
+        /* ── Sidebar collapsed ── */
+        .sidebar.collapsed { width: 72px; }
+        .sidebar.collapsed .sidebar-text { display: none !important; }
+        .sidebar.collapsed nav ul li a,
+        .sidebar.collapsed nav ul li button { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed nav ul li a i,
+        .sidebar.collapsed nav ul li button i { margin-right: 0; }
+        .sidebar.collapsed .flex.items-center.space-x-3 { justify-content: center; }
+
+        /* ── Mobile sidebar ── */
+        #mobileSidebar {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(-100%);
         }
-        
-        @@keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+        #mobileSidebar.open { transform: translateX(0); }
+
+        /* ── Glass card ── */
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 0.875rem;
+            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
         }
-        
-        /* Animation for fade in */
-        .animate-fade-in {
-            animation: fadeIn 0.2s ease-out;
+        .glass-card:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-card-hover);
         }
-        
-        @@keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+
+        /* ── Gradient text ── */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary-light), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        
-        /* Loading spinner */
+
+        /* ── Gradient button ── */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--accent2));
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.625rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(99,102,241,0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-primary:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(99,102,241,0.45);
+        }
+
+        /* ── Animations ── */
+        .animate-slide-in { animation: slideIn 0.3s ease-out; }
+        @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+        @@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .animate-fade-up { animation: fadeUp 0.3s ease-out; }
+        @@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ── Dropdown ── */
+        .dropdown-menu { animation: fadeInDown 0.2s ease-out; }
+        @@keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Loading spinner ── */
         .loading-spinner {
             display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #3b82f6;
+            width: 20px; height: 20px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top: 2px solid var(--primary);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
         }
-        
-        @@keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
-        
-        /* Modal backdrop blur */
+        @@keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Modal backdrop ── */
         .modal-backdrop {
-            backdrop-filter: blur(4px);
-            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(6px);
+            background: rgba(0,0,0,0.65);
         }
-        
-        /* Utility classes */
+
+        /* ── Dark form inputs ── */
+        .dark-input {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 0.625rem;
+            padding: 0.6rem 0.875rem;
+            font-size: 0.875rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+        .dark-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
+        }
+        .dark-input::placeholder { color: var(--text-muted); }
+        .dark-input option {
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
+        }
+
+        /* ── Stats badge ── */
+        .stat-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        /* ── Glow effect ── */
+        .glow-indigo { box-shadow: 0 0 20px rgba(99,102,241,0.25); }
+        .glow-cyan   { box-shadow: 0 0 20px rgba(6,182,212,0.25); }
+
+        /* ── Alert/message overrides ── */
+        .alert-success { background: rgba(16,185,129,0.1); border-left: 4px solid #10b981; color: #6ee7b7; }
+        .alert-error   { background: rgba(239,68,68,0.1);  border-left: 4px solid #ef4444; color: #fca5a5; }
+        .alert-info    { background: rgba(99,102,241,0.1); border-left: 4px solid #6366f1; color: #a5b4fc; }
+        .alert-warning { background: rgba(245,158,11,0.1); border-left: 4px solid #f59e0b; color: #fcd34d; }
+
+        /* ── Table styles ── */
+        .dark-table thead th {
+            background: rgba(99,102,241,0.08);
+            color: var(--text-subtle);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .dark-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+        .dark-table tbody tr:hover { background: rgba(99,102,241,0.06); }
+        .dark-table tbody td { padding: 0.875rem 1rem; color: var(--text-primary); font-size: 0.875rem; }
+
+        /* Rotate for chevrons */
+        .rotate-180 { transform: rotate(180deg); }
+
+        /* Truncate 2 lines */
         .truncate-2 {
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
-        
-        /* Rotate animation for chevrons */
-        .rotate-180 {
-            transform: rotate(180deg);
-        }
-        
-        /* Sidebar collapsed state */
-        .sidebar.collapsed {
-            width: 72px;
-        }
-        
-        .sidebar.collapsed .sidebar-text {
-            display: none !important;
-        }
-        
-        .sidebar.collapsed nav ul li a,
-        .sidebar.collapsed nav ul li button {
-            justify-content: center;
-            padding-left: 0;
-            padding-right: 0;
-        }
-        
-        .sidebar.collapsed nav ul li a i,
-        .sidebar.collapsed nav ul li button i {
-            margin-right: 0;
-        }
-        
-        .sidebar.collapsed .flex.items-center.space-x-3 {
-            justify-content: center;
-        }
-        
-        /* Mobile sidebar */
-        #mobileSidebar {
-            transition: transform 0.3s ease-in-out;
-            transform: translateX(-100%);
-        }
-        
-        #mobileSidebar.open {
-            transform: translateX(0);
-        }
-        
-        /* Dropdown animations */
-        .dropdown-menu {
-            animation: fadeInDown 0.2s ease-out;
-        }
-        
-        @@keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        /* Backdrop blur support */
-        .backdrop-blur-md {
-            backdrop-filter: blur(12px);
+
+        /* Background mesh animation */
+        .bg-mesh {
+            background-image:
+                radial-gradient(circle at 20% 20%, rgba(99,102,241,0.07) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(6,182,212,0.05) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(124,58,237,0.04) 0%, transparent 60%);
         }
     </style>
     
     @await RenderSectionAsync("Styles", required: false)
 </head>
-<body class="bg-gray-100">
-    <div class="flex h-screen bg-gray-100 overflow-hidden">
-        <!-- Sidebar (Desktop + Mobile combined) -->
+<body class="bg-[#0b0b18] bg-mesh text-slate-200">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
         @await Html.PartialAsync("_Sidebar")
         
         <!-- Main Content Area -->
-        <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300" id="main-content">
+        <div class="flex-1 flex flex-col overflow-hidden" id="main-content">
             @await Html.PartialAsync("_TopNav")
             
-            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4">
-                <div class="container mx-auto">
-                    <!-- Dynamic Alert Container -->
+            <main class="flex-1 overflow-x-hidden overflow-y-auto p-5">
+                <div class="container mx-auto max-w-7xl">
+                    <!-- Alert Container -->
                     <div id="alert-container"></div>
                     
-                    <!-- TempData Success Message -->
+                    <!-- TempData Messages -->
                     @if (TempData["SuccessMessage"] != null)
                     {
-                        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <i class="fas fa-check-circle mr-2"></i>
-                                    <p>@TempData["SuccessMessage"]</p>
-                                </div>
-                                <button type="button" onclick="$(this).closest('.border-l-4').fadeOut()" class="text-green-700 hover:text-green-900">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                        <div class="alert-success rounded-xl p-4 mb-4 flex items-center justify-between animate-slide-in">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-check-circle text-emerald-400"></i>
+                                <p class="text-sm font-medium">@TempData["SuccessMessage"]</p>
                             </div>
+                            <button type="button" onclick="$(this).closest('.alert-success').fadeOut()" class="text-emerald-400 hover:text-white transition">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     }
-                    
-                    <!-- TempData Error Message -->
                     @if (TempData["ErrorMessage"] != null)
                     {
-                        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <i class="fas fa-exclamation-circle mr-2"></i>
-                                    <p>@TempData["ErrorMessage"]</p>
-                                </div>
-                                <button type="button" onclick="$(this).closest('.border-l-4').fadeOut()" class="text-red-700 hover:text-red-900">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                        <div class="alert-error rounded-xl p-4 mb-4 flex items-center justify-between animate-slide-in">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-exclamation-circle text-red-400"></i>
+                                <p class="text-sm font-medium">@TempData["ErrorMessage"]</p>
                             </div>
+                            <button type="button" onclick="$(this).closest('.alert-error').fadeOut()" class="text-red-400 hover:text-white transition">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     }
-                    
-                    <!-- TempData Info Message -->
                     @if (TempData["InfoMessage"] != null)
                     {
-                        <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <i class="fas fa-info-circle mr-2"></i>
-                                    <p>@TempData["InfoMessage"]</p>
-                                </div>
-                                <button type="button" onclick="$(this).closest('.border-l-4').fadeOut()" class="text-blue-700 hover:text-blue-900">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                        <div class="alert-info rounded-xl p-4 mb-4 flex items-center justify-between animate-slide-in">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-info-circle text-indigo-400"></i>
+                                <p class="text-sm font-medium">@TempData["InfoMessage"]</p>
                             </div>
+                            <button type="button" onclick="$(this).closest('.alert-info').fadeOut()" class="text-indigo-400 hover:text-white transition">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     }
-                    
-                    <!-- TempData Warning Message -->
                     @if (TempData["WarningMessage"] != null)
                     {
-                        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded shadow animate-slide-in">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                                    <p>@TempData["WarningMessage"]</p>
-                                </div>
-                                <button type="button" onclick="$(this).closest('.border-l-4').fadeOut()" class="text-yellow-700 hover:text-yellow-900">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                        <div class="alert-warning rounded-xl p-4 mb-4 flex items-center justify-between animate-slide-in">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-exclamation-triangle text-amber-400"></i>
+                                <p class="text-sm font-medium">@TempData["WarningMessage"]</p>
                             </div>
+                            <button type="button" onclick="$(this).closest('.alert-warning').fadeOut()" class="text-amber-400 hover:text-white transition">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     }
                     
@@ -249,75 +303,63 @@
                 </div>
             </main>
             
-            <footer class="bg-white border-t border-gray-200 p-3 text-xs text-gray-600">
-                <div class="container mx-auto flex flex-wrap justify-between items-center gap-2">
-                    <div>&copy; @DateTime.Now.Year - TaskTracker v1.0.0</div>
-                    <div class="flex items-center space-x-4">
-                        <span class="text-gray-400">
-                            <i class="fas fa-database mr-1"></i>PostgreSQL
-                        </span>
-                        <span class="text-gray-400">
-                            <i class="fas fa-chart-line mr-1"></i>Real-time Updates
-                        </span>
-                        <span class="text-gray-400">
-                            Last updated: @DateTime.Now.ToString("MMM dd, yyyy HH:mm")
-                        </span>
-                    </div>
+            <footer class="border-t border-white/5 bg-[#0f0f1a]/80 backdrop-blur px-6 py-3 text-xs text-slate-500 flex flex-wrap justify-between items-center gap-2">
+                <div>&copy; @DateTime.Now.Year — TaskTracker v1.0.0</div>
+                <div class="flex items-center gap-4">
+                    <span class="flex items-center gap-1.5"><i class="fas fa-database text-indigo-500"></i>PostgreSQL</span>
+                    <span class="flex items-center gap-1.5"><i class="fas fa-bolt text-cyan-500"></i>Real-time</span>
+                    <span>@DateTime.Now.ToString("MMM dd, yyyy HH:mm")</span>
                 </div>
             </footer>
         </div>
     </div>
     
-    <!-- Global Notification Container -->
-    <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    <!-- Notification Container -->
+    <div id="notification-container" class="fixed top-4 right-4 z-[100] space-y-2"></div>
     
     <!-- Global Confirmation Modal -->
-    <div id="globalConfirmationModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all animate-fade-in">
-            <div class="bg-gradient-to-r from-red-600 to-red-800 px-6 py-4 rounded-t-xl">
-                <h3 class="text-lg font-semibold text-white flex items-center">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                    <span id="confirmationTitle">Confirm Action</span>
-                </h3>
+    <div id="globalConfirmationModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-[90]">
+        <div class="glass-card w-full max-w-md transform transition-all animate-fade-up border border-white/10 shadow-2xl" style="background:#1a1a2e;">
+            <div class="bg-gradient-to-r from-red-600 to-rose-700 px-6 py-4 rounded-t-[0.875rem] flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <i class="fas fa-exclamation-triangle text-white text-sm"></i>
+                </div>
+                <h3 class="text-base font-semibold text-white" id="confirmationTitle">Confirm Action</h3>
             </div>
             <div class="p-6">
-                <p id="confirmationMessage" class="text-gray-700">Are you sure you want to proceed?</p>
-                <input type="hidden" id="confirmationCallback" />
-                <input type="hidden" id="confirmationCancelCallback" />
+                <p id="confirmationMessage" class="text-slate-300 text-sm">Are you sure you want to proceed?</p>
             </div>
-            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 rounded-b-xl">
-                <button type="button" onclick="window.globalConfirmClose()" 
-                        class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+            <div class="px-6 py-4 border-t border-white/5 flex justify-end gap-3">
+                <button type="button" onclick="window.globalConfirmClose()"
+                        class="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 border border-white/10 hover:bg-white/5 transition">
                     Cancel
                 </button>
-                <button type="button" onclick="window.globalConfirmExecute()" 
-                        class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition flex items-center">
-                    <i class="fas fa-check mr-2"></i>Confirm
+                <button type="button" onclick="window.globalConfirmExecute()"
+                        class="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition flex items-center gap-2">
+                    <i class="fas fa-check"></i>Confirm
                 </button>
             </div>
         </div>
     </div>
     
     <!-- Global Loading Overlay -->
-    <div id="globalLoadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-xl p-6 flex flex-col items-center space-y-3 shadow-2xl">
-            <div class="loading-spinner w-8 h-8 border-4"></div>
-            <span id="loadingMessage" class="text-gray-700 font-medium">Loading...</span>
+    <div id="globalLoadingOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-[90]">
+        <div class="glass-card p-8 flex flex-col items-center gap-4" style="background:#1a1a2e; border-color:rgba(99,102,241,0.3);">
+            <div class="loading-spinner w-10 h-10 border-4"></div>
+            <span id="loadingMessage" class="text-slate-300 font-medium">Loading...</span>
         </div>
     </div>
     
-    <!-- Third Party Scripts -->
+    <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@@latest/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
-    <!-- Main Application Script -->
     <script>
         // ============================================
         // TASKTRACKER CORE APPLICATION
         // ============================================
-        
         (function() {
             'use strict';
             
@@ -331,9 +373,7 @@
                 },
                 
                 setupAjaxDefaults: function() {
-                    $.ajaxSetup({
-                        headers: { 'RequestVerificationToken': this.token }
-                    });
+                    $.ajaxSetup({ headers: { 'RequestVerificationToken': this.token } });
                 },
                 
                 setupGlobalEventListeners: function() {
@@ -345,7 +385,6 @@
                             });
                         }
                     });
-                    
                     $(window).click(function(e) {
                         if ($(e.target).hasClass('modal-backdrop')) {
                             window.globalConfirmClose();
@@ -354,38 +393,30 @@
                 },
                 
                 showNotification: function(message, type) {
-                    var colors = {
-                        success: 'bg-green-500',
-                        error: 'bg-red-500',
-                        info: 'bg-blue-500',
-                        warning: 'bg-yellow-500'
+                    var config = {
+                        success: { bg: 'from-emerald-600 to-emerald-700', icon: 'fa-check-circle' },
+                        error:   { bg: 'from-red-600 to-rose-700',       icon: 'fa-exclamation-circle' },
+                        info:    { bg: 'from-indigo-600 to-violet-700',  icon: 'fa-info-circle' },
+                        warning: { bg: 'from-amber-500 to-orange-600',   icon: 'fa-exclamation-triangle' }
                     };
-                    var icons = {
-                        success: 'fa-check-circle',
-                        error: 'fa-exclamation-circle',
-                        info: 'fa-info-circle',
-                        warning: 'fa-exclamation-triangle'
-                    };
+                    var c = config[type] || config.info;
                     
-                    $('.tasktracker-notification').remove();
-                    var notification = $('<div class="tasktracker-notification fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white ' + colors[type] + ' animate-slide-in flex items-center">' +
-                        '<i class="fas ' + icons[type] + ' mr-2"></i>' +
+                    var notification = $('<div class="tasktracker-notification flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-white text-sm font-medium animate-slide-in bg-gradient-to-r ' + c.bg + '" style="backdrop-filter:blur(12px); min-width:280px;">' +
+                        '<i class="fas ' + c.icon + ' text-white/90"></i>' +
                         '<span>' + this.escapeHtml(message) + '</span>' +
                         '</div>');
                     
                     $('#notification-container').append(notification);
-                    setTimeout(function() { 
-                        notification.fadeOut(300, function() { $(this).remove(); }); 
-                    }, 3000);
+                    setTimeout(function() {
+                        notification.fadeOut(300, function() { $(this).remove(); });
+                    }, 3500);
                 },
                 
                 confirm: function(options) {
                     $('#confirmationTitle').text(options.title || 'Confirm Action');
                     $('#confirmationMessage').text(options.message || 'Are you sure you want to proceed?');
-                    
                     window._confirmCallback = options.onConfirm;
                     window._confirmCancelCallback = options.onCancel;
-                    
                     $('#globalConfirmationModal').removeClass('hidden').addClass('flex');
                 },
                 
@@ -400,100 +431,29 @@
                 
                 escapeHtml: function(text) {
                     if (!text) return text;
-                    return text.replace(/&/g, '&amp;')
-                               .replace(/</g, '&lt;')
-                               .replace(/>/g, '&gt;')
-                               .replace(/"/g, '&quot;')
-                               .replace(/'/g, '&#39;');
-                },
-                
-                getInitials: function(name) {
-                    if (!name) return '?';
-                    var parts = name.split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.length === 0) return '?';
-                    if (parts.length === 1) return parts[0].substring(0, 1).toUpperCase();
-                    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                    return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
                 },
                 
                 formatDate: function(date, format) {
                     var d = new Date(date);
                     if (isNaN(d.getTime())) return '';
-                    if (format === 'short') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    if (format === 'medium') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                    if (format === 'long') return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    if (format === 'short')  return d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+                    if (format === 'medium') return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+                    if (format === 'long')   return d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
                     return d.toLocaleDateString();
                 },
                 
                 formatTime: function(date) {
                     var d = new Date(date);
                     if (isNaN(d.getTime())) return '--:--';
-                    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    return d.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
                 },
                 
                 getScoreColor: function(score) {
-                    if (score >= 90) return { text: 'text-green-600', bg: 'bg-green-100', border: 'border-green-500', bar: '#22c55e', icon: 'fa-trophy' };
-                    if (score >= 75) return { text: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-500', bar: '#3b82f6', icon: 'fa-chart-line' };
-                    if (score >= 60) return { text: 'text-yellow-600', bg: 'bg-yellow-100', border: 'border-yellow-500', bar: '#eab308', icon: 'fa-chart-simple' };
-                    return { text: 'text-red-600', bg: 'bg-red-100', border: 'border-red-500', bar: '#ef4444', icon: 'fa-exclamation-triangle' };
-                },
-                
-                setupTableFilter: function(tableId, searchInputId, filterSelectors) {
-                    var $table = $(tableId);
-                    var $searchInput = $('#' + searchInputId);
-                    
-                    function filter() {
-                        var searchTerm = $searchInput.val().toLowerCase();
-                        var filters = {};
-                        
-                        for (var selector in filterSelectors) {
-                            filters[selector] = $(filterSelectors[selector]).val();
-                        }
-                        
-                        var visibleCount = 0;
-                        
-                        $table.find('tbody tr').each(function() {
-                            var $row = $(this);
-                            var show = true;
-                            
-                            if (searchTerm) {
-                                var text = $row.text().toLowerCase();
-                                if (text.indexOf(searchTerm) === -1) show = false;
-                            }
-                            
-                            for (var key in filters) {
-                                var filterValue = filters[key];
-                                if (filterValue) {
-                                    var cellValue = $row.data(key) || '';
-                                    if (cellValue !== filterValue) show = false;
-                                }
-                            }
-                            
-                            $row.toggle(show);
-                            if (show) visibleCount++;
-                        });
-                        
-                        if (visibleCount === 0 && $table.find('tbody tr').length > 0) {
-                            if ($('#noResultsRow').length === 0) {
-                                var colCount = $table.find('thead tr th').length;
-                                $table.find('tbody').append('<tr id="noResultsRow"><td colspan="' + colCount + '" class="text-center py-12 text-gray-500">' +
-                                    '<i class="fas fa-search text-3xl mb-2 text-gray-300"></i>' +
-                                    '<p>No results match your filters</p>' +
-                                    '<button onclick="resetFilters()" class="mt-2 text-blue-600 hover:underline">Clear filters</button>' +
-                                    '</td></tr>');
-                            }
-                        } else {
-                            $('#noResultsRow').remove();
-                        }
-                        
-                        return visibleCount;
-                    }
-                    
-                    $searchInput.on('keyup', filter);
-                    for (var selector in filterSelectors) {
-                        $(filterSelectors[selector]).on('change', filter);
-                    }
-                    
-                    return { filter: filter };
+                    if (score >= 90) return { text: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-500', bar: '#10b981', icon: 'fa-trophy' };
+                    if (score >= 75) return { text: 'text-indigo-400',  bg: 'bg-indigo-400/10',  border: 'border-indigo-500',  bar: '#6366f1', icon: 'fa-chart-line' };
+                    if (score >= 60) return { text: 'text-amber-400',   bg: 'bg-amber-400/10',   border: 'border-amber-500',   bar: '#f59e0b', icon: 'fa-chart-simple' };
+                    return { text: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-500', bar: '#ef4444', icon: 'fa-exclamation-triangle' };
                 },
                 
                 exportToExcel: function(data, filename) {
@@ -525,35 +485,28 @@
             };
         })();
         
-        // ========== GLOBAL CONFIRMATION FUNCTIONS ==========
+        // ── Global Confirmation ──
         window.globalConfirmExecute = function() {
-            if (window._confirmCallback) {
-                window._confirmCallback();
-            }
+            if (window._confirmCallback) window._confirmCallback();
             window.globalConfirmClose();
         };
-        
         window.globalConfirmClose = function() {
-            if (window._confirmCancelCallback) {
-                window._confirmCancelCallback();
-            }
+            if (window._confirmCancelCallback) window._confirmCancelCallback();
             $('#globalConfirmationModal').addClass('hidden').removeClass('flex');
             window._confirmCallback = null;
             window._confirmCancelCallback = null;
         };
         
-        // ========== SIDEBAR FUNCTIONS ==========
+        // ── Sidebar ──
         function toggleSidebar() {
             var sidebar = $('#sidebar');
-            var toggleIcon = $('#sidebar-toggle-icon');
-            
             sidebar.toggleClass('collapsed');
-            
+            var icon = $('#sidebar-toggle-icon');
             if (sidebar.hasClass('collapsed')) {
-                toggleIcon.removeClass('fa-chevron-left').addClass('fa-chevron-right');
+                icon.removeClass('fa-chevron-left').addClass('fa-chevron-right');
                 localStorage.setItem('sidebarCollapsed', 'true');
             } else {
-                toggleIcon.removeClass('fa-chevron-right').addClass('fa-chevron-left');
+                icon.removeClass('fa-chevron-right').addClass('fa-chevron-left');
                 localStorage.setItem('sidebarCollapsed', 'false');
             }
         }
@@ -601,14 +554,11 @@
             if (window.TaskTracker) TaskTracker.showNotification('Filters reset', 'info');
         }
         
-        // ========== DOCUMENT READY ==========
+        // ── Document Ready ──
         $(document).ready(function() {
-            var token = $('input[name="__RequestVerificationToken"]').val() || 
-                       $('#requestVerificationToken').val() || '';
-            
-            if (window.TaskTracker) {
-                TaskTracker.init(token);
-            }
+            var token = $('input[name="__RequestVerificationToken"]').val() ||
+                        $('#requestVerificationToken').val() || '';
+            if (window.TaskTracker) TaskTracker.init(token);
             
             if (localStorage.getItem('sidebarCollapsed') === 'true') {
                 $('#sidebar').addClass('collapsed');
@@ -620,8 +570,6 @@
                     $('.dropdown-menu').slideUp(200);
                 }
             });
-            
-            console.log('TaskTracker initialized');
         });
     </script>
     

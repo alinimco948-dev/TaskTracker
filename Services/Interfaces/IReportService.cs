@@ -1,4 +1,4 @@
-﻿using TaskTracker.Models.Entities;
+using TaskTracker.Models.Entities;
 using TaskTracker.Models.ViewModels;
 
 namespace TaskTracker.Services.Interfaces;
@@ -25,6 +25,7 @@ public interface IReportService
     Task<TaskCompletionViewModel> ExecuteTaskReportAsync(int taskId, DateTime startDate, DateTime endDate);
     Task<AuditLogReportViewModel> ExecuteAuditReportAsync(DateTime startDate, DateTime endDate, string? action = null, string? entityType = null);
     Task<List<Dictionary<string, object>>> ExecuteCustomReportAsync(CustomReportRequest request);
+    Task<ExecutiveSummaryViewModel> GetExecutiveSummaryAsync(DateTime startDate, DateTime endDate);
     
     // ========== Employee Comparison & Ranking ==========
     Task<List<EmployeeRankingViewModel>> GetEmployeeRankingAsync(DateTime? startDate = null, DateTime? endDate = null);

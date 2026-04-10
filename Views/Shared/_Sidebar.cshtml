@@ -1,116 +1,233 @@
-﻿﻿@{
+@{
     var controller = ViewContext.RouteData.Values["controller"]?.ToString();
 }
 
-<!-- DESKTOP SIDEBAR -->
-<aside id="sidebar" class="sidebar w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col shadow-xl transition-all duration-300 hidden lg:flex">
-    <div class="p-4 border-b border-gray-700 flex items-center justify-between">
-        <div class="flex items-center space-x-2">
-            <i class="fas fa-tasks text-2xl text-blue-400"></i>
-            <span class="sidebar-text font-bold text-xl">TaskTracker</span>
+<!-- ════════════════════════════════════════
+     DESKTOP SIDEBAR
+════════════════════════════════════════ -->
+<aside id="sidebar" class="sidebar w-64 flex-shrink-0 flex flex-col shadow-2xl hidden lg:flex"
+       style="background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%); border-right: 1px solid rgba(255,255,255,0.06);">
+
+    <!-- Logo -->
+    <div class="px-4 py-5 flex items-center justify-between" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <div class="flex items-center gap-3 sidebar-text-group">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background: linear-gradient(135deg, #6366f1, #7c3aed); box-shadow: 0 4px 15px rgba(99,102,241,0.4);">
+                <i class="fas fa-tasks text-white text-sm"></i>
+            </div>
+            <span class="sidebar-text font-bold text-lg text-white tracking-wide">TaskTracker</span>
         </div>
-        <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white">
-            <i class="fas fa-chevron-left text-sm" id="sidebar-toggle-icon"></i>
+        <button onclick="toggleSidebar()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition">
+            <i class="fas fa-chevron-left text-xs" id="sidebar-toggle-icon"></i>
         </button>
     </div>
-    
+
+    <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto py-4">
-        <ul class="space-y-1 px-2">
-            <li><a href="@Url.Action("Index", "Home")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Home" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-tachometer-alt w-5"></i><span class="sidebar-text">Dashboard</span></a></li>
-            <li><a href="@Url.Action("Index", "Employee")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Employee" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-users w-5"></i><span class="sidebar-text">Employees</span></a></li>
-            <li><a href="@Url.Action("Index", "Branch")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Branch" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-store w-5"></i><span class="sidebar-text">Branches</span></a></li>
-            <li><a href="@Url.Action("Index", "Department")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Department" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-building w-5"></i><span class="sidebar-text">Departments</span></a></li>
-            <li><a href="@Url.Action("Index", "Task")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Task" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-tasks w-5"></i><span class="sidebar-text">Tasks</span></a></li>
+        <div class="px-3 mb-2">
+            <p class="sidebar-text text-[10px] font-semibold text-slate-500 uppercase tracking-widest px-3 mb-1">Main</p>
+        </div>
+        <ul class="space-y-0.5 px-3">
             <li>
-                <button onclick="$('#reports-dropdown').slideToggle()" class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-700">
-                    <div class="flex items-center space-x-3"><i class="fas fa-chart-bar w-5"></i><span class="sidebar-text">Reports</span></div>
-                    <i class="fas fa-chevron-down text-xs transition-transform" id="reports-chevron"></i>
+                <a href="@Url.Action("Index", "Home")"
+                   class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                          @(controller == "Home" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5")">
+                    <i class="fas fa-tachometer-alt w-4 text-center flex-shrink-0 @(controller == "Home" ? "text-indigo-400" : "")"></i>
+                    <span class="sidebar-text">Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="@Url.Action("Index", "Employee")"
+                   class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                          @(controller == "Employee" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5")">
+                    <i class="fas fa-users w-4 text-center flex-shrink-0 @(controller == "Employee" ? "text-indigo-400" : "")"></i>
+                    <span class="sidebar-text">Employees</span>
+                </a>
+            </li>
+            <li>
+                <a href="@Url.Action("Index", "Branch")"
+                   class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                          @(controller == "Branch" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5")">
+                    <i class="fas fa-store w-4 text-center flex-shrink-0 @(controller == "Branch" ? "text-indigo-400" : "")"></i>
+                    <span class="sidebar-text">Branches</span>
+                </a>
+            </li>
+            <li>
+                <a href="@Url.Action("Index", "Department")"
+                   class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                          @(controller == "Department" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5")">
+                    <i class="fas fa-building w-4 text-center flex-shrink-0 @(controller == "Department" ? "text-indigo-400" : "")"></i>
+                    <span class="sidebar-text">Departments</span>
+                </a>
+            </li>
+            <li>
+                <a href="@Url.Action("Index", "Task")"
+                   class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                          @(controller == "Task" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5")">
+                    <i class="fas fa-tasks w-4 text-center flex-shrink-0 @(controller == "Task" ? "text-indigo-400" : "")"></i>
+                    <span class="sidebar-text">Tasks</span>
+                </a>
+            </li>
+            <li>
+                <a href="@Url.Action("Index", "Holiday")"
+                   class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                          @(controller == "Holiday" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5")">
+                    <i class="fas fa-calendar-alt w-4 text-center flex-shrink-0 @(controller == "Holiday" ? "text-indigo-400" : "")"></i>
+                    <span class="sidebar-text">Holidays</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="px-3 mt-5 mb-2">
+            <p class="sidebar-text text-[10px] font-semibold text-slate-500 uppercase tracking-widest px-3 mb-1">Reports</p>
+        </div>
+        <ul class="space-y-0.5 px-3">
+            <li>
+                <button onclick="toggleReportsDropdown()"
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all duration-200">
+                    <i class="fas fa-chart-bar w-4 text-center flex-shrink-0 @(controller == "Report" ? "text-indigo-400" : "")"></i>
+                    <span class="sidebar-text flex-1 text-left">Analytics</span>
+                    <i class="fas fa-chevron-down text-xs transition-transform sidebar-text" id="reports-chevron"></i>
                 </button>
-                <div id="reports-dropdown" class="hidden mt-1 ml-8 space-y-1">
-                    <a href="@Url.Action("EmployeePerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Performance</a>
-                    <a href="@Url.Action("EmployeeRanking", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Ranking</a>
-                    <a href="@Url.Action("EmployeeComparison", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Comparison</a>
-                    <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Branch Performance</a>
-                    <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Department Performance</a>
-                    <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Task Completion</a>
-                    <a href="@Url.Action("AuditLog", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Audit Log</a>
+                <div id="reports-dropdown" class="hidden mt-1 ml-7 space-y-0.5">
+                    <a href="@Url.Action("ExecutiveSummary", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
+                        <i class="fas fa-chart-line mr-2 text-pink-400/70"></i>Executive Summary
+                    </a>
+                    <a href="@Url.Action("EmployeePerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
+                        <i class="fas fa-user-chart mr-2 text-indigo-400/70"></i>Employee Performance
+                    </a>
+                    <a href="@Url.Action("EmployeeComparison", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
+                        <i class="fas fa-users-cog mr-2 text-cyan-400/70"></i>Employee Insights
+                    </a>
+                    <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
+                        <i class="fas fa-store mr-2 text-emerald-400/70"></i>Branch Performance
+                    </a>
+                    <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
+                        <i class="fas fa-building mr-2 text-violet-400/70"></i>Dept Performance
+                    </a>
+                    <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
+                        <i class="fas fa-check-double mr-2 text-rose-400/70"></i>Task Completion
+                    </a>
+                    <a href="@Url.Action("AuditLog", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
+                        <i class="fas fa-clipboard-list mr-2 text-slate-400/70"></i>Audit Log
+                    </a>
                 </div>
             </li>
-            <li><a href="@Url.Action("Index", "Holiday")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Holiday" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-calendar-alt w-5"></i><span class="sidebar-text">Holidays</span></a></li>
         </ul>
     </nav>
-    
-    <div class="p-4 border-t border-gray-700">
-        <div class="flex items-center space-x-3">
-            <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center"><span class="text-sm font-semibold">AD</span></div>
-            <div class="sidebar-text"><div class="text-sm font-medium">Admin User</div><div class="text-xs text-gray-400">Administrator</div></div>
+
+    <!-- User Panel -->
+    <div class="p-4" style="border-top: 1px solid rgba(255,255,255,0.06);">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center font-bold text-sm text-white"
+                 style="background: linear-gradient(135deg, #6366f1, #06b6d4); box-shadow: 0 2px 10px rgba(99,102,241,0.3);">
+                AD
+            </div>
+            <div class="sidebar-text min-w-0">
+                <div class="text-sm font-semibold text-white truncate">Admin User</div>
+                <div class="text-xs text-slate-500 truncate">Administrator</div>
+            </div>
         </div>
     </div>
 </aside>
 
-<!-- MOBILE SIDEBAR OVERLAY -->
-<div id="mobileSidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden" onclick="closeMobileSidebar()"></div>
+<!-- ════════════════════════════════════════
+     MOBILE OVERLAY & SIDEBAR
+════════════════════════════════════════ -->
+<div id="mobileSidebarOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden lg:hidden" onclick="closeMobileSidebar()"></div>
 
-<!-- MOBILE SIDEBAR -->
-<div id="mobileSidebar" class="fixed top-0 left-0 w-64 h-full bg-gradient-to-b from-gray-900 to-gray-800 text-white z-50 transform -translate-x-full transition-transform duration-300 lg:hidden">
-    <div class="flex flex-col h-full">
-        <div class="p-4 border-b border-gray-700 flex items-center justify-between">
-            <div class="flex items-center space-x-2"><i class="fas fa-tasks text-2xl text-blue-400"></i><span class="font-bold text-xl">TaskTracker</span></div>
-            <button onclick="closeMobileSidebar()" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+<div id="mobileSidebar" class="fixed top-0 left-0 w-64 h-full z-50 flex flex-col lg:hidden"
+     style="background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%); border-right: 1px solid rgba(255,255,255,0.06);">
+
+    <div class="px-4 py-5 flex items-center justify-between" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center"
+                 style="background: linear-gradient(135deg, #6366f1, #7c3aed);">
+                <i class="fas fa-tasks text-white text-sm"></i>
+            </div>
+            <span class="font-bold text-lg text-white">TaskTracker</span>
         </div>
-        <nav class="flex-1 overflow-y-auto py-4">
-            <ul class="space-y-1 px-2">
-                <li><a href="@Url.Action("Index", "Home")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Home" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-tachometer-alt w-5"></i><span>Dashboard</span></a></li>
-                <li><a href="@Url.Action("Index", "Employee")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Employee" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-users w-5"></i><span>Employees</span></a></li>
-                <li><a href="@Url.Action("Index", "Branch")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Branch" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-store w-5"></i><span>Branches</span></a></li>
-                <li><a href="@Url.Action("Index", "Department")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Department" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-building w-5"></i><span>Departments</span></a></li>
-                <li><a href="@Url.Action("Index", "Task")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Task" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-tasks w-5"></i><span>Tasks</span></a></li>
-                <li><button onclick="$('#mobileReportsDropdown').slideToggle()" class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-700"><div class="flex items-center space-x-3"><i class="fas fa-chart-bar w-5"></i><span>Reports</span></div><i class="fas fa-chevron-down text-xs"></i></button>
-                    <div id="mobileReportsDropdown" class="hidden mt-1 ml-8 space-y-1">
-                        <a href="@Url.Action("EmployeePerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Performance</a>
-                        <a href="@Url.Action("EmployeeRanking", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Ranking</a>
-                        <a href="@Url.Action("EmployeeComparison", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Employee Comparison</a>
-                        <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Branch Performance</a>
-                        <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Department Performance</a>
-                        <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Task Completion</a>
-                        <a href="@Url.Action("AuditLog", "Report")" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-700">Audit Log</a>
-                    </div>
-                </li>
-                <li><a href="@Url.Action("Index", "Holiday")" class="flex items-center space-x-3 px-3 py-2 rounded-lg @(controller == "Holiday" ? "bg-blue-600" : "hover:bg-gray-700")"><i class="fas fa-calendar-alt w-5"></i><span>Holidays</span></a></li>
-            </ul>
-        </nav>
-        <div class="p-4 border-t border-gray-700"><div class="flex items-center space-x-3"><div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center"><span class="text-sm font-semibold">AD</span></div><div><div class="text-sm font-medium">Admin User</div><div class="text-xs text-gray-400">Administrator</div></div></div></div>
+        <button onclick="closeMobileSidebar()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto py-4">
+        <ul class="space-y-0.5 px-3">
+            <li><a href="@Url.Action("Index", "Home")" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium @(controller == "Home" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5") transition"><i class="fas fa-tachometer-alt w-4"></i>Dashboard</a></li>
+            <li><a href="@Url.Action("Index", "Employee")" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium @(controller == "Employee" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5") transition"><i class="fas fa-users w-4"></i>Employees</a></li>
+            <li><a href="@Url.Action("Index", "Branch")" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium @(controller == "Branch" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5") transition"><i class="fas fa-store w-4"></i>Branches</a></li>
+            <li><a href="@Url.Action("Index", "Department")" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium @(controller == "Department" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5") transition"><i class="fas fa-building w-4"></i>Departments</a></li>
+            <li><a href="@Url.Action("Index", "Task")" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium @(controller == "Task" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5") transition"><i class="fas fa-tasks w-4"></i>Tasks</a></li>
+            <li><a href="@Url.Action("Index", "Holiday")" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium @(controller == "Holiday" ? "active-nav" : "text-slate-400 hover:text-white hover:bg-white/5") transition"><i class="fas fa-calendar-alt w-4"></i>Holidays</a></li>
+            <li>
+                <button onclick="$('#mobileReportsDropdown').slideToggle()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition">
+                    <i class="fas fa-chart-bar w-4"></i><span class="flex-1 text-left">Analytics</span><i class="fas fa-chevron-down text-xs"></i>
+                </button>
+                <div id="mobileReportsDropdown" class="hidden mt-1 ml-7 space-y-0.5">
+                    <a href="@Url.Action("ExecutiveSummary", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Executive Summary</a>
+                    <a href="@Url.Action("EmployeePerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Employee Performance</a>
+                    <a href="@Url.Action("EmployeeComparison", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Employee Insights</a>
+                    <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Branch Performance</a>
+                    <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Dept Performance</a>
+                    <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Task Completion</a>
+                    <a href="@Url.Action("AuditLog", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Audit Log</a>
+                </div>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="p-4" style="border-top: 1px solid rgba(255,255,255,0.06);">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm text-white"
+                 style="background: linear-gradient(135deg, #6366f1, #06b6d4);">AD</div>
+            <div>
+                <div class="text-sm font-semibold text-white">Admin User</div>
+                <div class="text-xs text-slate-500">Administrator</div>
+            </div>
+        </div>
     </div>
 </div>
 
-<script>
-    function toggleSidebar() {
-        $('#sidebar').toggleClass('collapsed');
-        var icon = $('#sidebar-toggle-icon');
-        if ($('#sidebar').hasClass('collapsed')) {
-            icon.removeClass('fa-chevron-left').addClass('fa-chevron-right');
-            localStorage.setItem('sidebarCollapsed', 'true');
-        } else {
-            icon.removeClass('fa-chevron-right').addClass('fa-chevron-left');
-            localStorage.setItem('sidebarCollapsed', 'false');
-        }
-    }
-    function openMobileSidebar() { $('#mobileSidebar').addClass('open'); $('#mobileSidebarOverlay').removeClass('hidden'); $('body').addClass('overflow-hidden'); }
-    function closeMobileSidebar() { $('#mobileSidebar').removeClass('open'); $('#mobileSidebarOverlay').addClass('hidden'); $('body').removeClass('overflow-hidden'); }
-    $(document).ready(function() { 
-        if (localStorage.getItem('sidebarCollapsed') === 'true') { 
-            $('#sidebar').addClass('collapsed'); 
-            $('#sidebar-toggle-icon').removeClass('fa-chevron-left').addClass('fa-chevron-right'); 
-        } 
-    });
-</script>
-
 <style>
+    /* Active nav item */
+    .active-nav {
+        background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(124,58,237,0.15));
+        color: #e0e7ff;
+        border: 1px solid rgba(99,102,241,0.3);
+        box-shadow: 0 0 12px rgba(99,102,241,0.1);
+    }
+    .active-nav i { color: #818cf8 !important; }
+
+    /* Sidebar collapsed */
     .sidebar.collapsed { width: 72px; }
     .sidebar.collapsed .sidebar-text { display: none !important; }
-    .sidebar.collapsed nav ul li a, .sidebar.collapsed nav ul li button { justify-content: center; padding-left: 0; padding-right: 0; }
-    .sidebar.collapsed nav ul li a i, .sidebar.collapsed nav ul li button i { margin-right: 0; }
+    .sidebar.collapsed .sidebar-text-group { justify-content: center; }
+    .sidebar.collapsed nav ul li a,
+    .sidebar.collapsed nav ul li button { justify-content: center; padding-left: 0; padding-right: 0; }
+    .sidebar.collapsed nav ul li a i,
+    .sidebar.collapsed nav ul li button i { margin-right: 0; }
+
+    /* Mobile sidebar open */
     #mobileSidebar { transition: transform 0.3s ease-in-out; transform: translateX(-100%); }
     #mobileSidebar.open { transform: translateX(0); }
     #mobileSidebarOverlay { transition: opacity 0.3s; }
+
+    /* Rotate */
+    .rotate-180 { transform: rotate(180deg); }
 </style>
+
+<script>
+    // Sidebar collapse state restore & reports dropdown auto-open
+    $(document).ready(function() {
+        if (localStorage.getItem('sidebarCollapsed') === 'true') {
+            $('#sidebar').addClass('collapsed');
+            $('#sidebar-toggle-icon').removeClass('fa-chevron-left').addClass('fa-chevron-right');
+        }
+        var path = window.location.pathname.toLowerCase();
+        if (path.indexOf('/report/') !== -1) {
+            $('#reports-dropdown').show();
+            $('#reports-chevron').addClass('rotate-180');
+        }
+    });
+</script>

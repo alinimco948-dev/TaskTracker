@@ -1,0 +1,293 @@
+@model TaskTracker.Models.ViewModels.ExecutiveSummaryViewModel
+@{
+    ViewData["Title"] = "Executive Summary";
+}
+
+<div class="space-y-6 animate-fade-up">
+
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg" style="background: linear-gradient(135deg, #4f46e5, #ec4899);">
+                    <i class="fas fa-chart-line text-white"></i>
+                </div>
+                Executive Dashboard
+            </h1>
+            <p class="text-slate-400 mt-2 text-sm max-w-2xl">
+                Global overview of operations, identifying trends, top performing departments, and high-risk bottlenecks across the entire organization.
+            </p>
+        </div>
+
+        <form method="get" class="glass-card p-3 flex items-end gap-3 self-start">
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Start Date</label>
+                <input type="date" name="startDate" class="dark-input text-sm py-1.5" value="@Model.StartDate.ToString("yyyy-MM-dd")">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">End Date</label>
+                <input type="date" name="endDate" class="dark-input text-sm py-1.5" value="@Model.EndDate.ToString("yyyy-MM-dd")">
+            </div>
+            <button type="submit" class="btn-primary py-1.5 px-4 h-[38px]">
+                <i class="fas fa-sync-alt text-xs mr-1"></i>Update
+            </button>
+        </form>
+    </div>
+
+    <!-- Global Operations Health Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="glass-card p-5 relative overflow-hidden group">
+            <div class="absolute -right-4 -top-4 w-16 h-16 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Operations</p>
+            <p class="text-3xl font-bold text-white">@Model.TotalTasksAssigned.ToString("N0")</p>
+            <div class="mt-2 flex items-center gap-2">
+                <span class="text-xs text-slate-500">Tasks assigned system-wide</span>
+            </div>
+        </div>
+
+        <div class="glass-card p-5 relative overflow-hidden group border-b-2 border-emerald-500">
+            <div class="absolute -right-4 -top-4 w-16 h-16 bg-emerald-500/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Completed</p>
+            <p class="text-3xl font-bold text-emerald-400">@Model.TotalTasksCompleted.ToString("N0")</p>
+            <div class="mt-2 flex items-center gap-2">
+                <span class="stat-badge" style="background:rgba(16,185,129,0.15);color:#6ee7b7;">@Model.GlobalCompletionRate%</span>
+                <span class="text-[10px] text-slate-500">Completion Rate</span>
+            </div>
+        </div>
+
+        <div class="glass-card p-5 relative overflow-hidden group border-b-2 border-cyan-500">
+            <div class="absolute -right-4 -top-4 w-16 h-16 bg-cyan-500/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">On-Time</p>
+            <p class="text-3xl font-bold text-cyan-400">@Model.TotalTasksOnTime.ToString("N0")</p>
+            <div class="mt-2 flex items-center gap-2">
+                <span class="stat-badge" style="background:rgba(6,182,212,0.15);color:#67e8f9;">@Model.GlobalOnTimeRate%</span>
+                <span class="text-[10px] text-slate-500">Punctuality</span>
+            </div>
+        </div>
+
+        <div class="glass-card p-5 relative overflow-hidden group border-b-2 border-amber-500">
+            <div class="absolute -right-4 -top-4 w-16 h-16 bg-amber-500/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Pending</p>
+            <p class="text-3xl font-bold text-amber-400">@Model.TotalTasksPending.ToString("N0")</p>
+            <div class="mt-2 flex items-center gap-2">
+                <span class="text-xs text-slate-500">Awaiting action</span>
+            </div>
+        </div>
+
+        <div class="glass-card p-5 relative overflow-hidden group border-b-2 border-red-500">
+            <div class="absolute -right-4 -top-4 w-16 h-16 bg-red-500/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Late Fails</p>
+            <p class="text-3xl font-bold text-red-500">@Model.TotalTasksLate.ToString("N0")</p>
+            <div class="mt-2 flex items-center gap-2">
+                <span class="text-xs text-slate-500">Missed deadlines</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- 30-Day Trend -->
+        <div class="glass-card flex flex-col h-full">
+            <div class="p-4 border-b flex justify-between items-center" style="border-color: rgba(255,255,255,0.06); background: rgba(99,102,241,0.05);">
+                <h3 class="font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-chart-area text-indigo-400"></i>
+                    Operations Trend
+                </h3>
+            </div>
+            <div class="p-4 flex-1" style="min-height: 300px;">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Departmental Execution -->
+        <div class="glass-card flex flex-col h-full">
+            <div class="p-4 border-b flex justify-between items-center" style="border-color: rgba(255,255,255,0.06); background: rgba(236,72,153,0.05);">
+                <h3 class="font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-building text-pink-400"></i>
+                    Departmental Execution
+                </h3>
+            </div>
+            <div class="p-4 flex-1" style="min-height: 300px;">
+                <canvas id="deptChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Watchlist Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Bottom Branches -->
+        <div class="glass-card">
+            <div class="p-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(239,68,68,0.05);">
+                <h3 class="font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-exclamation-triangle text-red-500"></i>
+                    High Risk Branches
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">Branches with the lowest completion rates</p>
+            </div>
+            <div class="p-4">
+                @if (Model.BottomBranches.Any())
+                {
+                    <div class="space-y-3">
+                        @foreach(var branch in Model.BottomBranches)
+                        {
+                            <div class="form-section p-3 flex justify-between items-center">
+                                <div>
+                                    <div class="font-semibold text-white">@branch.BranchName</div>
+                                    <div class="text-xs text-slate-400">@branch.PendingTasks.ToString("N0") Pending Tasks</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xl font-bold @(branch.CompletionRate < 50 ? "text-red-500" : "text-amber-500")">
+                                        @branch.CompletionRate%
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-slate-500 italic text-sm text-center py-4">No high risk branches identified.</p>
+                }
+            </div>
+        </div>
+
+        <!-- Bottom Tasks -->
+        <div class="glass-card">
+            <div class="p-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(245,158,11,0.05);">
+                <h3 class="font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-tasks text-amber-500"></i>
+                    Failing Procedures
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">SOPs failing most often globally</p>
+            </div>
+            <div class="p-4">
+                @if (Model.BottomTasks.Any())
+                {
+                    <div class="space-y-3">
+                        @foreach(var task in Model.BottomTasks)
+                        {
+                            <div class="form-section p-3 flex justify-between items-center">
+                                <div>
+                                    <div class="font-semibold text-white truncate max-w-[200px] md:max-w-[250px]" title="@task.TaskName">@task.TaskName</div>
+                                    <div class="text-xs text-slate-400">Failed globally @task.PendingTasks.ToString("N0") times</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xl font-bold @(task.CompletionRate < 50 ? "text-red-500" : "text-amber-500")">
+                                        @task.CompletionRate%
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-slate-500 italic text-sm text-center py-4">No failing procedures identified.</p>
+                }
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            Chart.defaults.color = '#94a3b8';
+            Chart.defaults.font.family = "'Inter', sans-serif";
+
+            // 1. Trend Chart
+            const trendLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DailyTrends.Select(d => d.DateLabel)));
+            const trendRates = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DailyTrends.Select(d => d.CompletionRate)));
+            const trendVolumes = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DailyTrends.Select(d => d.TotalTasks)));
+
+            const ctxTrend = document.getElementById('trendChart');
+            if (ctxTrend) {
+                new Chart(ctxTrend, {
+                    type: 'line',
+                    data: {
+                        labels: trendLabels,
+                        datasets: [
+                            {
+                                label: 'Completion Rate (%)',
+                                data: trendRates,
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16,185,129,0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Task Volume',
+                                data: trendVolumes,
+                                type: 'bar',
+                                backgroundColor: 'rgba(99,102,241,0.2)',
+                                borderRadius: 4,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { display: true, position: 'top' }
+                        },
+                        scales: {
+                            x: { grid: { display: false } },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                max: 100,
+                                title: { display: true, text: 'Rate %' },
+                                grid: { color: 'rgba(255,255,255,0.05)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: { display: true, text: 'Volume' },
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 2. Department Chart
+            const deptLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DepartmentComparisons.Select(d => d.DepartmentName)));
+            const deptRates = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DepartmentComparisons.Select(d => d.CompletionRate)));
+
+            const ctxDept = document.getElementById('deptChart');
+            if (ctxDept) {
+                new Chart(ctxDept, {
+                    type: 'bar',
+                    data: {
+                        labels: deptLabels,
+                        datasets: [{
+                            label: 'Execution Rate (%)',
+                            data: deptRates,
+                            backgroundColor: deptRates.map(r => r > 80 ? 'rgba(16,185,129,0.7)' : r > 60 ? 'rgba(245,158,11,0.7)' : 'rgba(239,68,68,0.7)'),
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { display: false } },
+                            y: { max: 100, grid: { color: 'rgba(255,255,255,0.05)' } }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}

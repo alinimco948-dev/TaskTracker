@@ -17,7 +17,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     var rawConnectionString = railwayConnection ?? configConnection;
     
     // Convert PostgreSQL URI to Npgsql format if needed
-    var connectionString = ConvertPostgresUriToConnectionString(rawConnectionString);
+    var connectionString = ConvertPostgresUriToConnectionString(rawConnectionString ?? string.Empty);
     
     options.UseNpgsql(connectionString);
 });
@@ -77,11 +77,10 @@ builder.Services.AddSession(options =>
 // Add response caching
 builder.Services.AddResponseCaching();
 
-// Configure Kestrel for Railway
+// Configure Kestrel for local development
 builder.WebHost.ConfigureKestrel(options =>
 {
-    var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-    options.ListenAnyIP(int.Parse(port));
+    options.ListenAnyIP(5000);
 });
 
 // Set EPPlus license

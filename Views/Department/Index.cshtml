@@ -1,89 +1,147 @@
-﻿@model IEnumerable<TaskTracker.Models.ViewModels.DepartmentListViewModel>
+@model IEnumerable<TaskTracker.Models.ViewModels.DepartmentListViewModel>
 @{
     ViewData["Title"] = "Departments";
 }
 
-<div class="bg-white rounded-lg shadow-sm border border-gray-200">
-    <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-        <h2 class="text-lg font-semibold">Department Management</h2>
-        <a href="@Url.Action("Create")" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-            <i class="fas fa-plus-circle mr-2"></i>Add Department
+<div class="space-y-6 animate-fade-up">
+
+    <!-- Header -->
+    <div class="flex flex-wrap justify-between items-start gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #7c3aed, #6366f1);">
+                    <i class="fas fa-building text-white text-sm"></i>
+                </div>
+                Department Management
+            </h1>
+            <p class="text-slate-400 mt-1">Organize your branches and employees into departments</p>
+        </div>
+        <a href="@Url.Action("Create")" class="btn-primary">
+            <i class="fas fa-plus-circle"></i>Add Department
         </a>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50">
-        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <div class="text-sm text-gray-500 mb-1">Total Departments</div>
-            <div class="text-2xl font-bold text-gray-800">@(Model?.Count() ?? 0)</div>
+    <!-- Stats -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-card p-5 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full rounded-l-[0.875rem]" style="background: linear-gradient(180deg, #6366f1, #7c3aed);"></div>
+            <div class="pl-3">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Departments</p>
+                <p class="text-3xl font-bold text-white mt-1">@(Model?.Count() ?? 0)</p>
+            </div>
         </div>
-        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <div class="text-sm text-gray-500 mb-1">Active</div>
-            <div class="text-2xl font-bold text-green-600">@(Model?.Count(d => d.IsActive) ?? 0)</div>
+        <div class="glass-card p-5 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full rounded-l-[0.875rem]" style="background: linear-gradient(180deg, #10b981, #059669);"></div>
+            <div class="pl-3">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active</p>
+                <p class="text-3xl font-bold text-emerald-400 mt-1">@(Model?.Count(d => d.IsActive) ?? 0)</p>
+            </div>
         </div>
-        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <div class="text-sm text-gray-500 mb-1">Total Branches</div>
-            <div class="text-2xl font-bold text-blue-600">@ViewBag.TotalBranches</div>
+        <div class="glass-card p-5 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full rounded-l-[0.875rem]" style="background: linear-gradient(180deg, #06b6d4, #0891b2);"></div>
+            <div class="pl-3">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Branches</p>
+                <p class="text-3xl font-bold text-cyan-400 mt-1">@ViewBag.TotalBranches</p>
+            </div>
         </div>
-        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <div class="text-sm text-gray-500 mb-1">Total Employees</div>
-            <div class="text-2xl font-bold text-purple-600">@ViewBag.TotalEmployees</div>
+        <div class="glass-card p-5 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full rounded-l-[0.875rem]" style="background: linear-gradient(180deg, #f59e0b, #d97706);"></div>
+            <div class="pl-3">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Employees</p>
+                <p class="text-3xl font-bold text-amber-400 mt-1">@ViewBag.TotalEmployees</p>
+            </div>
         </div>
     </div>
 
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-4 py-2 text-left">Department</th>
-                    <th class="px-4 py-2 text-left">Code</th>
-                    <th class="px-4 py-2 text-left">Description</th>
-                    <th class="px-4 py-2 text-left">Branches</th>
-                    <th class="px-4 py-2 text-left">Employees</th>
-                    <th class="px-4 py-2 text-left">Status</th>
-                    <th class="px-4 py-2 text-left">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (Model != null && Model.Any())
-                {
-                    @foreach (var dept in Model)
+    <!-- Table -->
+    <div class="glass-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full dark-table">
+                <thead>
+                    <tr>
+                        <th>Department</th>
+                        <th>Code</th>
+                        <th>Description</th>
+                        <th class="text-center">Branches</th>
+                        <th class="text-center">Employees</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model != null && Model.Any())
                     {
-                        <tr class="border-t hover:bg-gray-50">
-                            <td class="px-4 py-2 font-medium">@dept.Name</td>
-                            <td class="px-4 py-2">@dept.Code</td>
-                            <td class="px-4 py-2">@dept.Description</td>
-                            <td class="px-4 py-2">@dept.BranchCount</td>
-                            <td class="px-4 py-2">@dept.EmployeeCount</td>
-                            <td class="px-4 py-2">
-                                @if (dept.IsActive)
-                                {
-                                    <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Active</span>
-                                }
-                                else
-                                {
-                                    <span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Inactive</span>
-                                }
-                            </td>
-                            <td class="px-4 py-2">
-                                <div class="flex space-x-2">
-                                    <a href="@Url.Action("Details", new { id = dept.Id })" class="text-blue-600 hover:text-blue-800"><i class="fas fa-eye"></i></a>
-                                    <a href="@Url.Action("Edit", new { id = dept.Id })" class="text-green-600 hover:text-green-800"><i class="fas fa-edit"></i></a>
-                                    <button onclick="deleteDepartment(@dept.Id, '@dept.Name')" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                        @foreach (var dept in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                                             style="background: linear-gradient(135deg, #7c3aed, #6366f1);">
+                                            @(dept.Name.Length > 0 ? dept.Name[0].ToString().ToUpper() : "D")
+                                        </div>
+                                        <span class="font-semibold text-white">@dept.Name</span>
+                                    </div>
+                                </td>
+                                <td><span class="font-mono text-slate-300 text-xs">@dept.Code</span></td>
+                                <td><span class="text-slate-400 text-sm truncate max-w-[200px] block">@dept.Description</span></td>
+                                <td class="text-center">
+                                    <span class="stat-badge" style="background: rgba(6,182,212,0.15); color: #67e8f9;">@dept.BranchCount</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="stat-badge" style="background: rgba(245,158,11,0.15); color: #fcd34d;">@dept.EmployeeCount</span>
+                                </td>
+                                <td class="text-center">
+                                    @if (dept.IsActive)
+                                    {
+                                        <span class="stat-badge" style="background: rgba(16,185,129,0.15); color: #6ee7b7;">
+                                            <i class="fas fa-circle text-[8px] text-emerald-400"></i>Active
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="stat-badge" style="background: rgba(239,68,68,0.15); color: #fca5a5;">
+                                            <i class="fas fa-circle text-[8px] text-red-400"></i>Inactive
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center gap-1">
+                                        <a href="@Url.Action("Details", new { id = dept.Id })"
+                                           class="w-8 h-8 rounded-lg flex items-center justify-center text-indigo-400 hover:bg-indigo-400/10 transition" title="View">
+                                            <i class="fas fa-eye text-sm"></i>
+                                        </a>
+                                        <a href="@Url.Action("Edit", new { id = dept.Id })"
+                                           class="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-400 hover:bg-emerald-400/10 transition" title="Edit">
+                                            <i class="fas fa-edit text-sm"></i>
+                                        </a>
+                                        <button onclick="deleteDepartment(@dept.Id, '@dept.Name')"
+                                                class="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-400/10 transition" title="Delete">
+                                            <i class="fas fa-trash text-sm"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="7" class="py-16 text-center">
+                                <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                                     style="background: rgba(124,58,237,0.1);">
+                                    <i class="fas fa-building text-violet-400 text-2xl"></i>
                                 </div>
+                                <p class="text-slate-300 font-semibold mb-1">No departments found</p>
+                                <p class="text-slate-500 text-sm mb-4">
+                                    <a href="@Url.Action("Create")" class="text-indigo-400 hover:underline">Create your first department</a>
+                                </p>
                             </td>
                         </tr>
                     }
-                }
-                else
-                {
-                    <tr>
-                        <td colspan="7" class="px-4 py-8 text-center text-gray-500">
-                            No departments found. <a href="@Url.Action("Create")" class="text-blue-600 hover:underline">Create your first department</a>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -95,10 +153,10 @@
                 type: 'POST',
                 success: function(response) {
                     if (response.success) {
-                        showNotification(response.message, 'success');
+                        if (window.TaskTracker) TaskTracker.showNotification(response.message, 'success');
                         setTimeout(() => location.reload(), 1000);
                     } else {
-                        showNotification(response.message, 'error');
+                        if (window.TaskTracker) TaskTracker.showNotification(response.message, 'error');
                     }
                 }
             });

@@ -103,7 +103,7 @@ public async Task<IActionResult> GetAllTaskStatuses(string date, string branchId
         var query = _context.DailyTasks
             .Include(dt => dt.TaskItem)
             .Include(dt => dt.TaskAssignment)
-                .ThenInclude(ta => ta.Employee)
+                .ThenInclude(ta => ta!.Employee)
             .Where(dt => dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd);
         
         if (branchIdList?.Any() == true)
@@ -200,7 +200,7 @@ public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, str
         var dailyTask = await _context.DailyTasks
             .Include(dt => dt.TaskItem)
             .Include(dt => dt.TaskAssignment)
-                .ThenInclude(ta => ta.Employee)
+                .ThenInclude(ta => ta!.Employee)
             .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
                                        dt.TaskItemId == taskItemId &&
                                        dt.TaskDate >= utcStart &&
@@ -213,7 +213,9 @@ public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, str
 
         // Calculate all values for debug
         var localTaskDate = _timezoneService.ConvertToLocalTime(dailyTask.TaskDate);
-        var deadline = _taskCalculationService.CalculateDeadline(dailyTask.TaskItem, dailyTask.TaskDate);
+        var deadline = dailyTask.TaskItem != null 
+            ? await _taskCalculationService.CalculateDeadline(dailyTask.TaskItem, dailyTask.TaskDate)
+            : DateTime.MaxValue;
         var localDeadline = _timezoneService.ConvertToLocalTime(deadline);
         DateTime? localCompleted = null;
         double diffMinutes = 0;
@@ -228,11 +230,11 @@ public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, str
 
         var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
 
-        string completedAtString = dailyTask.CompletedAt.HasValue 
+        string? completedAtString = dailyTask.CompletedAt.HasValue 
             ? dailyTask.CompletedAt.Value.ToString("yyyy-MM-ddTHH:mm:ssZ") 
             : null;
         
-        string deadlineString = delayInfo.Deadline.HasValue 
+        string? deadlineString = delayInfo.Deadline.HasValue 
             ? delayInfo.Deadline.Value.ToString("yyyy-MM-ddTHH:mm:ssZ") 
             : null;
 
@@ -401,7 +403,7 @@ public async Task<IActionResult> SaveAdjustment(int branchId, int taskItemId, st
         await _context.SaveChangesAsync();
         
         // If the task was already completed, recalculate delay info
-        object taskData = null;
+        object? taskData = null;
         if (dailyTask.IsCompleted && dailyTask.CompletedAt.HasValue)
         {
             var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dailyTask);
@@ -529,7 +531,7 @@ public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, st
         var dailyTask = await _context.DailyTasks
             .Include(dt => dt.TaskItem)
             .Include(dt => dt.TaskAssignment)
-                .ThenInclude(ta => ta.Employee)
+                .ThenInclude(ta => ta!.Employee)
             .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
                                        dt.TaskItemId == taskItemId &&
                                        dt.TaskDate >= utcStart &&
@@ -627,7 +629,7 @@ public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, st
                 return Json(new { success = false, message = "Task not found" });
             }
             
-            var deadline = _taskCalculationService.CalculateDeadline(task, utcStart);
+            var deadline = await _taskCalculationService.CalculateDeadline(task, utcStart);
             var adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0;
             var adjustedDeadline = deadline.AddMinutes(adjustmentMinutes);
             var localDeadline = _timezoneService.ConvertToLocalTime(adjustedDeadline);
@@ -693,7 +695,7 @@ public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, st
                     count++;
                 }
 
-                var deadline = _taskCalculationService.CalculateDeadline(task, utcStart);
+                var deadline = await _taskCalculationService.CalculateDeadline(task, utcStart);
                 var adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0;
                 var adjustedDeadline = deadline.AddMinutes(adjustmentMinutes);
                 var localDeadline = _timezoneService.ConvertToLocalTime(adjustedDeadline);
