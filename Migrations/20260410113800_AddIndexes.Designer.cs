@@ -12,8 +12,8 @@ using TaskTracker.Data;
 namespace TaskTracker.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260407201800_AddSoftDeleteColumnsToDailyTask")]
-    partial class AddSoftDeleteColumnsToDailyTask
+    [Migration("20260410113800_AddIndexes")]
+    partial class AddIndexes
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

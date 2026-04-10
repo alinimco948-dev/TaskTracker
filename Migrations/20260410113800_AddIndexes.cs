@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace TaskTracker.Migrations
 {
     /// <inheritdoc />
-    public partial class AddSoftDeleteColumnsToDailyTask : Migration
+    public partial class AddIndexes : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
