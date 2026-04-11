@@ -146,6 +146,14 @@ class ApiService {
         });
     }
 
+    async bulkUpdate(taskItemId, completionDateTime, branchIds) {
+        return this.request('/Home/BulkUpdate', 'POST', {
+            taskItemId: taskItemId,
+            completionDateTime: completionDateTime,
+            branchIds: branchIds
+        });
+    }
+
     async resetAllForTask(taskItemId, date) {
         return this.request('/Home/ResetAllForTask', 'POST', {
             taskItemId: taskItemId,
@@ -174,14 +182,6 @@ class ApiService {
         return this.request('/Home/SaveNotes', 'POST', {
             branchId: branchId,
             notes: notes
-        });
-    }
-
-    async bulkUpdate(taskItemId, completionDateTime, branchIds) {
-        return this.request('/Home/BulkUpdate', 'POST', {
-            taskItemId: taskItemId,
-            completionDateTime: completionDateTime,
-            branchIds: branchIds
         });
     }
 
@@ -216,47 +216,57 @@ function updateTaskCell(cell, data) {
             timeDisplay = `${hours}:${String(minutes).padStart(2, '0')} ${ampm}`;
             
             if (data.delayType === 'early') {
-                bgColor = "bg-blue-100";
-                textColor = "text-blue-800";
-                borderColor = "border-blue-300";
+                bgColor = "bg-blue-900/60";
+                textColor = "text-blue-300";
+                borderColor = "border-blue-700/50";
                 statusDisplay = data.delayText || "Early";
                 titleText = data.delayText || "Completed early";
             } else if (data.isOnTime === true) {
-                bgColor = "bg-green-100";
-                textColor = "text-green-800";
-                borderColor = "border-green-300";
+                bgColor = "bg-emerald-900/60";
+                textColor = "text-emerald-300";
+                borderColor = "border-emerald-700/50";
                 statusDisplay = "On Time";
                 titleText = "Completed on time";
-            } else if (data.delayType === 'minutes') {
-                bgColor = "bg-yellow-100";
-                textColor = "text-yellow-800";
-                borderColor = "border-yellow-300";
-                statusDisplay = data.delayText || "Late";
-                titleText = data.delayText || "Late";
-            } else if (data.delayType === 'hours') {
-                bgColor = "bg-orange-100";
-                textColor = "text-orange-800";
-                borderColor = "border-orange-300";
-                statusDisplay = data.delayText || "Late";
-                titleText = data.delayText || "Late";
-            } else if (data.delayType === 'days') {
-                bgColor = "bg-red-100";
-                textColor = "text-red-800";
-                borderColor = "border-red-300";
-                statusDisplay = data.delayText || "Late";
-                titleText = data.delayText || "Late";
+            } else if (data.delayType === 'late' || data.delayType === 'minutes' || data.delayType === 'hours' || data.delayType === 'days') {
+                if (data.delayText) {
+                    statusDisplay = data.delayText;
+                    titleText = data.delayText;
+                    if (data.delayText.includes('m') || data.delayText.includes('min')) {
+                        bgColor = "bg-amber-900/60";
+                        textColor = "text-amber-300";
+                        borderColor = "border-amber-700/50";
+                    } else if (data.delayText.includes('h') || data.delayText.includes('hr')) {
+                        bgColor = "bg-orange-900/60";
+                        textColor = "text-orange-300";
+                        borderColor = "border-orange-700/50";
+                    } else if (data.delayText.includes('d') || data.delayText.includes('day')) {
+                        bgColor = "bg-red-900/60";
+                        textColor = "text-red-300";
+                        borderColor = "border-red-700/50";
+                    } else {
+                        bgColor = "bg-amber-900/60";
+                        textColor = "text-amber-300";
+                        borderColor = "border-amber-700/50";
+                    }
+                } else {
+                    bgColor = "bg-amber-900/60";
+                    textColor = "text-amber-300";
+                    borderColor = "border-amber-700/50";
+                    statusDisplay = "Late";
+                    titleText = "Completed late";
+                }
             } else {
-                bgColor = "bg-red-100";
-                textColor = "text-red-800";
-                borderColor = "border-red-300";
-                statusDisplay = "Late";
-                titleText = "Completed late";
+                bgColor = "bg-red-900/60";
+                textColor = "text-red-300";
+                borderColor = "border-red-700/50";
+                statusDisplay = data.delayText || "Late";
+                titleText = data.delayText || "Completed late";
             }
         }
     } else {
-        bgColor = "bg-gray-50";
-        textColor = "text-gray-700";
-        borderColor = "border-gray-300";
+        bgColor = "bg-slate-800/50";
+        textColor = "text-slate-400";
+        borderColor = "border-slate-700/50";
     }
     
     const buttonClasses = `w-full px-1 py-2 rounded text-[9px] font-medium ${bgColor} ${textColor} hover:opacity-90 transition-all flex items-center justify-between gap-0.5 border ${borderColor} task-button`;
@@ -267,7 +277,7 @@ function updateTaskCell(cell, data) {
     
     if (data.assignedTo) {
         const initial = data.assignedTo.charAt(0).toUpperCase();
-        newHtml += `<span class="inline-flex items-center justify-center w-3.5 h-3.5 bg-gray-300 text-gray-800 rounded-full text-[6px] font-bold flex-shrink-0 employee-initial" title="${escapeHtml(data.assignedTo)}">${escapeHtml(initial)}</span>`;
+        newHtml += `<span class="inline-flex items-center justify-center w-3.5 h-3.5 bg-indigo-600 text-white rounded-full text-[6px] font-bold flex-shrink-0 employee-initial" title="${escapeHtml(data.assignedTo)}">${escapeHtml(initial)}</span>`;
     }
     
     button.html(newHtml).prop('disabled', false);
@@ -290,7 +300,7 @@ function updateAdjustmentIndicator(cell, minutes) {
 function updateBranchProgress(row) {
     const progressCell = row.find('td:last-child');
     const visibleTasks = row.find('.task-button').length;
-    const completedTasks = row.find('.task-button.bg-green-100, .task-button.bg-blue-100, .task-button.bg-yellow-100, .task-button.bg-orange-100, .task-button.bg-red-100').length;
+    const completedTasks = row.find('.task-button.bg-emerald-900\\/60, .task-button.bg-blue-900\\/60, .task-button.bg-amber-900\\/60, .task-button.bg-orange-900\\/60, .task-button.bg-red-900\\/60').length;
     const progress = visibleTasks > 0 ? Math.round((completedTasks * 100) / visibleTasks) : 0;
     progressCell.find('.bg-blue-500').css('width', progress + '%');
     progressCell.find('.progress-percent').text(progress + '%');
@@ -300,9 +310,9 @@ function updateStats() {
     let completed = 0, total = 0;
     $('.task-button').each(function() {
         total++;
-        if ($(this).hasClass('bg-green-100') || $(this).hasClass('bg-blue-100') || 
-            $(this).hasClass('bg-yellow-100') || $(this).hasClass('bg-orange-100') || 
-            $(this).hasClass('bg-red-100')) {
+        if ($(this).hasClass('bg-emerald-900/60') || $(this).hasClass('bg-blue-900/60') || 
+            $(this).hasClass('bg-amber-900/60') || $(this).hasClass('bg-orange-900/60') || 
+            $(this).hasClass('bg-red-900/60')) {
             completed++;
         }
     });
@@ -312,7 +322,7 @@ function updateStats() {
     
     let onTimeCount = 0;
     $('.task-button').each(function() {
-        if ($(this).hasClass('bg-green-100')) {
+        if ($(this).hasClass('bg-emerald-900/60')) {
             onTimeCount++;
         }
     });
@@ -651,22 +661,33 @@ async function executeBulkUpdate() {
         return;
     }
     
+    // Get all branch IDs from the table rows
     const branchIds = [];
-    $('tr[data-branch-id]').each(function() {
-        const branchId = $(this).data('branch-id');
-        if (branchId) branchIds.push(branchId);
+    $('.branch-row').each(function() {
+        const branchId = $(this).attr('data-branch-id');
+        if (branchId) branchIds.push(parseInt(branchId));
     });
     
     if (branchIds.length === 0) {
-        showNotification('No branches selected', 'error');
+        showNotification('No branches found on page', 'error');
         return;
     }
     
-    const btn = $('#bulkUpdateModal .bg-purple-600');
+    console.log('Bulk updating task:', taskId, 'time:', time, 'branches:', branchIds);
+    console.log('Token:', DashboardState.token);
+    
+    const btn = $('#bulkUpdateModal button:contains("EXECUTE")');
     const originalText = btn.text();
     
     try {
         btn.text('Updating...').prop('disabled', true);
+        
+        const payload = {
+            taskItemId: parseInt(taskId),
+            completionDateTime: time,
+            branchIds: branchIds
+        };
+        console.log('Sending payload:', JSON.stringify(payload));
         
         const response = await fetch('/Home/BulkUpdate', {
             method: 'POST',
@@ -674,14 +695,11 @@ async function executeBulkUpdate() {
                 'Content-Type': 'application/json',
                 'RequestVerificationToken': DashboardState.token
             },
-            body: JSON.stringify({
-                taskItemId: parseInt(taskId),
-                completionDateTime: time,
-                branchIds: branchIds
-            })
+            body: JSON.stringify(payload)
         });
         
         const res = await response.json();
+        console.log('Response:', res);
         
         if (res.success) {
             showNotification(`${res.count} tasks updated successfully`, 'success');
@@ -927,8 +945,7 @@ function showKeyboardShortcuts() {
           'Ctrl + D: Next day\n' +
           'Ctrl + A: Previous day\n' +
           'Ctrl + T: Today\n' +
-        
-          'Ctrl + B: Open bulk update\n' +
+          'Ctrl + B: Bulk update\n' +
           'Ctrl + H: This help\n\n' +
           'Tip: Hover over any task button for additional actions');
 }
@@ -984,7 +1001,6 @@ $(document).ready(function() {
         if (e.ctrlKey && e.key === 'd') { e.preventDefault(); changeDate(1); }
         if (e.ctrlKey && e.key === 'a') { e.preventDefault(); changeDate(-1); }
         if (e.ctrlKey && e.key === 't') { e.preventDefault(); window.location.href = '/Home/Index'; }
-       
         if (e.ctrlKey && e.key === 'b') { e.preventDefault(); openBulkUpdateModal(); }
         if (e.ctrlKey && e.key === 'h') { e.preventDefault(); showKeyboardShortcuts(); }
         if (e.key === 'Escape') {

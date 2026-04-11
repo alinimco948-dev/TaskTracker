@@ -282,25 +282,25 @@ public async Task<IActionResult> GetTaskStatus(int branchId, int taskItemId, str
 
 [HttpPost]
 [ValidateAntiForgeryToken]
-public async Task<IActionResult> BulkUpdate(int taskItemId, string completionDateTime, [FromBody] List<int> branchIds)
+public async Task<IActionResult> BulkUpdate([FromBody] BulkUpdateRequest request)
 {
     try
     {
-        _logger.LogInformation($"BulkUpdate: TaskId={taskItemId}, DateTime={completionDateTime}, Branches={branchIds?.Count ?? 0}");
+        _logger.LogInformation($"BulkUpdate: TaskId={request.taskItemId}, DateTime={request.completionDateTime}, Branches={request.branchIds?.Count ?? 0}");
         
-        if (branchIds == null || !branchIds.Any())
+        if (request.branchIds == null || !request.branchIds.Any())
         {
             return Json(new { success = false, message = "No branches selected" });
         }
         
-        var task = await _context.TaskItems.FindAsync(taskItemId);
+        var task = await _context.TaskItems.FindAsync(request.taskItemId);
         if (task == null)
         {
             return Json(new { success = false, message = "Task not found" });
         }
         
         DateTime localCompletionTime;
-        if (!DateTime.TryParse(completionDateTime, out localCompletionTime))
+        if (!DateTime.TryParse(request.completionDateTime, out localCompletionTime))
         {
             return Json(new { success = false, message = "Invalid completion time" });
         }
@@ -312,7 +312,7 @@ public async Task<IActionResult> BulkUpdate(int taskItemId, string completionDat
         
         var count = 0;
         
-        foreach (var branchId in branchIds)
+        foreach (var branchId in request.branchIds)
         {
             // Check if task is hidden for this branch
             var branch = await _context.Branches.FindAsync(branchId);
@@ -321,7 +321,7 @@ public async Task<IActionResult> BulkUpdate(int taskItemId, string completionDat
             
             var dailyTask = await _context.DailyTasks
                 .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
-                                           dt.TaskItemId == taskItemId &&
+                                           dt.TaskItemId == request.taskItemId &&
                                            dt.TaskDate >= utcStart &&
                                            dt.TaskDate <= utcEnd);
             
@@ -331,10 +331,12 @@ public async Task<IActionResult> BulkUpdate(int taskItemId, string completionDat
                 dailyTask = new DailyTask
                 {
                     BranchId = branchId,
-                    TaskItemId = taskItemId,
+                    TaskItemId = request.taskItemId,
                     TaskDate = utcStart,
                     IsCompleted = true,
-                    CompletedAt = utcCompletionTime
+                    CompletedAt = utcCompletionTime,
+                    IsBulkUpdated = true,
+                    BulkUpdateTime = utcCompletionTime
                 };
                 _context.DailyTasks.Add(dailyTask);
                 count++;
@@ -344,6 +346,8 @@ public async Task<IActionResult> BulkUpdate(int taskItemId, string completionDat
                 // Update existing task
                 dailyTask.IsCompleted = true;
                 dailyTask.CompletedAt = utcCompletionTime;
+                dailyTask.IsBulkUpdated = true;
+                dailyTask.BulkUpdateTime = utcCompletionTime;
                 count++;
             }
         }

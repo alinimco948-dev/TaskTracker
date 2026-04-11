@@ -197,8 +197,47 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            Chart.defaults.color = '#94a3b8';
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            Chart.defaults.color = isLight ? '#64748b' : '#94a3b8';
             Chart.defaults.font.family = "'Inter', sans-serif";
+            
+            const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+            const getGridColor = () => document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+            const getTextColor = () => document.documentElement.getAttribute('data-theme') === 'light' ? '#64748b' : '#94a3b8';
+
+            // Responsive chart options
+            const getCommonOptions = () => ({
+                responsive: true,
+                maintainAspectRatio: false,
+                devicePixelRatio: window.devicePixelRatio || 1,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { usePointStyle: true, padding: 20 } }
+                },
+                scales: {
+                    x: { 
+                        grid: { display: false },
+                        ticks: { color: getTextColor() }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        max: 100,
+                        title: { display: true, text: 'Rate %', color: getTextColor() },
+                        grid: { color: getGridColor() },
+                        ticks: { color: getTextColor() }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'Volume', color: getTextColor() },
+                        grid: { display: false },
+                        ticks: { color: getTextColor() }
+                    }
+                }
+            });
 
             // 1. Trend Chart
             const trendLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DailyTrends.Select(d => d.DateLabel)));
@@ -219,44 +258,21 @@
                                 backgroundColor: 'rgba(16,185,129,0.1)',
                                 fill: true,
                                 tension: 0.4,
-                                yAxisID: 'y'
+                                yAxisID: 'y',
+                                pointRadius: 3,
+                                pointHoverRadius: 6
                             },
                             {
                                 label: 'Task Volume',
                                 data: trendVolumes,
                                 type: 'bar',
-                                backgroundColor: 'rgba(99,102,241,0.2)',
+                                backgroundColor: 'rgba(99,102,241,0.6)',
                                 borderRadius: 4,
                                 yAxisID: 'y1'
                             }
                         ]
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: {
-                            legend: { display: true, position: 'top' }
-                        },
-                        scales: {
-                            x: { grid: { display: false } },
-                            y: {
-                                type: 'linear',
-                                display: true,
-                                position: 'left',
-                                max: 100,
-                                title: { display: true, text: 'Rate %' },
-                                grid: { color: 'rgba(255,255,255,0.05)' }
-                            },
-                            y1: {
-                                type: 'linear',
-                                display: true,
-                                position: 'right',
-                                title: { display: true, text: 'Volume' },
-                                grid: { display: false }
-                            }
-                        }
-                    }
+                    options: getCommonOptions()
                 });
             }
 
@@ -274,20 +290,36 @@
                             label: 'Execution Rate (%)',
                             data: deptRates,
                             backgroundColor: deptRates.map(r => r > 80 ? 'rgba(16,185,129,0.7)' : r > 60 ? 'rgba(245,158,11,0.7)' : 'rgba(239,68,68,0.7)'),
-                            borderRadius: 6
+                            borderRadius: 6,
+                            barThickness: window.innerWidth < 768 ? 20 : 40
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        devicePixelRatio: window.devicePixelRatio || 1,
                         plugins: { legend: { display: false } },
                         scales: {
-                            x: { grid: { display: false } },
-                            y: { max: 100, grid: { color: 'rgba(255,255,255,0.05)' } }
+                            x: { 
+                                grid: { display: false },
+                                ticks: { color: getTextColor() }
+                            },
+                            y: { 
+                                max: 100, 
+                                grid: { color: getGridColor() },
+                                ticks: { color: getTextColor() }
+                            }
                         }
                     }
                 });
             }
+            
+            // Handle resize
+            window.addEventListener('resize', function() {
+                Chart.helpers?.each(Chart.instances, function(chart) {
+                    chart.resize();
+                });
+            });
         });
     </script>
 }

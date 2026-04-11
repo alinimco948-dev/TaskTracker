@@ -210,11 +210,15 @@
                                             <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">@s</span>
                                         }
                                     }
+                                    else if (Model.AverageScore >= 75)
+                                    {
+                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Strong Performance</span>
+                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Good Teamwork</span>
+                                    }
                                     else
                                     {
-                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Reporting Speed</span>
+                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-400 shadow-sm">Developing Skills</span>
                                     }
-                                    <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">On-Time Rate</span>
                                 </div>
                             </div>
                             
@@ -229,34 +233,44 @@
                                             <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">@w</span>
                                         }
                                     }
+                                    else if (Model.ComparisonResult.ScoreDifference > 10)
+                                    {
+                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Performance Variance</span>
+                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Process Standardization</span>
+                                    }
                                     else
                                     {
-                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Inventory Logs</span>
+                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-400 shadow-sm">No significant issues</span>
                                     }
-                                    <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Gap Reduction</span>
                                 </div>
                             </div>
                         </div>
 
                         <div class="space-y-4">
-                            <div class="flex gap-4 items-start">
-                                <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-1 border border-indigo-500/20">
-                                    <i class="fas fa-medal text-indigo-400"></i>
+                            @if (Model.ComparisonResult.BestPerformer != null && Model.ComparisonResult.BestPerformer.PerformanceScore > 0)
+                            {
+                                <div class="flex gap-4 items-start">
+                                    <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-1 border border-indigo-500/20">
+                                        <i class="fas fa-medal text-indigo-400"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="text-sm font-bold text-slate-200">Top Performer: @(Model.ComparisonResult.BestPerformer.Name)</h5>
+                                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">Exhibits exceptional operational efficiency with a @(Model.ComparisonResult.BestPerformer.PerformanceScore)% composite score, consistently exceeding target completion rates.</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h5 class="text-sm font-bold text-slate-200">Top Performer: @(Model.ComparisonResult.BestPerformer?.Name ?? "N/A")</h5>
-                                    <p class="text-xs text-slate-400 mt-1 leading-relaxed">Exhibits exceptional operational efficiency with a @(Model.ComparisonResult.BestPerformer?.PerformanceScore ?? 0)% composite score, consistently exceeding target completion rates.</p>
+                            }
+                            @if (Model.ComparisonResult.ScoreDifference > 0)
+                            {
+                                <div class="flex gap-4 items-start">
+                                    <div class="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 mt-1 border border-slate-700">
+                                        <i class="fas fa-chart-line text-slate-400"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="text-sm font-bold text-slate-200">Performance Gap Noted</h5>
+                                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">There is a @Model.ComparisonResult.ScoreDifference% variance between the highest and lowest performers. Standardizing workflow tools could bridge this gap.</p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="flex gap-4 items-start">
-                                <div class="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 mt-1 border border-slate-700">
-                                    <i class="fas fa-chart-line text-slate-400"></i>
-                                </div>
-                                <div>
-                                    <h5 class="text-sm font-bold text-slate-200">Performance Gap Noted</h5>
-                                    <p class="text-xs text-slate-400 mt-1 leading-relaxed">There is a @Model.ComparisonResult.ScoreDifference% variance between the highest and lowest performers. Standardizing workflow tools could bridge this gap.</p>
-                                </div>
-                            </div>
+                            }
                         </div>
                     </div>
                 </div>

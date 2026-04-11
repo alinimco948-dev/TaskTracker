@@ -76,4 +76,11 @@ namespace TaskTracker.Models.ViewModels
         public List<string> UniqueStrengths { get; set; } = new();
         public List<string> UniqueWeaknesses { get; set; } = new();
     }
+
+    public class BulkUpdateRequest
+    {
+        public int taskItemId { get; set; }
+        public string completionDateTime { get; set; } = string.Empty;
+        public List<int> branchIds { get; set; } = new();
+    }
 }

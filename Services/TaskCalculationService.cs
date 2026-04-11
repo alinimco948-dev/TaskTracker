@@ -512,12 +512,14 @@ public class TaskCalculationService : ITaskCalculationService
 
             if (employee == null) return new TaskStatistics();
 
-            var assignedBranchIds = employee.BranchAssignments
-                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= GetCurrentUtcDate())
-                .Select(ba => ba.BranchId)
+            var assignmentsDuringPeriod = employee.BranchAssignments
+                .Where(ba => ba.StartDate.Date <= endDate.Date && 
+                            (ba.EndDate == null || ba.EndDate.Value.Date >= startDate.Date))
                 .ToList();
 
-            if (!assignedBranchIds.Any()) return new TaskStatistics();
+            if (!assignmentsDuringPeriod.Any()) return new TaskStatistics();
+
+            var assignedBranchIds = assignmentsDuringPeriod.Select(ba => ba.BranchId).ToList();
 
             var dailyTasks = await _context.DailyTasks
                 .Include(dt => dt.TaskItem)
@@ -528,10 +530,10 @@ public class TaskCalculationService : ITaskCalculationService
 
             var relevantTasks = dailyTasks.Where(dt =>
             {
-                var assignment = employee.BranchAssignments
+                var assignment = assignmentsDuringPeriod
                     .FirstOrDefault(ba => ba.BranchId == dt.BranchId &&
-                                         (ba.EndDate == null || dt.TaskDate.Date <= ba.EndDate.Value.Date) &&
-                                         dt.TaskDate.Date >= ba.StartDate.Date);
+                                         dt.TaskDate.Date >= ba.StartDate.Date &&
+                                         (ba.EndDate == null || dt.TaskDate.Date <= ba.EndDate.Value.Date));
                 return assignment != null;
             }).ToList();
 
@@ -549,7 +551,25 @@ public class TaskCalculationService : ITaskCalculationService
             
             var completionRate = totalTasks > 0 ? Math.Round((double)completedTasks / totalTasks * 100, 1) : 0;
             var onTimeRate = completedTasks > 0 ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) : 0;
-            var weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
+            
+            double weightedScore;
+            if (totalTasks == 0)
+            {
+                weightedScore = 0;
+            }
+            else if (completedTasks == 0)
+            {
+                weightedScore = completionRate * 0.7;
+            }
+            else if (onTimeTasks == completedTasks)
+            {
+                weightedScore = completionRate;
+            }
+            else
+            {
+                weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
+            }
+            weightedScore = Math.Round(weightedScore, 1);
 
             return new TaskStatistics
             {
@@ -598,7 +618,25 @@ public class TaskCalculationService : ITaskCalculationService
             
             var completionRate = totalTasks > 0 ? Math.Round((double)completedTasks / totalTasks * 100, 1) : 0;
             var onTimeRate = completedTasks > 0 ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) : 0;
-            var weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
+            
+            double weightedScore;
+            if (totalTasks == 0)
+            {
+                weightedScore = 0;
+            }
+            else if (completedTasks == 0)
+            {
+                weightedScore = completionRate * 0.7;
+            }
+            else if (onTimeTasks == completedTasks)
+            {
+                weightedScore = completionRate;
+            }
+            else
+            {
+                weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
+            }
+            weightedScore = Math.Round(weightedScore, 1);
 
             var taskBreakdown = new Dictionary<string, int>();
             foreach (var dt in branchTasks.Where(dt => dt.TaskItem != null && dt.IsCompleted))
@@ -670,7 +708,25 @@ public class TaskCalculationService : ITaskCalculationService
 
             var completionRate = totalTasks > 0 ? Math.Round((double)completedTasks / totalTasks * 100, 1) : 0;
             var onTimeRate = completedTasks > 0 ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) : 0;
-            var weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
+            
+            double weightedScore;
+            if (totalTasks == 0)
+            {
+                weightedScore = 0;
+            }
+            else if (completedTasks == 0)
+            {
+                weightedScore = completionRate * 0.7;
+            }
+            else if (onTimeTasks == completedTasks)
+            {
+                weightedScore = completionRate;
+            }
+            else
+            {
+                weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
+            }
+            weightedScore = Math.Round(weightedScore, 1);
 
             return new DepartmentTaskStatistics
             {
