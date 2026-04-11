@@ -341,9 +341,9 @@ public async Task<IActionResult> BulkUpdate([FromBody] BulkUpdateRequest request
                 _context.DailyTasks.Add(dailyTask);
                 count++;
             }
-            else if (!dailyTask.IsCompleted)
+            else
             {
-                // Update existing task
+                // Update existing task (even if already completed)
                 dailyTask.IsCompleted = true;
                 dailyTask.CompletedAt = utcCompletionTime;
                 dailyTask.IsBulkUpdated = true;
