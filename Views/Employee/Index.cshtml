@@ -345,7 +345,7 @@
         const token = $('#requestVerificationToken').val();
         if (!branchId) { if (window.TaskTracker) TaskTracker.showNotification('Please select a branch', 'error'); return; }
         $.ajax({
-            url: '@Url.Action("AssignBranch", "Employee")', type: 'POST',
+            url: '@Url.Action("AssignEmployee", "Branch")', type: 'POST',
             data: { employeeId: currentEmployeeId, branchId, startDate },
             headers: { 'RequestVerificationToken': token },
             success: function(r) {
@@ -403,18 +403,22 @@
         }
     }
 
+    let filterDebounceTimer;
     function filterTable() {
-        var search = $('#searchInput').val().toLowerCase();
-        var dept = $('#departmentFilter').val();
-        var status = $('#statusFilter').val();
-        $('#employeeTableBody tr').each(function() {
-            var name = $(this).data('name') || '', pos = $(this).data('position') || '';
-            var d = $(this).data('department') || '', s = $(this).data('status') || '';
-            var ok = (search === '' || name.includes(search) || pos.includes(search)) &&
-                     (dept === '' || d === dept) && (status === '' || s === status);
-            $(this).toggle(ok);
-        });
-        updateStats();
+        clearTimeout(filterDebounceTimer);
+        filterDebounceTimer = setTimeout(function() {
+            var search = $('#searchInput').val().toLowerCase();
+            var dept = $('#departmentFilter').val();
+            var status = $('#statusFilter').val();
+            $('#employeeTableBody tr').each(function() {
+                var name = $(this).data('name') || '', pos = $(this).data('position') || '';
+                var d = $(this).data('department') || '', s = $(this).data('status') || '';
+                var ok = (search === '' || name.includes(search) || pos.includes(search)) &&
+                         (dept === '' || d === dept) && (status === '' || s === status);
+                $(this).toggle(ok);
+            });
+            updateStats();
+        }, 300);
     }
 
     function updateStats() {

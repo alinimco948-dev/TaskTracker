@@ -55,11 +55,35 @@ public class EmployeeService : IEmployeeService
                 .AsNoTracking()
                 .ToListAsync();
             
-            var result = new List<EmployeeListViewModel>();
             var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
             var todayUtc = _timezoneService.GetStartOfDayLocal(todayLocal);
             var lookAheadDays = 90;
             var endDateUtc = todayUtc.AddDays(lookAheadDays);
+
+            var allBranchIds = employees
+                .SelectMany(e => e.BranchAssignments
+                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
+                    .Select(ba => ba.BranchId))
+                .Distinct()
+                .ToList();
+
+            var branchHiddenTasks = await _context.Branches
+                .Where(b => b.IsActive)
+                .Select(b => new { b.Id, b.HiddenTasks })
+                .ToListAsync();
+            
+            var branchHiddenTasksDict = branchHiddenTasks
+                .Where(b => b.HiddenTasks != null && b.HiddenTasks.Any())
+                .ToDictionary(b => b.Id, b => b.HiddenTasks!);
+
+            var allDailyTasks = allBranchIds.Any()
+                ? await _context.DailyTasks
+                    .Include(dt => dt.TaskItem)
+                    .Where(dt => allBranchIds.Contains(dt.BranchId) && dt.TaskDate >= todayUtc && dt.TaskDate <= endDateUtc)
+                    .ToListAsync()
+                : new List<DailyTask>();
+
+            var result = new List<EmployeeListViewModel>();
 
             foreach (var emp in employees)
             {
@@ -67,7 +91,6 @@ public class EmployeeService : IEmployeeService
                 
                 try
                 {
-                    // Get current active branches (not ended)
                     var currentBranches = emp.BranchAssignments
                         .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
                         .Select(ba => ba.Branch?.Name ?? string.Empty)
@@ -100,22 +123,17 @@ public class EmployeeService : IEmployeeService
                         continue;
                     }
 
-                    // Get completed tasks
-                    var completedDailyTasks = await _context.DailyTasks
-                        .Where(dt => assignedBranchIds.Contains(dt.BranchId) && dt.IsCompleted)
-                        .ToListAsync();
+                    var employeeDailyTasks = allDailyTasks
+                        .Where(dt => assignedBranchIds.Contains(dt.BranchId))
+                        .ToList();
+
+                    var completedTasks = employeeDailyTasks.Count(dt => dt.IsCompleted);
                     
-                    var completedTasks = completedDailyTasks.Count;
-                    
-                    // Calculate expected total tasks safely
                     int expectedTotalTasks = 0;
                     
                     foreach (var assignment in activeAssignments)
                     {
-                        var branch = await _context.Branches.FindAsync(assignment.BranchId);
-                        if (branch == null) continue;
-
-                        var hiddenTaskNames = branch.HiddenTasks ?? new List<string>();
+                        var hiddenTaskNames = branchHiddenTasksDict.TryGetValue(assignment.BranchId, out var hidden) ? hidden : new List<string>();
                         var assignmentStartUtc = assignment.StartDate.Date > todayUtc ? assignment.StartDate : todayUtc;
                         var assignmentEndUtc = assignment.EndDate?.Date ?? endDateUtc;
 
@@ -130,8 +148,7 @@ public class EmployeeService : IEmployeeService
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogWarning(ex, $"Error calculating task count for task {task.Name}, employee {emp.Name}");
-                                expectedTotalTasks += 1;
+                                _logger.LogWarning(ex, "Error calculating task count for task {TaskName}, employee {EmployeeName}", task.Name, emp.Name);
                             }
                         }
                     }
@@ -139,16 +156,15 @@ public class EmployeeService : IEmployeeService
                     var totalTasks = Math.Max(expectedTotalTasks, completedTasks);
                     var completionRate = totalTasks > 0 ? (int)Math.Round((double)completedTasks / totalTasks * 100) : 0;
                     
-                    // Calculate on-time rate for completed tasks
                     var onTimeTasks = 0;
-                    foreach (var dt in completedDailyTasks)
+                    foreach (var dt in employeeDailyTasks.Where(d => d.IsCompleted))
                     {
                         try
                         {
                             if (dt.TaskItem != null)
                             {
-                                var isOnTime = _taskCalculationService.IsTaskOnTime(dt);
-                                if (isOnTime) onTimeTasks++;
+                                var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt);
+                                if (delayInfo.IsOnTime) onTimeTasks++;
                             }
                             else
                             {
@@ -157,17 +173,18 @@ public class EmployeeService : IEmployeeService
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogWarning(ex, $"Error checking on-time status for task {dt.Id}");
+                            _logger.LogWarning(ex, "Error checking on-time status for task {TaskId}", dt.Id);
                             onTimeTasks++;
                         }
                     }
                     
                     var onTimeRate = completedTasks > 0 ? (int)Math.Round((double)onTimeTasks / completedTasks * 100) : 0;
                     
-                    // Weighted score: 70% completion + 30% on-time
-                    var weightedScore = (int)Math.Round((completionRate * 0.7) + (onTimeRate * 0.3));
+                    // Use unified scoring
+                    var weightedScore = (int)_taskCalculationService.CalculateWeightedScore(totalTasks, completedTasks, onTimeTasks);
                     
-                    _logger.LogInformation($"  Employee {emp.Name}: Total={totalTasks}, Completed={completedTasks}, Completion={completionRate}%, OnTime={onTimeRate}%, Score={weightedScore}%");
+                    _logger.LogInformation("  Employee {EmployeeName}: Total={TotalTasks}, Completed={CompletedTasks}, Completion={CompletionRate}%, OnTime={OnTimeRate}%, Score={WeightedScore}%",
+                        emp.Name, totalTasks, completedTasks, completionRate, onTimeRate, weightedScore);
 
                     result.Add(new EmployeeListViewModel
                     {
@@ -188,7 +205,7 @@ public class EmployeeService : IEmployeeService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Error processing employee {emp.Id} - {emp.Name}");
+                    _logger.LogError(ex, "Error processing employee {EmployeeId} - {EmployeeName}", emp.Id, emp.Name);
                     result.Add(new EmployeeListViewModel
                     {
                         Id = emp.Id,
@@ -208,7 +225,7 @@ public class EmployeeService : IEmployeeService
                 }
             }
             
-            _logger.LogInformation($"=== GetAllEmployeesAsync END - returning {result.Count} employees ===");
+            _logger.LogInformation("=== GetAllEmployeesAsync END - returning {EmployeeCount} employees ===", result.Count);
             return result;
         }
         catch (Exception ex)
@@ -514,7 +531,7 @@ public class EmployeeService : IEmployeeService
     {
         var actualStartDate = startDate.HasValue 
             ? _timezoneService.GetStartOfDayLocal(startDate.Value) 
-            : _timezoneService.GetStartOfDayLocal(_timezoneService.GetCurrentLocalTime().AddMonths(-1));
+            : _timezoneService.GetStartOfDayLocal(_timezoneService.GetCurrentLocalTime().AddDays(-30));
         var actualEndDate = endDate.HasValue 
             ? _timezoneService.GetEndOfDayLocal(endDate.Value) 
             : _timezoneService.GetEndOfDayLocal(_timezoneService.GetCurrentLocalTime());

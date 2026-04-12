@@ -810,8 +810,18 @@ public async Task<IActionResult> ExportEmployeeComparison(int? branchId, List<in
             
             ViewBag.StartDate = startDate.Value.ToString("yyyy-MM-dd");
             ViewBag.EndDate = endDate.Value.ToString("yyyy-MM-dd");
-            ViewBag.Actions = await _context.AuditLogs.Select(a => a.Action).Distinct().ToListAsync();
-            ViewBag.EntityTypes = await _context.AuditLogs.Select(a => a.EntityType).Distinct().ToListAsync();
+            ViewBag.Actions = await _context.AuditLogs
+                .Where(a => a.Timestamp >= startDate.Value && a.Timestamp <= endDate.Value)
+                .Select(a => a.Action)
+                .Distinct()
+                .Take(50)
+                .ToListAsync();
+            ViewBag.EntityTypes = await _context.AuditLogs
+                .Where(a => a.Timestamp >= startDate.Value && a.Timestamp <= endDate.Value)
+                .Select(a => a.EntityType)
+                .Distinct()
+                .Take(50)
+                .ToListAsync();
             ViewBag.CurrentPage = page;
             ViewBag.PageSize = pageSize;
             ViewBag.TotalItems = totalItems;

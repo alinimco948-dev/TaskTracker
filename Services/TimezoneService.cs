@@ -97,45 +97,25 @@ public class TimezoneService : ITimezoneService
         }
     }
 
-  public DateTime ConvertToUtc(DateTime localDate)
-{
-    // Debug log
-    _logger.LogInformation($"ConvertToUtc called with: {localDate}, Kind: {localDate.Kind}");
-    
-    // If the date already has UTC kind, return as is
-    if (localDate.Kind == DateTimeKind.Utc)
+    public DateTime ConvertToUtc(DateTime localDate)
     {
-        _logger.LogInformation("Date already UTC, returning as is");
-        return localDate;
+        if (localDate.Kind == DateTimeKind.Utc)
+            return localDate;
+        
+        if (localDate.Kind == DateTimeKind.Local)
+            return localDate.ToUniversalTime();
+        
+        try
+        {
+            var offset = _timeZoneInfo.GetUtcOffset(localDate);
+            return DateTime.SpecifyKind(localDate.Subtract(offset), DateTimeKind.Utc);
+        }
+        catch
+        {
+            var offset = _timeZoneInfo.GetUtcOffset(DateTime.Now);
+            return DateTime.SpecifyKind(localDate.Subtract(offset), DateTimeKind.Utc);
+        }
     }
-    
-    // For dates coming from JavaScript datetime-local (string parsed to DateTime)
-    // They come as Unspecified but are actually LOCAL time
-    if (localDate.Kind == DateTimeKind.Unspecified)
-    {
-        // Get the offset for the configured timezone (for UTC+3, offset is +3 hours)
-        var offset = _timeZoneInfo.GetUtcOffset(localDate);
-        // Subtract offset to get UTC (10 PM local - 3 hours = 7 PM UTC)
-        var result = localDate.Subtract(offset);
-        _logger.LogInformation("Local time: {Local}, Offset: {Offset}, UTC: {Result}", localDate, offset, result);
-        return DateTime.SpecifyKind(result, DateTimeKind.Utc);
-    }
-    
-    // Otherwise convert from local to UTC using configured timezone
-    try
-    {
-        var result = TimeZoneInfo.ConvertTimeToUtc(localDate, _timeZoneInfo);
-        _logger.LogInformation("Converted from local {Local} to UTC {Utc}", localDate, result);
-        return result;
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error converting local to UTC for date {Date}", localDate);
-        // Fallback: subtract offset
-        var offset = _timeZoneInfo.GetUtcOffset(localDate);
-        return DateTime.SpecifyKind(localDate.Subtract(offset), DateTimeKind.Utc);
-    }
-}
   
   
   

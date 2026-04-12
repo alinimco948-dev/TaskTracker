@@ -12,17 +12,20 @@ public class BranchService : IBranchService
     private readonly ILogger<BranchService> _logger;
     private readonly IAuditService _auditService;
     private readonly ITimezoneService _timezoneService;
+    private readonly ITaskCalculationService _taskCalculationService;
 
     public BranchService(
         ApplicationDbContext context,
         ILogger<BranchService> logger,
         IAuditService auditService,
-        ITimezoneService timezoneService)
+        ITimezoneService timezoneService,
+        ITaskCalculationService taskCalculationService)
     {
         _context = context;
         _logger = logger;
         _auditService = auditService;
         _timezoneService = timezoneService;
+        _taskCalculationService = taskCalculationService;
     }
 
     public async Task<List<BranchListViewModel>> GetAllBranchesAsync()
@@ -38,6 +41,23 @@ public class BranchService : IBranchService
 
             var result = new List<BranchListViewModel>();
             var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+            var utcStart = _timezoneService.GetStartOfDayLocal(todayLocal.AddDays(-7));
+            var utcEnd = _timezoneService.GetEndOfDayLocal(todayLocal);
+
+            var branchIds = branches.Select(b => b.Id).ToList();
+            
+            Dictionary<int, double> taskStatsDict = new Dictionary<int, double>();
+            
+            if (branchIds.Any())
+            {
+                var taskStats = await _context.DailyTasks
+                    .Where(dt => branchIds.Contains(dt.BranchId) && dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
+                    .GroupBy(dt => dt.BranchId)
+                    .Select(g => new { BranchId = g.Key, Total = g.Count(), Completed = g.Count(x => x.IsCompleted) })
+                    .ToListAsync();
+                    
+                taskStatsDict = taskStats.ToDictionary(x => x.BranchId, x => x.Total > 0 ? (double)x.Completed / x.Total * 100 : 0);
+            }
 
             foreach (var branch in branches)
             {
@@ -49,7 +69,7 @@ public class BranchService : IBranchService
 
                 var employeeCount = activeEmployees.Count;
                 var employeeNames = activeEmployees.Select(e => e!.Name).ToList();
-                var completionRate = await GetBranchCompletionRateAsync(branch.Id, todayLocal);
+                var completionRate = taskStatsDict.GetValueOrDefault(branch.Id, 0);
 
                 result.Add(new BranchListViewModel
                 {
@@ -483,8 +503,18 @@ public class BranchService : IBranchService
 
         if (!tasks.Any()) return 0;
 
-        var completed = tasks.Count(t => t.IsCompleted);
-        return Math.Round((double)completed / tasks.Count * 100, 1);
+        var totalTasks = tasks.Count;
+        var completedTasks = tasks.Count(t => t.IsCompleted);
+        
+        // Use unified scoring system
+        var onTimeTasks = 0;
+        foreach (var task in tasks.Where(t => t.IsCompleted))
+        {
+            if (_taskCalculationService.IsTaskOnTime(task)) onTimeTasks++;
+        }
+        
+        var score = _taskCalculationService.CalculateWeightedScore(totalTasks, completedTasks, onTimeTasks);
+        return score;
     }
 
     private async Task<List<string>> GetTaskNamesAsync(List<int> taskIds)

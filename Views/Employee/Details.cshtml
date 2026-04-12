@@ -541,7 +541,7 @@
         const startDate = $('#assignmentStartDate').val(), token = $('#requestVerificationToken').val();
         if (!branchId) { if (window.TaskTracker) TaskTracker.showNotification('Please select a branch', 'error'); return; }
         $.ajax({
-            url: '@Url.Action("AssignBranch", "Employee")', type: 'POST',
+            url: '@Url.Action("AssignEmployee", "Branch")', type: 'POST',
             data: { employeeId, branchId, startDate },
             headers: { 'RequestVerificationToken': token },
             success: function(r) {

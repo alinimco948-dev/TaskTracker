@@ -4,6 +4,14 @@ namespace TaskTracker.Services.Interfaces;
 
 public interface ITaskCalculationService
 {
+    // ========== Unified Scoring Constants ==========
+    double CompletionWeight { get; }
+    double OnTimeWeight { get; }
+    
+    // ========== Unified Scoring Methods ==========
+    double CalculateWeightedScore(int totalTasks, int completedTasks, int onTimeTasks);
+    (double completionRate, double onTimeRate, double weightedScore) CalculateScores(int totalTasks, int completedTasks, int onTimeTasks);
+    
     // ========== Core Calculations ==========
     Task<DateTime> CalculateDeadline(TaskItem task, DateTime taskDate);
     Task<DateTime> GetLocalDeadline(TaskItem task, DateTime taskDate);

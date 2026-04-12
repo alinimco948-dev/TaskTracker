@@ -180,15 +180,35 @@ public class DepartmentService : IDepartmentService
             if (department == null)
                 throw new Exception($"Department {id} not found");
 
-            var branches = department.Branches != null && department.Branches.Any()
-                ? department.Branches.Where(b => b.IsActive).Select(b => new DepartmentBranchItem
-                {
-                    Id = b.Id,
-                    Name = b.Name,
-                    Address = b.Address ?? string.Empty,
-                    CompletionRate = GetBranchCompletionRate(b.Id)
-                }).ToList()
-                : new List<DepartmentBranchItem>();
+            var branchList = department.Branches != null && department.Branches.Any()
+                ? department.Branches.Where(b => b.IsActive).ToList()
+                : new List<Branch>();
+
+            var branchIds = branchList.Select(b => b.Id).ToList();
+            var branchCompletionRates = new Dictionary<int, double>();
+            
+            if (branchIds.Any())
+            {
+                var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
+                var utcStart = _timezoneService.GetStartOfDayLocal(todayLocal.AddDays(-7));
+                var utcEnd = _timezoneService.GetEndOfDayLocal(todayLocal);
+                
+                var taskStats = await _context.DailyTasks
+                    .Where(dt => branchIds.Contains(dt.BranchId) && dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
+                    .GroupBy(dt => dt.BranchId)
+                    .Select(g => new { BranchId = g.Key, Total = g.Count(), Completed = g.Count(x => x.IsCompleted) })
+                    .ToListAsync();
+                    
+                branchCompletionRates = taskStats.ToDictionary(x => x.BranchId, x => x.Total > 0 ? Math.Round((double)x.Completed / x.Total * 100, 1) : 0);
+            }
+
+            var branches = branchList.Select(b => new DepartmentBranchItem
+            {
+                Id = b.Id,
+                Name = b.Name,
+                Address = b.Address ?? string.Empty,
+                CompletionRate = branchCompletionRates.GetValueOrDefault(b.Id, 0)
+            }).ToList();
 
             var employees = department.Employees != null && department.Employees.Any()
                 ? department.Employees.Where(e => e.IsActive).Select(e => new DepartmentEmployeeItem
@@ -248,20 +268,23 @@ public class DepartmentService : IDepartmentService
 
     #region Private Helper Methods
 
-    private double GetBranchCompletionRate(int branchId)
+    private async Task<double> GetBranchCompletionRateAsync(int branchId)
     {
         var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
-        var utcStart = _timezoneService.GetStartOfDayLocal(todayLocal);
+        var utcStart = _timezoneService.GetStartOfDayLocal(todayLocal.AddDays(-7));
         var utcEnd = _timezoneService.GetEndOfDayLocal(todayLocal);
         
-        var tasks = _context.DailyTasks
+        var totalTask = await _context.DailyTasks
             .Where(dt => dt.BranchId == branchId && dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
-            .ToList();
-
-        if (!tasks.Any()) return 0;
-
-        var completed = tasks.Count(t => t.IsCompleted);
-        return Math.Round((double)completed / tasks.Count * 100, 1);
+            .CountAsync();
+        
+        if (totalTask == 0) return 0;
+        
+        var completedTask = await _context.DailyTasks
+            .Where(dt => dt.BranchId == branchId && dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd && dt.IsCompleted)
+            .CountAsync();
+        
+        return Math.Round((double)completedTask / totalTask * 100, 1);
     }
 
     private async Task<int> GetDepartmentTaskCountAsync(int departmentId)

@@ -26,6 +26,57 @@ public class TaskCalculationService : ITaskCalculationService
 
     public DateTime GetCurrentUtcDate() => DateTime.UtcNow.Date;
 
+    // ========== UNIFIED SCORING SYSTEM ==========
+    // All scoring across the application uses these constants and method
+    
+    public const double CompletionWeight = 0.7;
+    public const double OnTimeWeight = 0.3;
+    
+    public static double CalculateWeightedScore(int totalTasks, int completedTasks, int onTimeTasks)
+    {
+        // If no tasks, score is 0
+        if (totalTasks == 0) return 0;
+        
+        // Calculate rates
+        var completionRate = Math.Round((double)completedTasks / totalTasks * 100, 1);
+        var onTimeRate = completedTasks > 0 
+            ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) 
+            : 0;
+        
+        // Apply scoring rules
+        double weightedScore;
+        
+        if (completedTasks == 0)
+        {
+            // No completed tasks = partial score based on completion only
+            weightedScore = completionRate * CompletionWeight;
+        }
+        else if (onTimeTasks == completedTasks)
+        {
+            // All completed on-time = full completion rate (no penalty)
+            weightedScore = completionRate;
+        }
+        else
+        {
+            // Standard: 70% completion + 30% on-time
+            weightedScore = (completionRate * CompletionWeight) + (onTimeRate * OnTimeWeight);
+        }
+        
+        return Math.Round(weightedScore, 1);
+    }
+    
+    public static (double completionRate, double onTimeRate, double weightedScore) CalculateScores(int totalTasks, int completedTasks, int onTimeTasks)
+    {
+        var completionRate = totalTasks > 0 
+            ? Math.Round((double)completedTasks / totalTasks * 100, 1) 
+            : 0;
+        var onTimeRate = completedTasks > 0 
+            ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) 
+            : 0;
+        var weightedScore = CalculateWeightedScore(totalTasks, completedTasks, onTimeTasks);
+        return (completionRate, onTimeRate, weightedScore);
+    }
+
     #region Core Deadline Calculation
 
     public async Task<DateTime> CalculateDeadline(TaskItem task, DateTime taskDate)
@@ -449,37 +500,32 @@ public class TaskCalculationService : ITaskCalculationService
     public List<DateTime> GetTaskDatesInRange(TaskItem task, DateTime startDate, DateTime endDate)
     {
         var dates = new List<DateTime>();
+        if (task == null) return dates;
         
         try
         {
-            var currentDate = startDate.Date;
-            var maxDate = endDate.Date;
+            var localStartDate = _timezoneService.ConvertToLocalTime(startDate.Date);
+            var localEndDate = _timezoneService.ConvertToLocalTime(endDate.Date);
+            var maxDate = localEndDate > localStartDate.AddYears(1) ? localStartDate.AddYears(1) : localEndDate;
             
-            if (maxDate > startDate.AddYears(1))
-            {
-                maxDate = startDate.AddYears(1);
-                _logger.LogWarning($"Date range too large, limiting to 1 year for task {task?.Name}");
-            }
-            
-            for (var date = currentDate; date <= maxDate; date = date.AddDays(1))
+            for (var date = localStartDate; date <= maxDate; date = date.AddDays(1))
             {
                 try
                 {
-                    var localDate = _timezoneService.ConvertToLocalTime(date);
-                    if (task != null && IsTaskVisibleOnDate(task, localDate))
+                    if (IsTaskVisibleOnDate(task, date))
                     {
-                        dates.Add(date);
+                        dates.Add(_timezoneService.ConvertToUtc(date));
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, $"Error checking visibility for task {task?.Name} on date {date}");
+                    _logger.LogWarning(ex, "Error checking visibility for task {TaskName} on date {Date}", task?.Name, date);
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error in GetTaskDatesInRange for task {task?.Name}");
+            _logger.LogError(ex, "Error in GetTaskDatesInRange for task {TaskName}", task?.Name);
         }
         
         return dates;
@@ -534,7 +580,7 @@ public class TaskCalculationService : ITaskCalculationService
                     .FirstOrDefault(ba => ba.BranchId == dt.BranchId &&
                                          dt.TaskDate.Date >= ba.StartDate.Date &&
                                          (ba.EndDate == null || dt.TaskDate.Date <= ba.EndDate.Value.Date));
-                return assignment != null;
+                return assignment != null && dt.TaskItem != null;
             }).ToList();
 
             var totalTasks = relevantTasks.Count;
@@ -549,27 +595,7 @@ public class TaskCalculationService : ITaskCalculationService
             var lateTasks = completedTasks - onTimeTasks;
             var pendingTasks = totalTasks - completedTasks;
             
-            var completionRate = totalTasks > 0 ? Math.Round((double)completedTasks / totalTasks * 100, 1) : 0;
-            var onTimeRate = completedTasks > 0 ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) : 0;
-            
-            double weightedScore;
-            if (totalTasks == 0)
-            {
-                weightedScore = 0;
-            }
-            else if (completedTasks == 0)
-            {
-                weightedScore = completionRate * 0.7;
-            }
-            else if (onTimeTasks == completedTasks)
-            {
-                weightedScore = completionRate;
-            }
-            else
-            {
-                weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
-            }
-            weightedScore = Math.Round(weightedScore, 1);
+            var (completionRate, onTimeRate, weightedScore) = CalculateScores(totalTasks, completedTasks, onTimeTasks);
 
             return new TaskStatistics
             {
@@ -616,27 +642,7 @@ public class TaskCalculationService : ITaskCalculationService
             
             var lateTasks = completedTasks - onTimeTasks;
             
-            var completionRate = totalTasks > 0 ? Math.Round((double)completedTasks / totalTasks * 100, 1) : 0;
-            var onTimeRate = completedTasks > 0 ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) : 0;
-            
-            double weightedScore;
-            if (totalTasks == 0)
-            {
-                weightedScore = 0;
-            }
-            else if (completedTasks == 0)
-            {
-                weightedScore = completionRate * 0.7;
-            }
-            else if (onTimeTasks == completedTasks)
-            {
-                weightedScore = completionRate;
-            }
-            else
-            {
-                weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
-            }
-            weightedScore = Math.Round(weightedScore, 1);
+            var (completionRate, onTimeRate, weightedScore) = CalculateScores(totalTasks, completedTasks, onTimeTasks);
 
             var taskBreakdown = new Dictionary<string, int>();
             foreach (var dt in branchTasks.Where(dt => dt.TaskItem != null && dt.IsCompleted))

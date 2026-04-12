@@ -73,7 +73,7 @@ public class DashboardService : IDashboardService
                 .ToDictionaryAsync(b => b.Id.ToString(), b => b.Notes ?? "");
             
             // Check if today is a holiday (using the holiday service)
-            var isHoliday = await _holidayService.IsHolidayAsync(localDate);
+            var isHoliday = await _holidayService.IsHolidayAsync(utcStart);
             var holidayName = "";
             
             if (isHoliday)
@@ -129,22 +129,7 @@ public class DashboardService : IDashboardService
         }
     }
 
-    private async Task<Dictionary<string, string>> GetNotesDataAsync()
-    {
-        try
-        {
-            return await _context.Branches
-                .Where(b => !string.IsNullOrEmpty(b.Notes))
-                .ToDictionaryAsync(b => b.Id.ToString(), b => b.Notes ?? string.Empty);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting notes data");
-            return new Dictionary<string, string>();
-        }
-    }
-
-    private async Task<Dictionary<int, string>> GetBranchAssignmentsAsync(DateTime utcStart, DateTime utcEnd)
+    private async Task<Dictionary<int, List<string>>> GetBranchEmployeesAsync(DateTime utcStart, DateTime utcEnd)
     {
         try
         {
@@ -157,14 +142,30 @@ public class DashboardService : IDashboardService
 
             return assignments
                 .Where(ba => ba.Employee != null)
+                .GroupBy(ba => ba.BranchId)
                 .ToDictionary(
-                    ba => ba.BranchId,
-                    ba => ba.Employee!.Name);
+                    g => g.Key,
+                    g => g.Select(ba => ba.Employee!.Name).ToList());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting branch assignments");
-            return new Dictionary<int, string>();
+            _logger.LogError(ex, "Error getting branch employees");
+            return new Dictionary<int, List<string>>();
+        }
+    }
+
+    private async Task<Dictionary<string, string>> GetNotesDataAsync()
+    {
+        try
+        {
+            return await _context.Branches
+                .Where(b => !string.IsNullOrEmpty(b.Notes))
+                .ToDictionaryAsync(b => b.Id.ToString(), b => b.Notes ?? string.Empty);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting notes data");
+            return new Dictionary<string, string>();
         }
     }
 

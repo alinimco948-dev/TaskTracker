@@ -140,6 +140,10 @@ private async Task AutoAssignTaskToAllEmployees(TaskItem task)
             .ThenInclude(ba => ba.Branch)
             .ToListAsync();
 
+        var branchHiddenTasks = await _context.Branches
+            .Where(b => b.IsActive && b.HiddenTasks != null)
+            .ToDictionaryAsync(b => b.Id, b => b.HiddenTasks ?? new List<string>());
+
         var startDate = task.StartDate.HasValue
             ? task.StartDate.Value
             : _timezoneService.GetStartOfDayLocal(_timezoneService.GetCurrentLocalTime());
@@ -148,54 +152,82 @@ private async Task AutoAssignTaskToAllEmployees(TaskItem task)
             : _timezoneService.GetEndOfDayLocal(_timezoneService.GetCurrentLocalTime().AddYears(1));
 
         var taskDates = _taskCalculationService.GetTaskDatesInRange(task, startDate, endDate);
-        var createdCount = 0;
+        
+        var existingKeys = await _context.DailyTasks
+            .Where(dt => dt.TaskItemId == task.Id)
+            .Select(dt => new { dt.BranchId, dt.TaskDate })
+            .ToListAsync();
+        
+        var existingSet = existingKeys
+            .Select(e => $"{e.BranchId}_{e.TaskDate:yyyy-MM-dd}")
+            .ToHashSet();
+
+        var dailyTasksToAdd = new List<DailyTask>();
+        var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
 
         foreach (var employee in employees)
         {
             var activeAssignments = employee.BranchAssignments
-                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= _timezoneService.GetCurrentLocalTime().Date)
+                .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
                 .ToList();
 
             foreach (var assignment in activeAssignments)
             {
+                var hiddenTasks = branchHiddenTasks.GetValueOrDefault(assignment.BranchId, new List<string>());
+                if (hiddenTasks.Contains(task.Name)) continue;
+
                 foreach (var taskDate in taskDates)
                 {
                     if (taskDate.Date < assignment.StartDate.Date) continue;
                     if (assignment.EndDate.HasValue && taskDate.Date > assignment.EndDate.Value.Date) continue;
 
-                    var existingDailyTask = await _context.DailyTasks
-                        .FirstOrDefaultAsync(dt => dt.BranchId == assignment.BranchId &&
-                                                   dt.TaskItemId == task.Id &&
-                                                   dt.TaskDate.Date == taskDate.Date);
+                    var key = $"{assignment.BranchId}_{taskDate:yyyy-MM-dd}";
+                    if (existingSet.Contains(key)) continue;
 
-                    if (existingDailyTask == null)
+                    var dailyTask = new DailyTask
                     {
-                        var dailyTask = new DailyTask
-                        {
-                            BranchId = assignment.BranchId,
-                            TaskItemId = task.Id,
-                            TaskDate = taskDate.Date,
-                            IsCompleted = false,
-                            CompletedAt = null
-                        };
-                        _context.DailyTasks.Add(dailyTask);
-                        await _context.SaveChangesAsync();
-
-                        var taskAssignment = new TaskAssignment
-                        {
-                            EmployeeId = employee.Id,
-                            DailyTaskId = dailyTask.Id,
-                            AssignedAt = DateTime.UtcNow
-                        };
-                        _context.TaskAssignments.Add(taskAssignment);
-                        createdCount++;
-                    }
+                        BranchId = assignment.BranchId,
+                        TaskItemId = task.Id,
+                        TaskDate = taskDate.Date,
+                        IsCompleted = false,
+                        CompletedAt = null
+                    };
+                    dailyTasksToAdd.Add(dailyTask);
                 }
             }
         }
 
-        await _context.SaveChangesAsync();
-        _logger.LogInformation($"Auto-assigned task '{task.Name}' to {createdCount} employee-task combinations");
+        if (dailyTasksToAdd.Any())
+        {
+            await _context.DailyTasks.AddRangeAsync(dailyTasksToAdd);
+            await _context.SaveChangesAsync();
+
+            var employeeBranchMap = employees
+                .SelectMany(e => e.BranchAssignments
+                    .Where(ba => ba.EndDate == null || ba.EndDate.Value.Date >= todayLocal)
+                    .Select(ba => new { ba.BranchId, EmployeeId = e.Id }))
+                .ToLookup(x => x.BranchId, x => x.EmployeeId);
+
+            var taskAssignmentsToAdd = new List<TaskAssignment>();
+            foreach (var dt in dailyTasksToAdd)
+            {
+                var employeeIds = employeeBranchMap[dt.BranchId].ToList();
+                foreach (var employeeId in employeeIds)
+                {
+                    taskAssignmentsToAdd.Add(new TaskAssignment
+                    {
+                        EmployeeId = employeeId,
+                        DailyTaskId = dt.Id,
+                        AssignedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            await _context.TaskAssignments.AddRangeAsync(taskAssignmentsToAdd);
+            await _context.SaveChangesAsync();
+            
+            _logger.LogInformation($"Auto-assigned task '{task.Name}' to {taskAssignmentsToAdd.Count} employee-task combinations");
+        }
     }
     catch (Exception ex)
     {

@@ -43,10 +43,7 @@ public class BranchController : Controller
             ViewBag.Departments = await _departmentService.GetAllDepartmentsAsync();
             var employeeCounts = await _branchService.GetBranchEmployeeCountsAsync();
             ViewBag.BranchEmployeeCount = employeeCounts;
-
-            var totalEmployees = (await _employeeService.GetAllEmployeesAsync()).Count;
-            ViewBag.TotalEmployees = totalEmployees;
-
+            ViewBag.TotalEmployees = await _context.Employees.CountAsync(e => e.IsActive);
             var completionRates = await _branchService.GetBranchCompletionRatesAsync(DateTime.Today);
             var avgCompletion = completionRates.Values.Any() ? completionRates.Values.Average() : 0;
             ViewBag.CompletionRate = Math.Round(avgCompletion, 1);
@@ -245,29 +242,14 @@ public class BranchController : Controller
     {
         try
         {
-            var branch = await _context.Branches.FindAsync(branchId);
-            var employee = await _context.Employees.FindAsync(employeeId);
-            
-            if (branch == null)
-                return Json(new { success = false, message = "Branch not found" });
-            if (employee == null)
-                return Json(new { success = false, message = "Employee not found" });
-
-            var existingAssignment = await _context.BranchAssignments
-                .FirstOrDefaultAsync(ba => ba.BranchId == branchId && 
-                                           ba.EmployeeId == employeeId && 
-                                           ba.EndDate == null);
-
-            if (existingAssignment != null)
-            {
-                return Json(new { success = false, message = $"{employee.Name} is already assigned to {branch.Name}" });
-            }
+            if (branchId <= 0 || employeeId <= 0 || startDate == default)
+                return Json(new { success = false, message = "Invalid parameters" });
 
             var result = await _branchService.AssignEmployeeAsync(branchId, employeeId, startDate);
 
             if (result)
             {
-                return Json(new { success = true, message = $"Successfully assigned {employee.Name} to {branch.Name}" });
+                return Json(new { success = true, message = "Employee assigned successfully" });
             }
             return Json(new { success = false, message = "Failed to assign employee" });
         }
