@@ -32,40 +32,44 @@ public class TaskCalculationService : ITaskCalculationService
     public double CompletionWeight => 0.7;
     public double OnTimeWeight => 0.3;
     
+    // Instance wrapper delegates to static for interface compliance
     public double CalculateWeightedScore(int totalTasks, int completedTasks, int onTimeTasks)
+        => CalculateWeightedScoreStatic(totalTasks, completedTasks, onTimeTasks);
+    
+    public (double completionRate, double onTimeRate, double weightedScore) CalculateScores(int totalTasks, int completedTasks, int onTimeTasks)
+        => CalculateScoresStatic(totalTasks, completedTasks, onTimeTasks);
+    
+    public static double CalculateWeightedScoreStatic(int totalTasks, int completedTasks, int onTimeTasks)
     {
-        // If no tasks, score is 0
+        const double completionWeight = 0.7;
+        const double onTimeWeight = 0.3;
+        
         if (totalTasks == 0) return 0;
         
-        // Calculate rates
         var completionRate = Math.Round((double)completedTasks / totalTasks * 100, 1);
         var onTimeRate = completedTasks > 0 
             ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) 
             : 0;
         
-        // Apply scoring rules
         double weightedScore;
         
         if (completedTasks == 0)
         {
-            // No completed tasks = partial score based on completion only
-            weightedScore = completionRate * CompletionWeight;
+            weightedScore = completionRate * completionWeight;
         }
         else if (onTimeTasks == completedTasks)
         {
-            // All completed on-time = full completion rate (no penalty)
             weightedScore = completionRate;
         }
         else
         {
-            // Standard: 70% completion + 30% on-time
-            weightedScore = (completionRate * CompletionWeight) + (onTimeRate * OnTimeWeight);
+            weightedScore = (completionRate * completionWeight) + (onTimeRate * onTimeWeight);
         }
         
         return Math.Round(weightedScore, 1);
     }
     
-    public (double completionRate, double onTimeRate, double weightedScore) CalculateScores(int totalTasks, int completedTasks, int onTimeTasks)
+    public static (double completionRate, double onTimeRate, double weightedScore) CalculateScoresStatic(int totalTasks, int completedTasks, int onTimeTasks)
     {
         var completionRate = totalTasks > 0 
             ? Math.Round((double)completedTasks / totalTasks * 100, 1) 
@@ -73,7 +77,7 @@ public class TaskCalculationService : ITaskCalculationService
         var onTimeRate = completedTasks > 0 
             ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) 
             : 0;
-        var weightedScore = CalculateWeightedScore(totalTasks, completedTasks, onTimeTasks);
+        var weightedScore = CalculateWeightedScoreStatic(totalTasks, completedTasks, onTimeTasks);
         return (completionRate, onTimeRate, weightedScore);
     }
 
@@ -580,7 +584,7 @@ public class TaskCalculationService : ITaskCalculationService
                     .FirstOrDefault(ba => ba.BranchId == dt.BranchId &&
                                          dt.TaskDate.Date >= ba.StartDate.Date &&
                                          (ba.EndDate == null || dt.TaskDate.Date <= ba.EndDate.Value.Date));
-                return assignment != null && dt.TaskItem != null;
+                return assignment != null && dt.TaskItem != null && !dt.IsDeleted;
             }).ToList();
 
             var totalTasks = relevantTasks.Count;
@@ -714,25 +718,7 @@ public class TaskCalculationService : ITaskCalculationService
 
             var completionRate = totalTasks > 0 ? Math.Round((double)completedTasks / totalTasks * 100, 1) : 0;
             var onTimeRate = completedTasks > 0 ? Math.Round((double)onTimeTasks / completedTasks * 100, 1) : 0;
-            
-            double weightedScore;
-            if (totalTasks == 0)
-            {
-                weightedScore = 0;
-            }
-            else if (completedTasks == 0)
-            {
-                weightedScore = completionRate * 0.7;
-            }
-            else if (onTimeTasks == completedTasks)
-            {
-                weightedScore = completionRate;
-            }
-            else
-            {
-                weightedScore = (completionRate * 0.7) + (onTimeRate * 0.3);
-            }
-            weightedScore = Math.Round(weightedScore, 1);
+            var weightedScore = CalculateWeightedScoreStatic(totalTasks, completedTasks, onTimeTasks);
 
             return new DepartmentTaskStatistics
             {

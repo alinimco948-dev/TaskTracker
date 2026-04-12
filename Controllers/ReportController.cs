@@ -367,8 +367,8 @@ public async Task<IActionResult> ExportEmployeeComparison(int? branchId, List<in
     {
         try
         {
-            startDate ??= DateTime.UtcNow.AddMonths(-1);
-            endDate ??= DateTime.UtcNow;
+            startDate ??= _timezoneService.GetCurrentLocalTime().AddMonths(-1);
+            endDate ??= _timezoneService.GetCurrentLocalTime();
 
             var rankings = await _reportService.GetEmployeeRankingAsync(startDate, endDate);
             

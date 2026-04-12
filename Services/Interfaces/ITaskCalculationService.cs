@@ -8,7 +8,7 @@ public interface ITaskCalculationService
     double CompletionWeight { get; }
     double OnTimeWeight { get; }
     
-    // ========== Unified Scoring Methods ==========
+    // ========== Instance Scoring Methods (delegate to static) ==========
     double CalculateWeightedScore(int totalTasks, int completedTasks, int onTimeTasks);
     (double completionRate, double onTimeRate, double weightedScore) CalculateScores(int totalTasks, int completedTasks, int onTimeTasks);
     
@@ -43,6 +43,10 @@ public interface ITaskCalculationService
     
     // ========== Utility ==========
     DateTime GetCurrentUtcDate();
+    
+    // ========== Static Helpers (call TaskCalculationService.X directly) ==========
+    // public static double CalculateWeightedScore(int totalTasks, int completedTasks, int onTimeTasks)
+    // public static (double completionRate, double onTimeRate, double weightedScore) CalculateScores(int totalTasks, int completedTasks, int onTimeTasks)
 }
 
 // ========== Result Classes ==========

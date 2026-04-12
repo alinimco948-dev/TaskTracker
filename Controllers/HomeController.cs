@@ -82,6 +82,45 @@ public IActionResult TestTimezone()
         utcOffset = TimeZoneInfo.Local.BaseUtcOffset.ToString()
     });
 }
+
+[HttpGet]
+public IActionResult TestGrading()
+{
+    var tests = new List<Dictionary<string, object>>();
+    
+    // Test 1: Zero tasks
+    tests.Add(new Dictionary<string, object> { { "name", "Zero tasks returns 0" }, { "expected", 0.0 }, { "actual", Services.TaskCalculationService.CalculateWeightedScoreStatic(0, 0, 0) } });
+    // Test 2: 100% / 100%
+    tests.Add(new Dictionary<string, object> { { "name", "100% completion, 100% on-time" }, { "expected", 100.0 }, { "actual", Services.TaskCalculationService.CalculateWeightedScoreStatic(10, 10, 10) } });
+    // Test 3: 70% / 100%
+    tests.Add(new Dictionary<string, object> { { "name", "70% completion, 100% on-time" }, { "expected", 79.0 }, { "actual", Services.TaskCalculationService.CalculateWeightedScoreStatic(10, 7, 7) } });
+    // Test 4: 50% / 100%
+    tests.Add(new Dictionary<string, object> { { "name", "50% completion, 100% on-time" }, { "expected", 65.0 }, { "actual", Services.TaskCalculationService.CalculateWeightedScoreStatic(10, 5, 5) } });
+    // Test 5: 70% / 50%
+    tests.Add(new Dictionary<string, object> { { "name", "70% completion, 50% on-time" }, { "expected", 64.0 }, { "actual", Services.TaskCalculationService.CalculateWeightedScoreStatic(10, 7, 3) } });
+    // Test 6: 0% completion
+    tests.Add(new Dictionary<string, object> { { "name", "0% completion = 0%" }, { "expected", 0.0 }, { "actual", Services.TaskCalculationService.CalculateWeightedScoreStatic(10, 0, 0) } });
+    // Test 7: All late
+    tests.Add(new Dictionary<string, object> { { "name", "100% late = 70%" }, { "expected", 70.0 }, { "actual", Services.TaskCalculationService.CalculateWeightedScoreStatic(10, 10, 0) } });
+    
+    var results = new List<object>();
+    int passed = 0;
+    foreach (var t in tests)
+    {
+        var expected = Convert.ToDouble(t["expected"]);
+        var actual = Convert.ToDouble(t["actual"]);
+        var pass = Math.Abs(expected - actual) < 0.1;
+        if (pass) passed++;
+        results.Add(new { name = t["name"], expected, actual, passed = pass });
+    }
+    
+    return Json(new {
+        totalTests = results.Count,
+        passed,
+        failed = results.Count - passed,
+        results
+    });
+}
     #region API Endpoints - Batch Operations
 
 [HttpGet]

@@ -140,10 +140,10 @@
                 <div class="mt-3">
                     <div class="flex justify-between text-xs mb-1">
                         <span class="text-slate-500">Completion Rate</span>
-                        <span class="font-semibold text-emerald-400">@Model.CompletionRate%</span>
+                        <span class="font-semibold text-emerald-400">@Model.CompletionRate.ToString("F2")%</span>
                     </div>
                     <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
-                        <div class="bg-emerald-500 h-1.5 rounded-full" style="width: @Model.CompletionRate%"></div>
+                        <div class="bg-emerald-500 h-1.5 rounded-full" style="width: @Math.Min(Model.CompletionRate, 100)%"></div>
                     </div>
                 </div>
             </div>
@@ -160,10 +160,10 @@
                 <div class="mt-3">
                     <div class="flex justify-between text-xs mb-1">
                         <span class="text-slate-500">On-Time Rate</span>
-                        <span class="font-semibold text-cyan-400">@Model.OnTimeRate%</span>
+                        <span class="font-semibold text-cyan-400">@Model.OnTimeRate.ToString("F2")%</span>
                     </div>
                     <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
-                        <div class="bg-cyan-500 h-1.5 rounded-full" style="width: @Model.OnTimeRate%"></div>
+                        <div class="bg-cyan-500 h-1.5 rounded-full" style="width: @Math.Min(Model.OnTimeRate, 100)%"></div>
                     </div>
                 </div>
             </div>
@@ -225,7 +225,7 @@
                                             @if (stats.Pending > 0) { <span class="text-xs text-amber-400"><i class="fas fa-clock mr-1"></i>@stats.Pending pending</span> }
                                             @if (stats.Late > 0) { <span class="text-xs text-red-400"><i class="fas fa-exclamation-triangle mr-1"></i>@stats.Late late</span> }
                                         </div>
-                                        @if (stats.OnTime > 0) { <span class="text-xs text-cyan-400">@stats.OnTimeRate% on time</span> }
+                                        @if (stats.OnTime > 0) { <span class="text-xs text-cyan-400">@stats.OnTimeRate.ToString("F2")% on time</span> }
                                     </div>
                                 </div>
                             }
@@ -287,7 +287,7 @@
                                             <div class="rounded-xl p-3" style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15);">
                                                 <div class="flex justify-between items-center mb-1">
                                                     <span class="font-medium text-slate-200 text-sm">@task.Key</span>
-                                                    <span class="font-bold text-amber-400">@task.Value.CompletionRate%</span>
+                                                    <span class="font-bold text-amber-400">@task.Value.CompletionRate.ToString("F2")%</span>
                                                 </div>
                                                 <div class="w-full rounded-full h-1" style="background: rgba(255,255,255,0.08);">
                                                     <div class="bg-amber-500 h-1 rounded-full" style="width: @task.Value.CompletionRate%"></div>
@@ -556,8 +556,8 @@
                             }
                             else
                             {
-                                <p class="text-sm text-slate-400">• Completion Rate: <strong class="text-emerald-400">@Model.CompletionRate%</strong></p>
-                                <p class="text-sm text-slate-400">• On Time Rate: <strong class="text-cyan-400">@Model.OnTimeRate%</strong></p>
+                                <p class="text-sm text-slate-400">• Completion Rate: <strong class="text-emerald-400">@Model.CompletionRate.ToString("F2")%</strong></p>
+                                <p class="text-sm text-slate-400">• On Time Rate: <strong class="text-cyan-400">@Model.OnTimeRate.ToString("F2")%</strong></p>
                                 @if (Model.PendingTasks > 0) { <p class="text-sm text-amber-400">• @Model.PendingTasks pending tasks need attention</p> }
                                 @if (Model.LateTasks > 0) { <p class="text-sm text-red-400">• @Model.LateTasks tasks completed late</p> }
                             }

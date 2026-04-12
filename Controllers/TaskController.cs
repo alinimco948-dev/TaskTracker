@@ -46,7 +46,7 @@ public class TaskController : Controller
     // POST: Task/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(TaskItemViewModel model)
+    public async Task<IActionResult> Create([Bind("Id,Name,Description,Deadline,IsSameDay,DisplayOrder,IsActive,ExecutionType,WeeklyDays,MonthlyPattern,DurationDays,StartDate,EndDate,MaxOccurrences,AvailableFrom,AvailableTo")] TaskItemViewModel model)
     {
         try
         {
