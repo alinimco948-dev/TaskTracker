@@ -29,10 +29,10 @@ public class TaskCalculationService : ITaskCalculationService
     // ========== UNIFIED SCORING SYSTEM ==========
     // All scoring across the application uses these constants and method
     
-    public const double CompletionWeight = 0.7;
-    public const double OnTimeWeight = 0.3;
+    public double CompletionWeight => 0.7;
+    public double OnTimeWeight => 0.3;
     
-    public static double CalculateWeightedScore(int totalTasks, int completedTasks, int onTimeTasks)
+    public double CalculateWeightedScore(int totalTasks, int completedTasks, int onTimeTasks)
     {
         // If no tasks, score is 0
         if (totalTasks == 0) return 0;
@@ -65,7 +65,7 @@ public class TaskCalculationService : ITaskCalculationService
         return Math.Round(weightedScore, 1);
     }
     
-    public static (double completionRate, double onTimeRate, double weightedScore) CalculateScores(int totalTasks, int completedTasks, int onTimeTasks)
+    public (double completionRate, double onTimeRate, double weightedScore) CalculateScores(int totalTasks, int completedTasks, int onTimeTasks)
     {
         var completionRate = totalTasks > 0 
             ? Math.Round((double)completedTasks / totalTasks * 100, 1) 
