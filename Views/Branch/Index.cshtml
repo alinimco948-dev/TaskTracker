@@ -141,6 +141,7 @@
                         @foreach (var branch in Model.OrderBy(b => b.Name))
                         {
                             var completionRate = branch.CompletionRate;
+                            var completionRateFormatted = completionRate.ToString("F2");
                             var barColor = completionRate >= 80 ? "#10b981" : completionRate >= 60 ? "#f59e0b" : "#ef4444";
                             var branchInitials = string.IsNullOrEmpty(branch.Name) ? "?" : branch.Name.Length > 1 ? branch.Name.Substring(0, 2).ToUpper() : branch.Name[0].ToString().ToUpper();
                             
@@ -178,7 +179,7 @@
                                 </td>
                                 <td class="text-center">
                                     <div class="flex flex-col items-center gap-1">
-                                        <span class="text-sm font-bold" style="color: @barColor">@completionRate%</span>
+                                        <span class="text-sm font-bold" style="color: @barColor">@completionRateFormatted%</span>
                                         <div class="w-16 bg-white/10 rounded-full h-1.5">
                                             <div class="h-1.5 rounded-full transition-all" style="width: @completionRate%; background-color: @barColor"></div>
                                         </div>

@@ -655,6 +655,27 @@ function setBulkTime(preset) {
 async function executeBulkUpdate() {
     const taskId = $('#bulkTaskId').val();
     const time = $('#bulkCompletionTime').val();
+    const viewingDate = $('#bulkViewingDate').val();
+    
+    console.log('=== BULK UPDATE DEBUG ===');
+    console.log('Task ID:', taskId);
+    console.log('Time:', time);
+    console.log('Viewing Date from hidden field:', viewingDate);
+    console.log('DatePicker value:', $('#datePicker').val());
+    console.log('DashboardState.currentDate:', DashboardState.currentDate);
+    
+    // Force fallback to date picker if hidden field is empty
+    let finalDate = viewingDate;
+    if (!finalDate || finalDate === '') {
+        finalDate = $('#datePicker').val();
+        console.log('Using DatePicker fallback:', finalDate);
+    }
+    if (!finalDate || finalDate === '') {
+        finalDate = DashboardState.currentDate;
+        console.log('Using DashboardState fallback:', finalDate);
+    }
+    console.log('Final date being sent:', finalDate);
+    console.log('==========================');
     
     if (!taskId || !time) {
         showNotification('Select a task and time', 'error');
@@ -673,7 +694,7 @@ async function executeBulkUpdate() {
         return;
     }
     
-    console.log('Bulk updating task:', taskId, 'time:', time, 'branches:', branchIds);
+    console.log('Bulk updating task:', taskId, 'time:', time, 'viewingDate:', finalDate, 'branches:', branchIds);
     console.log('Token:', DashboardState.token);
     
     const btn = $('#bulkUpdateModal button:contains("EXECUTE")');
@@ -685,6 +706,7 @@ async function executeBulkUpdate() {
         const payload = {
             taskItemId: parseInt(taskId),
             completionDateTime: time,
+            viewingDate: finalDate,
             branchIds: branchIds
         };
         console.log('Sending payload:', JSON.stringify(payload));
@@ -702,7 +724,17 @@ async function executeBulkUpdate() {
         console.log('Response:', res);
         
         if (res.success) {
-            showNotification(`${res.count} tasks updated successfully`, 'success');
+            console.log('=== BULK UPDATE RESPONSE ===');
+            console.log('Success:', res.success);
+            console.log('Total count:', res.count);
+            console.log('Created:', res.created);
+            console.log('Updated:', res.updated);
+            console.log('Skipped (hidden):', res.skippedHidden);
+            console.log('============================');
+            const created = res.created || 0;
+            const updated = res.updated || 0;
+            const totalUpdated = res.count || 0;
+            showNotification(`${totalUpdated} tasks: ${created} created, ${updated} updated, ${res.skippedHidden || 0} skipped (hidden)`, 'success');
             closeBulkUpdateModal();
             await loadAllTaskStatuses();
         } else {
@@ -839,14 +871,23 @@ function closeAdjustmentModal() {
 
 function addAdjustment(min) {
     const current = parseInt($('#adjustmentMinutes').val()) || 0;
-    $('#adjustmentMinutes').val(current + min);
-    $('#currentAdjustmentDisplay').text(current + min);
+    const newValue = current + min;
+    $('#adjustmentMinutes').val(newValue);
+    $('#currentAdjustmentDisplay').text(newValue);
+    $('#customAdjustment').val(newValue);
 }
 
 function clearAdjustment() {
     $('#adjustmentMinutes').val(0);
     $('#adjustmentReason').val('');
     $('#currentAdjustmentDisplay').text('0');
+    $('#customAdjustment').val('');
+}
+
+function applyCustomAdjustment() {
+    const customValue = parseInt($('#customAdjustment').val()) || 0;
+    $('#adjustmentMinutes').val(customValue);
+    $('#currentAdjustmentDisplay').text(customValue);
 }
 
 async function saveAdjustment() {
@@ -954,9 +995,16 @@ function changeDate(days) {
     const datePicker = $('#datePicker');
     const currentDate = datePicker.val();
     if (currentDate) {
-        const date = new Date(currentDate);
+        const date = new Date(currentDate + 'T00:00:00');
         date.setDate(date.getDate() + days);
-        const newDate = date.toISOString().split('T')[0];
+        
+        // Format as YYYY-MM-DD manually to avoid UTC conversion issues
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const newDate = `${year}-${month}-${day}`;
+        
+        console.log('Date navigation:', currentDate, '->', newDate, '(days:', days, ')');
         window.location.href = '/Home/Index?date=' + newDate;
     }
 }
@@ -991,6 +1039,8 @@ $(document).ready(function() {
     $('#datePicker').on('change', function() {
         const selectedDate = $(this).val();
         if (selectedDate) {
+            // Update the hidden bulk viewing date as well
+            $('#bulkViewingDate').val(selectedDate);
             window.location.href = '/Home/Index?date=' + selectedDate;
         }
     });

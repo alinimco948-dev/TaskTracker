@@ -81,6 +81,7 @@ namespace TaskTracker.Models.ViewModels
     {
         public int taskItemId { get; set; }
         public string completionDateTime { get; set; } = string.Empty;
+        public string viewingDate { get; set; } = string.Empty;
         public List<int> branchIds { get; set; } = new();
     }
 }

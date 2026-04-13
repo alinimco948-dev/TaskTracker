@@ -6,6 +6,22 @@
     <title>@ViewData["Title"] - TaskTracker</title>
     
     <!-- Tailwind CSS -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            base: '#0b0b18',
+                            surface: '#12121f',
+                            card: 'rgba(255,255,255,0.04)',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Font Awesome -->
@@ -36,10 +52,34 @@
             --text-subtle:   #94a3b8;
         }
 
+        [data-theme="day"] {
+            --bg-base:       #f8fafc;
+            --bg-surface:    #ffffff;
+            --bg-card:       rgba(0,0,0,0.03);
+            --bg-card-hover: rgba(0,0,0,0.06);
+            --border:        rgba(0,0,0,0.08);
+            --border-hover:  rgba(99,102,241,0.6);
+            --primary:       #6366f1;
+            --primary-dark:  #4f46e5;
+            --primary-light: #818cf8;
+            --accent:        #0891b2;
+            --accent2:       #7c3aed;
+            --success:       #059669;
+            --warning:       #d97706;
+            --danger:        #dc2626;
+            --text-primary:  #1e293b;
+            --text-muted:    #64748b;
+            --text-subtle:   #475569;
+        }
+
         * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
 
         html {
             color-scheme: dark;
+        }
+
+        [data-theme="day"] html {
+            color-scheme: light;
         }
 
         body {
@@ -235,7 +275,7 @@
     
     @await RenderSectionAsync("Styles", required: false)
 </head>
-<body class="bg-[#0b0b18] bg-mesh text-slate-200">
+<body id="pageBody" class="bg-[#0b0b18] bg-mesh text-slate-200">
     <div class="flex h-screen overflow-hidden">
         <!-- Sidebar -->
         @await Html.PartialAsync("_Sidebar")
@@ -353,8 +393,48 @@
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script>
+        // ============================================
+        // GLOBAL CHART.JS CONFIGURATION
+        // High DPI / Retina Display Support
+        // ============================================
+        (function() {
+            // Set global Chart.js defaults for high quality rendering
+            const dpr = window.devicePixelRatio || 1;
+            
+            // Override default configuration for all charts
+            const originalLineDraw = Chart.prototype.draw;
+            Chart.prototype.draw = function() {
+                if (this.canvas) {
+                    const ctx = this.canvas.getContext('2d');
+                    ctx.scale(dpr, dpr);
+                }
+                originalLineDraw.apply(this, arguments);
+            };
+            
+            // Set global defaults
+            Chart.defaults.font.family = "'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+            Chart.defaults.font.size = 12;
+            Chart.defaults.color = '#94a3b8';
+            
+            // Global device pixel ratio for all charts
+            Chart.defaults.devicePixelRatio = dpr;
+            
+            // Improve anti-aliasing
+            if (Chart.defaults.animation) {
+                Chart.defaults.animation.duration = 0;
+            }
+            
+            // Responsive with proper scaling
+            Chart.defaults.responsive = true;
+            Chart.defaults.maintainAspectRatio = false;
+            
+            console.log('Chart.js initialized with devicePixelRatio:', dpr);
+        })();
+    </script>
     
     <script>
         // ============================================
@@ -510,7 +590,7 @@
                 localStorage.setItem('sidebarCollapsed', 'false');
             }
         }
-        
+
         function openMobileSidebar() {
             $('#mobileSidebar').addClass('open');
             $('#mobileSidebarOverlay').removeClass('hidden');

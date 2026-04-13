@@ -102,4 +102,23 @@ public async Task LogAsync(string action, string entityType, int? entityId, stri
             .OrderBy(a => a)
             .ToListAsync();
     }
+
+    public async Task<(List<string> actions, List<string> entityTypes)> GetFilterOptionsAsync(DateTime startDate, DateTime endDate)
+    {
+        var actions = await _context.AuditLogs
+            .Where(a => a.Timestamp >= startDate && a.Timestamp <= endDate)
+            .Select(a => a.Action)
+            .Distinct()
+            .Take(50)
+            .ToListAsync();
+
+        var entityTypes = await _context.AuditLogs
+            .Where(a => a.Timestamp >= startDate && a.Timestamp <= endDate)
+            .Select(a => a.EntityType)
+            .Distinct()
+            .Take(50)
+            .ToListAsync();
+
+        return (actions, entityTypes);
+    }
 }

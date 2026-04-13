@@ -17,6 +17,9 @@ public interface ITaskService
 
     // NEW: Scheduling methods
     Task<List<TaskItem>> GetTasksVisibleOnDateAsync(DateTime date);
+    
+    // Report controller helper methods
+    Task<List<TaskListViewModel>> GetActiveTaskSummariesAsync();
 }
 
 public class DelayResult

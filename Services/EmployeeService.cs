@@ -769,6 +769,25 @@ public class EmployeeService : IEmployeeService
 
     #endregion
 
+    #region Report Controller Helper Methods
+
+    public async Task<List<EmployeeListViewModel>> GetActiveEmployeesSummaryAsync()
+    {
+        return await _context.Employees
+            .Where(e => e.IsActive)
+            .Select(e => new EmployeeListViewModel
+            {
+                Id = e.Id,
+                Name = e.Name,
+                Position = e.Position,
+                Department = e.Department != null ? e.Department.Name : ""
+            })
+            .OrderBy(e => e.Name)
+            .ToListAsync();
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private string GetInitials(string name)

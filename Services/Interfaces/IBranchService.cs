@@ -17,4 +17,7 @@ public interface IBranchService
     Task<bool> UpdateTaskVisibilityAsync(int branchId, List<string> visibleTasks);  // Changed to accept List<string>
     Task<Dictionary<int, int>> GetBranchEmployeeCountsAsync();
     Task<Dictionary<int, double>> GetBranchCompletionRatesAsync(DateTime date);
+    
+    // Report controller helper methods
+    Task<List<BranchListViewModel>> GetActiveBranchesSummaryAsync();
 }

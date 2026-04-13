@@ -454,6 +454,7 @@
             const employeeNames = @Html.Raw(Json.Serialize(Model?.EmployeeScores?.Keys.ToList() ?? new List<string>()));
             const employeeScores = @Html.Raw(Json.Serialize(Model?.EmployeeScores?.Values.ToList() ?? new List<double>()));
             const branchAverage = @branchAverageScore;
+            const dpr = window.devicePixelRatio || 1;
 
             const combined = employeeNames.map((name, i) => ({ name, score: employeeScores[i] }));
             combined.sort((a, b) => b.score - a.score);
@@ -466,23 +467,71 @@
                         {
                             label: 'Performance Score (%)',
                             data: combined.map(c => c.score),
-                            backgroundColor: combined.map(c => c.score >= 90 ? 'rgba(16,185,129,0.7)' : c.score >= 75 ? 'rgba(6,182,212,0.7)' : c.score >= 60 ? 'rgba(245,158,11,0.7)' : 'rgba(239,68,68,0.7)'),
+                            backgroundColor: combined.map(c => c.score >= 90 ? 'rgba(16,185,129,0.8)' : c.score >= 75 ? 'rgba(6,182,212,0.8)' : c.score >= 60 ? 'rgba(245,158,11,0.8)' : 'rgba(239,68,68,0.8)'),
                             borderColor: combined.map(c => c.score >= 90 ? '#10b981' : c.score >= 75 ? '#06b6d4' : c.score >= 60 ? '#f59e0b' : '#ef4444'),
-                            borderWidth: 1, borderRadius: 6
+                            borderWidth: 1, 
+                            borderRadius: 6,
+                            barPercentage: 0.7
                         },
                         {
-                            label: 'Branch Average', data: Array(combined.length).fill(branchAverage),
-                            type: 'line', borderColor: '#7c3aed', borderWidth: 2,
-                            borderDash: [5, 5], fill: false, pointRadius: 0, tension: 0
+                            label: 'Branch Average', 
+                            data: Array(combined.length).fill(branchAverage),
+                            type: 'line', 
+                            borderColor: '#7c3aed', 
+                            borderWidth: 2,
+                            borderDash: [5, 5], 
+                            fill: false, 
+                            pointRadius: 0, 
+                            tension: 0
                         }
                     ]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'top', labels: { color: '#94a3b8', boxWidth: 10 } } },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    devicePixelRatio: dpr,
+                    animation: { duration: 0 },
+                    plugins: { 
+                        legend: { 
+                            position: 'top', 
+                            labels: { 
+                                color: '#94a3b8', 
+                                boxWidth: 10,
+                                padding: 20,
+                                usePointStyle: true,
+                                font: { weight: '500' }
+                            } 
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(26,26,46,0.95)',
+                            titleColor: '#fff',
+                            bodyColor: '#94a3b8',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            padding: 12
+                        }
+                    },
                     scales: {
-                        y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
-                        x: { ticks: { maxRotation: 45, minRotation: 45, font: { size: 10 }, color: '#64748b' }, grid: { display: false } }
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100, 
+                            grid: { color: 'rgba(255,255,255,0.05)' }, 
+                            ticks: { 
+                                color: '#94a3b8',
+                                font: { size: 11 },
+                                callback: function(value) { return value + '%'; }
+                            } 
+                        },
+                        x: { 
+                            ticks: { 
+                                maxRotation: 45, 
+                                minRotation: 45, 
+                                font: { size: 11 }, 
+                                color: '#94a3b8'
+                            }, 
+                            grid: { display: false }
+                        }
                     }
                 }
             });

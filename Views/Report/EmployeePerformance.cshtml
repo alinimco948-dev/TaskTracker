@@ -630,22 +630,91 @@
             const trendDates = @Html.Raw(Json.Serialize(Model?.DailyTrendDates ?? new List<string>()));
             const completionRates = @Html.Raw(Json.Serialize(Model?.DailyCompletionRates ?? new List<double>()));
             const onTimeRates = @Html.Raw(Json.Serialize(Model?.DailyOnTimeRates ?? new List<double>()));
+            const dpr = window.devicePixelRatio || 1;
 
             new Chart(trendCtx, {
                 type: 'line',
                 data: {
                     labels: trendDates,
                     datasets: [
-                        { label: 'Completion Rate (%)', data: completionRates, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 3, pointHoverRadius: 5, pointBackgroundColor: '#10b981', pointBorderColor: '#0b0b18' },
-                        { label: 'On Time Rate (%)', data: onTimeRates, borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,0.1)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 3, pointHoverRadius: 5, pointBackgroundColor: '#06b6d4', pointBorderColor: '#0b0b18' }
+                        { 
+                            label: 'Completion Rate (%)', 
+                            data: completionRates, 
+                            borderColor: '#10b981', 
+                            backgroundColor: 'rgba(16,185,129,0.1)', 
+                            borderWidth: 2, 
+                            tension: 0.4, 
+                            fill: true, 
+                            pointRadius: 4, 
+                            pointHoverRadius: 7, 
+                            pointBackgroundColor: '#10b981', 
+                            pointBorderColor: '#0b0b18',
+                            pointBorderWidth: 2
+                        },
+                        { 
+                            label: 'On Time Rate (%)', 
+                            data: onTimeRates, 
+                            borderColor: '#06b6d4', 
+                            backgroundColor: 'rgba(6,182,212,0.1)', 
+                            borderWidth: 2, 
+                            tension: 0.4, 
+                            fill: true, 
+                            pointRadius: 4, 
+                            pointHoverRadius: 7, 
+                            pointBackgroundColor: '#06b6d4', 
+                            pointBorderColor: '#0b0b18',
+                            pointBorderWidth: 2
+                        }
                     ]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'top', labels: { color: '#94a3b8', boxWidth: 10 } }, tooltip: { mode: 'index', intersect: false } },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    devicePixelRatio: dpr,
+                    animation: { duration: 0 },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { 
+                        legend: { 
+                            position: 'top', 
+                            labels: { 
+                                color: '#94a3b8', 
+                                boxWidth: 10,
+                                padding: 20,
+                                usePointStyle: true,
+                                font: { weight: '500' }
+                            } 
+                        }, 
+                        tooltip: { 
+                            mode: 'index', 
+                            intersect: false,
+                            backgroundColor: 'rgba(26,26,46,0.95)',
+                            titleColor: '#fff',
+                            bodyColor: '#94a3b8',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            cornerRadius: 8
+                        } 
+                    },
                     scales: {
-                        y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
-                        x: { grid: { display: false }, ticks: { color: '#64748b' } }
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100, 
+                            grid: { color: 'rgba(255,255,255,0.05)' }, 
+                            ticks: { 
+                                color: '#94a3b8',
+                                callback: function(value) { return value + '%'; },
+                                font: { size: 11 }
+                            } 
+                        },
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { 
+                                color: '#94a3b8',
+                                font: { size: 11 },
+                                maxRotation: 45
+                            } 
+                        }
                     }
                 }
             });

@@ -469,6 +469,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    const dpr = window.devicePixelRatio || 1;
+    
     // Performance Trend Chart
     const ctx = document.getElementById('performanceChart').getContext('2d');
     const chartLabels = @Html.Raw(Json.Serialize(Model.ChartLabels ?? new List<string>()));
@@ -486,15 +488,46 @@
                 tension: 0.4, fill: true,
                 pointBackgroundColor: 'rgb(99, 102, 241)',
                 pointBorderColor: '#0b0b18',
-                pointRadius: 4
+                pointRadius: 4,
+                pointHoverRadius: 7,
+                borderWidth: 2
             }]
         },
         options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            responsive: true,
+            maintainAspectRatio: false,
+            devicePixelRatio: dpr,
+            animation: { duration: 0 },
+            plugins: { 
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(26,26,46,0.95)',
+                    titleColor: '#fff',
+                    bodyColor: '#94a3b8',
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    padding: 12
+                }
+            },
             scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
-                x: { grid: { display: false }, ticks: { color: '#64748b' } }
+                y: { 
+                    beginAtZero: true, 
+                    grid: { color: 'rgba(255,255,255,0.05)' }, 
+                    ticks: { 
+                        color: '#94a3b8',
+                        font: { size: 11 },
+                        callback: function(value) { return value; }
+                    } 
+                },
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { 
+                        color: '#94a3b8',
+                        font: { size: 11 },
+                        maxRotation: 45
+                    } 
+                }
             }
         }
     });
@@ -505,9 +538,35 @@
             type: 'doughnut',
             data: {
                 labels: ['Completed', 'Pending'],
-                datasets: [{ data: [@Model.CompletedTasks, @(Model.TotalTasks - Model.CompletedTasks)], backgroundColor: ['#10b981', 'rgba(245,158,11,0.4)'], borderWidth: 0, borderRadius: 4 }]
+                datasets: [{ 
+                    data: [@Model.CompletedTasks, @(Model.TotalTasks - Model.CompletedTasks)], 
+                    backgroundColor: ['#10b981', 'rgba(245,158,11,0.4)'], 
+                    borderWidth: 0, 
+                    borderRadius: 4,
+                    hoverOffset: 8
+                }]
             },
-            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10 } } } }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                devicePixelRatio: dpr,
+                plugins: { 
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { 
+                            color: '#94a3b8', 
+                            boxWidth: 10,
+                            padding: 15,
+                            usePointStyle: true
+                        } 
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(26,26,46,0.95)',
+                        cornerRadius: 8,
+                        padding: 12
+                    }
+                } 
+            }
         });
     }
 
@@ -517,9 +576,35 @@
             type: 'doughnut',
             data: {
                 labels: ['On Time', 'Late'],
-                datasets: [{ data: [@Model.OnTimeTasks, @(Model.CompletedTasks - Model.OnTimeTasks)], backgroundColor: ['#06b6d4', 'rgba(239,68,68,0.6)'], borderWidth: 0, borderRadius: 4 }]
+                datasets: [{ 
+                    data: [@Model.OnTimeTasks, @(Model.CompletedTasks - Model.OnTimeTasks)], 
+                    backgroundColor: ['#06b6d4', 'rgba(239,68,68,0.6)'], 
+                    borderWidth: 0, 
+                    borderRadius: 4,
+                    hoverOffset: 8
+                }]
             },
-            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10 } } } }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                devicePixelRatio: dpr,
+                plugins: { 
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { 
+                            color: '#94a3b8', 
+                            boxWidth: 10,
+                            padding: 15,
+                            usePointStyle: true
+                        } 
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(26,26,46,0.95)',
+                        cornerRadius: 8,
+                        padding: 12
+                    }
+                } 
+            }
         });
     }
 

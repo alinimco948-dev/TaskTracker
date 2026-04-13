@@ -25,4 +25,7 @@ public interface IEmployeeService
     Task<bool> EndBranchAssignmentAsync(int assignmentId);
     Task<List<Branch>> GetEmployeeBranchesAsync(int employeeId);
     Task<List<Employee>> GetBranchEmployeesAsync(int branchId);
+    
+    // Report controller helper methods
+    Task<List<EmployeeListViewModel>> GetActiveEmployeesSummaryAsync();
 }

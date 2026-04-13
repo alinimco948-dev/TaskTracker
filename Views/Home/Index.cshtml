@@ -448,6 +448,7 @@
             <h3 class="text-white font-black flex items-center gap-2 tracking-tight"><i class="fas fa-layer-group text-purple-400"></i> Industrial Bulk</h3>
         </div>
         <div class="p-6 space-y-4">
+            <input type="hidden" id="bulkViewingDate" value="@Model.CurrentDate.ToString("yyyy-MM-dd")" />
             <div>
                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Target Task</label>
                 <select id="bulkTaskId" class="dark-input">
@@ -495,11 +496,20 @@
 
             <input type="hidden" id="adjustmentMinutes" value="0">
             
-            <div class="grid grid-cols-4 gap-2">
+            <div class="grid grid-cols-6 gap-2">
+                <button type="button" onclick="addAdjustment(1)" class="py-2 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition">+1m</button>
                 <button type="button" onclick="addAdjustment(5)" class="py-2 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition">+5m</button>
                 <button type="button" onclick="addAdjustment(10)" class="py-2 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition">+10m</button>
+                <button type="button" onclick="addAdjustment(-1)" class="py-2 bg-red-500/10 text-red-400 text-[10px] font-bold rounded-lg border border-red-500/20 hover:bg-red-500/20 transition">-1m</button>
                 <button type="button" onclick="addAdjustment(-5)" class="py-2 bg-red-500/10 text-red-400 text-[10px] font-bold rounded-lg border border-red-500/20 hover:bg-red-500/20 transition">-5m</button>
                 <button type="button" onclick="addAdjustment(-10)" class="py-2 bg-red-500/10 text-red-400 text-[10px] font-bold rounded-lg border border-red-500/20 hover:bg-red-500/20 transition">-10m</button>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div class="flex-1">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Custom</label>
+                    <input type="number" id="customAdjustment" class="dark-input text-center" placeholder="±min" min="-1440" max="1440" onchange="applyCustomAdjustment()">
+                </div>
             </div>
 
             <div>

@@ -463,4 +463,17 @@ private async Task AutoAssignTaskToAllEmployees(TaskItem task)
             return new DelayResult { Type = "hours", Text = $"{hours}h {mins % 60}m late", IsHoliday = isHoliday };
         return new DelayResult { Type = "minutes", Text = $"{mins}m late", IsHoliday = isHoliday };
     }
+
+    public async Task<List<TaskListViewModel>> GetActiveTaskSummariesAsync()
+    {
+        return await _context.TaskItems
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.DisplayOrder)
+            .Select(t => new TaskListViewModel
+            {
+                Id = t.Id,
+                Name = t.Name
+            })
+            .ToListAsync();
+    }
 }

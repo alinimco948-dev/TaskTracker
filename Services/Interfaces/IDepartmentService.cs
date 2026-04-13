@@ -13,4 +13,7 @@ public interface IDepartmentService
     Task<DepartmentDetailsViewModel> GetDepartmentDetailsAsync(int id);
     Task<Dictionary<int, int>> GetDepartmentBranchCountsAsync();
     Task<Dictionary<int, int>> GetDepartmentEmployeeCountsAsync();
+    
+    // Report controller helper methods
+    Task<List<DepartmentListViewModel>> GetActiveDepartmentsSummaryAsync();
 }

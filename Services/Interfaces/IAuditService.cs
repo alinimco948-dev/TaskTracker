@@ -8,4 +8,7 @@ public interface IAuditService
     Task<List<AuditLog>> GetAuditLogsAsync(DateTime? startDate = null, DateTime? endDate = null, string? action = null, string? entityType = null);
     Task<List<string>> GetDistinctActionsAsync();
     Task<List<string>> GetDistinctEntityTypesAsync();
+    
+    // Report controller helper methods
+    Task<(List<string> actions, List<string> entityTypes)> GetFilterOptionsAsync(DateTime startDate, DateTime endDate);
 }

@@ -535,4 +535,18 @@ public class BranchService : IBranchService
         if (parts.Length == 1) return parts[0].Substring(0, 1).ToUpper();
         return (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
     }
+
+    public async Task<List<BranchListViewModel>> GetActiveBranchesSummaryAsync()
+    {
+        return await _context.Branches
+            .Where(b => b.IsActive)
+            .OrderBy(b => b.Name)
+            .Select(b => new BranchListViewModel
+            {
+                Id = b.Id,
+                Name = b.Name,
+                Code = b.Code
+            })
+            .ToListAsync();
+    }
 }

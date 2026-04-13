@@ -209,32 +209,56 @@
             const getCommonOptions = () => ({
                 responsive: true,
                 maintainAspectRatio: false,
-                devicePixelRatio: window.devicePixelRatio || 1,
+                devicePixelRatio: window.devicePixelRatio,
+                animation: { duration: 0 },
                 interaction: { mode: 'index', intersect: false },
+                elements: {
+                    line: { borderWidth: 2, tension: 0.4 },
+                    point: { radius: 3, hoverRadius: 6, borderWidth: 2 }
+                },
                 plugins: {
-                    legend: { display: true, position: 'top', labels: { usePointStyle: true, padding: 20 } }
+                    legend: { 
+                        display: true, 
+                        position: 'top', 
+                        labels: { 
+                            usePointStyle: true, 
+                            padding: 20,
+                            font: { weight: '500' }
+                        } 
+                    }
                 },
                 scales: {
                     x: { 
                         grid: { display: false },
-                        ticks: { color: getTextColor() }
+                        ticks: { 
+                            color: getTextColor(),
+                            font: { size: 11 }
+                        }
                     },
                     y: {
                         type: 'linear',
                         display: true,
                         position: 'left',
                         max: 100,
-                        title: { display: true, text: 'Rate %', color: getTextColor() },
+                        title: { display: true, text: 'Rate %', color: getTextColor(), font: { weight: 'bold' } },
                         grid: { color: getGridColor() },
-                        ticks: { color: getTextColor() }
+                        ticks: { 
+                            color: getTextColor(),
+                            font: { size: 11 },
+                            callback: function(value) { return value + '%'; }
+                        }
                     },
                     y1: {
                         type: 'linear',
                         display: true,
                         position: 'right',
-                        title: { display: true, text: 'Volume', color: getTextColor() },
+                        title: { display: true, text: 'Volume', color: getTextColor(), font: { weight: 'bold' } },
                         grid: { display: false },
-                        ticks: { color: getTextColor() }
+                        ticks: { 
+                            color: getTextColor(),
+                            font: { size: 11 },
+                            stepSize: 1
+                        }
                     }
                 }
             });

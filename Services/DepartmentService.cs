@@ -325,4 +325,18 @@ public class DepartmentService : IDepartmentService
     }
 
     #endregion
+
+    public async Task<List<DepartmentListViewModel>> GetActiveDepartmentsSummaryAsync()
+    {
+        return await _context.Departments
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.Name)
+            .Select(d => new DepartmentListViewModel
+            {
+                Id = d.Id,
+                Name = d.Name,
+                Code = d.Code
+            })
+            .ToListAsync();
+    }
 }

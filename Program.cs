@@ -60,6 +60,7 @@ builder.Services.AddScoped<TaskSchedulerService>();
 builder.Services.AddScoped<ITaskCalculationService, TaskCalculationService>();
 builder.Services.AddScoped<ITimezoneService, TimezoneService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IGradingService, GradingService>();
 
 // Add HttpContextAccessor
 builder.Services.AddHttpContextAccessor();

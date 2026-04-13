@@ -325,7 +325,7 @@ public async Task<IActionResult> BulkUpdate([FromBody] BulkUpdateRequest request
 {
     try
     {
-        _logger.LogInformation($"BulkUpdate: TaskId={request.taskItemId}, DateTime={request.completionDateTime}, Branches={request.branchIds?.Count ?? 0}");
+        _logger.LogInformation($"BulkUpdate: TaskId={request.taskItemId}, DateTime={request.completionDateTime}, ViewingDate={request.viewingDate}, Branches={request.branchIds?.Count ?? 0}");
         
         if (request.branchIds == null || !request.branchIds.Any())
         {
@@ -344,19 +344,43 @@ public async Task<IActionResult> BulkUpdate([FromBody] BulkUpdateRequest request
             return Json(new { success = false, message = "Invalid completion time" });
         }
         
+        DateTime localViewingDate;
+        if (!DateTime.TryParse(request.viewingDate, out localViewingDate))
+        {
+            _logger.LogWarning("No viewing date provided or invalid format '{ViewingDate}', defaulting to today", request.viewingDate);
+            localViewingDate = _timezoneService.GetCurrentLocalTime().Date;
+        }
+        
+        _logger.LogInformation("Viewing date parsed: {LocalViewingDate}, Date parts: Year={Year}, Month={Month}, Day={Day}", 
+            localViewingDate, localViewingDate.Year, localViewingDate.Month, localViewingDate.Day);
+        
         var utcCompletionTime = _timezoneService.ConvertToUtc(localCompletionTime);
-        var currentDate = _timezoneService.GetCurrentLocalTime().Date;
-        var utcStart = _timezoneService.GetStartOfDayLocal(currentDate);
-        var utcEnd = _timezoneService.GetEndOfDayLocal(currentDate);
+        var utcStart = _timezoneService.GetStartOfDayLocal(localViewingDate.Date);
+        var utcEnd = _timezoneService.GetEndOfDayLocal(localViewingDate.Date);
+        
+        _logger.LogInformation("Date conversion: LocalDate={LocalDate}, UtcStart={UtcStart}, UtcEnd={UtcEnd}", 
+            localViewingDate.Date.ToString("yyyy-MM-dd"), utcStart.ToString("yyyy-MM-dd HH:mm:ss"), utcEnd.ToString("yyyy-MM-dd HH:mm:ss"));
+        
+        _logger.LogInformation($"BulkUpdate using date range: {utcStart} to {utcEnd}");
         
         var count = 0;
+        var skippedHidden = 0;
+        var created = 0;
+        var updated = 0;
+        var notFound = 0;
         
         foreach (var branchId in request.branchIds)
         {
+            _logger.LogDebug("Processing branch {BranchId} for task {TaskId}", branchId, request.taskItemId);
+            
             // Check if task is hidden for this branch
             var branch = await _context.Branches.FindAsync(branchId);
             if (branch?.HiddenTasks?.Contains(task.Name) == true)
+            {
+                _logger.LogDebug("Task {TaskName} is hidden for branch {BranchId}, skipping", task.Name, branchId);
+                skippedHidden++;
                 continue;
+            }
             
             var dailyTask = await _context.DailyTasks
                 .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
@@ -364,8 +388,12 @@ public async Task<IActionResult> BulkUpdate([FromBody] BulkUpdateRequest request
                                            dt.TaskDate >= utcStart &&
                                            dt.TaskDate <= utcEnd);
             
+            _logger.LogDebug("Query for BranchId={BranchId}, TaskId={TaskId}, DateRange: {Start} to {End} -> Found: {Found}", 
+                branchId, request.taskItemId, utcStart.ToString("yyyy-MM-dd HH:mm:ss"), utcEnd.ToString("yyyy-MM-dd HH:mm:ss"), dailyTask != null);
+            
             if (dailyTask == null)
             {
+                _logger.LogDebug("No existing task found - creating new for branch {BranchId}", branchId);
                 // Create new daily task
                 dailyTask = new DailyTask
                 {
@@ -378,24 +406,28 @@ public async Task<IActionResult> BulkUpdate([FromBody] BulkUpdateRequest request
                     BulkUpdateTime = utcCompletionTime
                 };
                 _context.DailyTasks.Add(dailyTask);
+                created++;
                 count++;
             }
             else
             {
+                _logger.LogDebug("Found existing task {TaskId} for branch {BranchId}, updating", dailyTask.Id, branchId);
                 // Update existing task (even if already completed)
                 dailyTask.IsCompleted = true;
                 dailyTask.CompletedAt = utcCompletionTime;
                 dailyTask.IsBulkUpdated = true;
                 dailyTask.BulkUpdateTime = utcCompletionTime;
+                updated++;
                 count++;
             }
         }
         
         await _context.SaveChangesAsync();
         
-        _logger.LogInformation($"BulkUpdate completed: {count} tasks updated");
+        _logger.LogInformation("BulkUpdate Summary - Total: {Count}, Created: {Created}, Updated: {Updated}, Skipped(Hidden): {Skipped}, NotFound: {NotFound}", 
+            count, created, updated, skippedHidden, notFound);
         
-        return Json(new { success = true, count = count });
+        return Json(new { success = true, count = count, created = created, updated = updated, skippedHidden = skippedHidden });
     }
     catch (Exception ex)
     {
