@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "l8hJV/25jlY=",
+  "dgSpecHash": "7hFW8RCpNo4=",
   "success": true,
-  "projectFilePath": "C:\\Users\\M\\source\\repos\\New folder (3)\\TaskTracker\\TaskTracker\\TaskTracker.csproj",
+  "projectFilePath": "C:\\Users\\M\\source\\repos\\full working ap\\New folder (3)\\TaskTracker (3) - Copy\\TaskTracker\\TaskTracker.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\M\\.nuget\\packages\\epplus\\8.5.0\\epplus.8.5.0.nupkg.sha512",
     "C:\\Users\\M\\.nuget\\packages\\epplus.interfaces\\8.4.0\\epplus.interfaces.8.4.0.nupkg.sha512",
