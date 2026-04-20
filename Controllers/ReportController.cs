@@ -45,14 +45,37 @@ public class ReportController : Controller
 
     // GET: Report/ExecutiveSummary
     [HttpGet]
-    public async Task<IActionResult> ExecutiveSummary(DateTime? startDate = null, DateTime? endDate = null)
+    public async Task<IActionResult> ExecutiveSummary(DateTime? startDate = null, DateTime? endDate = null, bool generate = false)
     {
         try
         {
             var end = endDate ?? GetDefaultEndDate();
             var start = startDate ?? end.AddDays(-30);
 
-            var model = await _reportService.GetExecutiveSummaryAsync(start, end);
+            var model = new ExecutiveSummaryViewModel
+            {
+                StartDate = start,
+                EndDate = end,
+                IsGenerated = false
+            };
+
+            if (generate)
+            {
+                var reportData = await _reportService.GetExecutiveSummaryAsync(start, end);
+                
+                // Map properties
+                model.TotalTasksAssigned = reportData.TotalTasksAssigned;
+                model.TotalTasksCompleted = reportData.TotalTasksCompleted;
+                model.TotalTasksPending = reportData.TotalTasksPending;
+                model.TotalTasksOnTime = reportData.TotalTasksOnTime;
+                model.TotalTasksLate = reportData.TotalTasksLate;
+                model.DailyTrends = reportData.DailyTrends;
+                model.DepartmentComparisons = reportData.DepartmentComparisons;
+                model.BottomBranches = reportData.BottomBranches;
+                model.BottomTasks = reportData.BottomTasks;
+                model.IsGenerated = true;
+            }
+
             return View(model);
         }
         catch (Exception ex)
@@ -65,7 +88,7 @@ public class ReportController : Controller
 
     // GET: Report/EmployeePerformance
     [HttpGet]
-    public async Task<IActionResult> EmployeePerformance(int? employeeId, DateTime? startDate, DateTime? endDate, int page = 1, int pageSize = 50)
+    public async Task<IActionResult> EmployeePerformance(int? employeeId, DateTime? startDate, DateTime? endDate, int page = 1, int pageSize = 50, bool generate = false)
     {
         try
         {
@@ -77,26 +100,35 @@ public class ReportController : Controller
             ViewBag.StartDate = start.ToString("yyyy-MM-dd");
             ViewBag.EndDate = end.ToString("yyyy-MM-dd");
 
-            if (!employeeId.HasValue || employeeId.Value <= 0)
+            var model = new EmployeePerformanceViewModel 
+            { 
+                StartDate = start, 
+                EndDate = end, 
+                EmployeeId = employeeId ?? 0,
+                IsGenerated = false
+            };
+
+            if (generate && employeeId.HasValue && employeeId.Value > 0)
             {
-                return View(new EmployeePerformanceViewModel { StartDate = start, EndDate = end, EmployeeId = 0 });
+                var report = await _reportService.ExecuteEmployeeReportAsync(employeeId.Value, start, end);
+                report.IsGenerated = true;
+
+                if (report.DailyBreakdown?.Any() == true)
+                {
+                    report.DailyBreakdown = report.DailyBreakdown
+                        .Skip((page - 1) * pageSize)
+                        .Take(pageSize)
+                        .ToList();
+                }
+
+                ViewBag.CurrentPage = page;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalItems = report.DailyBreakdown?.Count ?? 0;
+
+                return View(report);
             }
 
-            var report = await _reportService.ExecuteEmployeeReportAsync(employeeId.Value, start, end);
-
-            if (report.DailyBreakdown?.Any() == true)
-            {
-                report.DailyBreakdown = report.DailyBreakdown
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToList();
-            }
-
-            ViewBag.CurrentPage = page;
-            ViewBag.PageSize = pageSize;
-            ViewBag.TotalItems = report.DailyBreakdown?.Count ?? 0;
-
-            return View(report);
+            return View(model);
         }
         catch (Exception ex)
         {
@@ -106,14 +138,15 @@ public class ReportController : Controller
             {
                 StartDate = GetDefaultStartDate(),
                 EndDate = GetDefaultEndDate(),
-                EmployeeId = 0
+                EmployeeId = employeeId ?? 0,
+                IsGenerated = false
             });
         }
     }
 
     // GET: Report/EmployeeComparison
     [HttpGet]
-    public async Task<IActionResult> EmployeeComparison(int? branchId, List<int>? employeeIds, DateTime? startDate, DateTime? endDate, string comparisonMode = "branch")
+    public async Task<IActionResult> EmployeeComparison(int? branchId, List<int>? employeeIds, DateTime? startDate, DateTime? endDate, string comparisonMode = "branch", bool generate = false)
     {
         try
         {
@@ -129,16 +162,26 @@ public class ReportController : Controller
             ViewBag.StartDate = start.ToString("yyyy-MM-dd");
             ViewBag.EndDate = end.ToString("yyyy-MM-dd");
 
-            var report = await _reportService.ExecuteEmployeeComparisonReportAsync(
-                branchId, employeeIds ?? new List<int>(), start, end, comparisonMode);
+            if (generate)
+            {
+                var report = await _reportService.ExecuteEmployeeComparisonReportAsync(
+                    branchId, employeeIds ?? new List<int>(), start, end, comparisonMode);
+                report.IsGenerated = true;
+                return View(report);
+            }
 
-            return View(report);
+            return View(new EmployeeComparisonViewModel 
+            { 
+                StartDate = start, 
+                EndDate = end, 
+                IsGenerated = false 
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating employee comparison report");
             TempData["ErrorMessage"] = $"Error generating report: {ex.Message}";
-            return View(new EmployeeComparisonViewModel());
+            return View(new EmployeeComparisonViewModel { IsGenerated = false });
         }
     }
 
@@ -172,40 +215,60 @@ public class ReportController : Controller
 
     // GET: Report/EmployeeRanking
     [HttpGet]
-    public async Task<IActionResult> EmployeeRanking(DateTime? startDate = null, DateTime? endDate = null, int page = 1, int pageSize = 20)
+    public async Task<IActionResult> EmployeeRanking(DateTime? startDate = null, DateTime? endDate = null, int page = 1, int pageSize = 20, bool generate = false)
     {
         try
         {
             var start = startDate ?? _timezoneService.GetCurrentLocalTime().AddMonths(-1);
             var end = endDate ?? _timezoneService.GetCurrentLocalTime();
 
-            var rankings = await _reportService.GetEmployeeRankingAsync(start, end);
-
-            var totalItems = rankings.Count;
-            var pagedRankings = rankings.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            var model = new EmployeeRankingReportViewModel
+            {
+                StartDate = start,
+                EndDate = end,
+                CurrentPage = page,
+                PageSize = pageSize,
+                IsGenerated = false
+            };
 
             ViewBag.StartDate = start.ToString("yyyy-MM-dd");
             ViewBag.EndDate = end.ToString("yyyy-MM-dd");
-            ViewBag.TotalEmployees = totalItems;
-            ViewBag.AverageScore = rankings.Any() ? Math.Round(rankings.Average(r => r.PerformanceScore), 0) : 0;
-            ViewBag.TopScore = rankings.Any() ? rankings.Max(r => r.PerformanceScore) : 0;
-            ViewBag.CurrentPage = page;
-            ViewBag.PageSize = pageSize;
-            ViewBag.TotalPages = (int)Math.Ceiling((double)totalItems / pageSize);
 
-            return View(pagedRankings);
+            if (generate)
+            {
+                var rankings = await _reportService.GetEmployeeRankingAsync(start, end);
+
+                var totalItems = rankings.Count;
+                var pagedRankings = rankings.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+                model.Rankings = pagedRankings;
+                model.TotalEmployees = totalItems;
+                model.AverageScore = rankings.Any() ? Math.Round(rankings.Average(r => r.PerformanceScore), 0) : 0;
+                model.TopScore = rankings.Any() ? rankings.Max(r => r.PerformanceScore) : 0;
+                model.TotalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+                model.IsGenerated = true;
+
+                ViewBag.TotalEmployees = totalItems;
+                ViewBag.AverageScore = model.AverageScore;
+                ViewBag.TopScore = model.TopScore;
+                ViewBag.CurrentPage = page;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalPages = model.TotalPages;
+            }
+
+            return View(model);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating employee ranking");
             TempData["ErrorMessage"] = "Error generating ranking report. Please try again.";
-            return View(new List<EmployeeRankingViewModel>());
+            return View(new EmployeeRankingReportViewModel { IsGenerated = false });
         }
     }
 
     // GET: Report/BranchPerformance
     [HttpGet]
-    public async Task<IActionResult> BranchPerformance(int? branchId, DateTime? startDate, DateTime? endDate)
+    public async Task<IActionResult> BranchPerformance(int? branchId, DateTime? startDate, DateTime? endDate, bool generate = false)
     {
         try
         {
@@ -217,13 +280,23 @@ public class ReportController : Controller
             ViewBag.StartDate = start.ToString("yyyy-MM-dd");
             ViewBag.EndDate = end.ToString("yyyy-MM-dd");
 
-            if (!branchId.HasValue || branchId.Value <= 0)
+            var model = new BranchPerformanceViewModel 
+            { 
+                BranchId = branchId ?? 0, 
+                BranchName = "", 
+                StartDate = start, 
+                EndDate = end,
+                IsGenerated = false
+            };
+
+            if (generate && branchId.HasValue && branchId.Value > 0)
             {
-                return View(new BranchPerformanceViewModel { BranchId = 0, BranchName = "", StartDate = start, EndDate = end });
+                var report = await _reportService.ExecuteBranchReportAsync(branchId.Value, start, end);
+                report.IsGenerated = true;
+                return View(report);
             }
 
-            var report = await _reportService.ExecuteBranchReportAsync(branchId.Value, start, end);
-            return View(report);
+            return View(model);
         }
         catch (Exception ex)
         {
@@ -239,7 +312,8 @@ public class ReportController : Controller
             {
                 BranchId = branchId ?? 0,
                 StartDate = startDate ?? GetDefaultStartDate(),
-                EndDate = endDate ?? GetDefaultEndDate()
+                EndDate = endDate ?? GetDefaultEndDate(),
+                IsGenerated = false
             });
         }
     }
@@ -270,76 +344,11 @@ public class ReportController : Controller
         }
     }
 
-    // GET: Report/DepartmentPerformance
-    [HttpGet]
-    public async Task<IActionResult> DepartmentPerformance(int? departmentId, DateTime? startDate, DateTime? endDate)
-    {
-        try
-        {
-            var start = startDate ?? GetDefaultStartDate();
-            var end = endDate ?? GetDefaultEndDate();
 
-            var departments = await _departmentService.GetActiveDepartmentsSummaryAsync();
-            ViewBag.Departments = departments.Select(d => new { d.Id, d.Name, d.Code }).ToList();
-            ViewBag.StartDate = start.ToString("yyyy-MM-dd");
-            ViewBag.EndDate = end.ToString("yyyy-MM-dd");
-
-            if (!departmentId.HasValue || departmentId.Value <= 0)
-            {
-                return View(new DepartmentPerformanceViewModel { DepartmentId = 0, DepartmentName = "", StartDate = start, EndDate = end });
-            }
-
-            var report = await _reportService.ExecuteDepartmentReportAsync(departmentId.Value, start, end);
-            return View(report);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating department performance report");
-            TempData["ErrorMessage"] = $"Error generating report: {ex.Message}";
-
-            var departments = await _departmentService.GetActiveDepartmentsSummaryAsync();
-            ViewBag.Departments = departments.Select(d => new { d.Id, d.Name, d.Code }).ToList();
-            ViewBag.StartDate = (startDate ?? GetDefaultStartDate()).ToString("yyyy-MM-dd");
-            ViewBag.EndDate = (endDate ?? GetDefaultEndDate()).ToString("yyyy-MM-dd");
-
-            return View(new DepartmentPerformanceViewModel
-            {
-                DepartmentId = departmentId ?? 0,
-                StartDate = startDate ?? GetDefaultStartDate(),
-                EndDate = endDate ?? GetDefaultEndDate()
-            });
-        }
-    }
-
-    // GET: Report/ExportDepartmentReport
-    [HttpGet]
-    public async Task<IActionResult> ExportDepartmentReport(int departmentId, DateTime startDate, DateTime endDate, string format = "excel")
-    {
-        try
-        {
-            var report = await _reportService.ExecuteDepartmentReportAsync(departmentId, startDate, endDate);
-            var exportData = BuildDepartmentReportExportData(report, startDate, endDate);
-
-            var (fileData, fileName, contentType) = format.ToLower() switch
-            {
-                "csv" => (await _reportService.ExportToCsvAsync(exportData, report.DepartmentName), $"{SanitizeFileName(report.DepartmentName)}_Department_Report_{DateTime.Now:yyyyMMdd_HHmmss}.csv", "text/csv"),
-                "pdf" => (await _reportService.ExportToPdfAsync(exportData, report.DepartmentName), $"{SanitizeFileName(report.DepartmentName)}_Department_Report_{DateTime.Now:yyyyMMdd_HHmmss}.pdf", "application/pdf"),
-                _ => (await _reportService.ExportToExcelAsync(exportData, report.DepartmentName), $"{SanitizeFileName(report.DepartmentName)}_Department_Report_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            };
-
-            return File(fileData, contentType, fileName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error exporting department report");
-            TempData["ErrorMessage"] = "Error exporting report. Please try again.";
-            return RedirectToAction(nameof(DepartmentPerformance), new { departmentId, startDate, endDate });
-        }
-    }
 
     // GET: Report/TaskCompletion
     [HttpGet]
-    public async Task<IActionResult> TaskCompletion(int? taskId, DateTime? startDate, DateTime? endDate)
+    public async Task<IActionResult> TaskCompletion(int? taskId, DateTime? startDate, DateTime? endDate, bool generate = false)
     {
         try
         {
@@ -351,13 +360,22 @@ public class ReportController : Controller
             ViewBag.StartDate = start.ToString("yyyy-MM-dd");
             ViewBag.EndDate = end.ToString("yyyy-MM-dd");
 
-            if (!taskId.HasValue || taskId.Value <= 0)
+            var model = new TaskCompletionViewModel 
+            { 
+                StartDate = start, 
+                EndDate = end, 
+                TaskId = taskId ?? 0,
+                IsGenerated = false 
+            };
+
+            if (generate && taskId.HasValue && taskId.Value > 0)
             {
-                return View(new TaskCompletionViewModel { StartDate = start, EndDate = end });
+                var report = await _reportService.ExecuteTaskReportAsync(taskId.Value, start, end);
+                report.IsGenerated = true;
+                return View(report);
             }
 
-            var report = await _reportService.ExecuteTaskReportAsync(taskId.Value, start, end);
-            return View(report);
+            return View(model);
         }
         catch (Exception ex)
         {
@@ -366,7 +384,8 @@ public class ReportController : Controller
             return View(new TaskCompletionViewModel
             {
                 StartDate = GetDefaultStartDate(),
-                EndDate = GetDefaultEndDate()
+                EndDate = GetDefaultEndDate(),
+                IsGenerated = false
             });
         }
     }
@@ -399,17 +418,12 @@ public class ReportController : Controller
 
     // GET: Report/AuditLog
     [HttpGet]
-    public async Task<IActionResult> AuditLog(DateTime? startDate, DateTime? endDate, string? action = null, string? entityType = null, int page = 1, int pageSize = 50)
+    public async Task<IActionResult> AuditLog(DateTime? startDate, DateTime? endDate, string? action = null, string? entityType = null, int page = 1, int pageSize = 50, bool generate = false)
     {
         try
         {
             var start = startDate ?? _timezoneService.GetCurrentLocalTime().AddDays(-30);
             var end = endDate ?? GetDefaultEndDate();
-
-            var report = await _reportService.ExecuteAuditReportAsync(start, end, action, entityType);
-
-            var totalItems = report.Events.Count;
-            var pagedEvents = report.Events.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
             var (actions, entityTypes) = await _auditService.GetFilterOptionsAsync(start, end);
 
@@ -419,20 +433,39 @@ public class ReportController : Controller
             ViewBag.EntityTypes = entityTypes;
             ViewBag.CurrentPage = page;
             ViewBag.PageSize = pageSize;
-            ViewBag.TotalItems = totalItems;
-            ViewBag.TotalPages = (int)Math.Ceiling((double)totalItems / pageSize);
             ViewBag.SelectedAction = action;
             ViewBag.SelectedEntityType = entityType;
 
-            report.Events = pagedEvents;
+            var model = new AuditLogReportViewModel
+            {
+                StartDate = start,
+                EndDate = end,
+                IsGenerated = false
+            };
 
-            return View(report);
+            if (generate)
+            {
+                var report = await _reportService.ExecuteAuditReportAsync(start, end, action, entityType);
+
+                var totalItems = report.Events.Count;
+                var pagedEvents = report.Events.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+                report.Events = pagedEvents;
+                report.IsGenerated = true;
+
+                ViewBag.TotalItems = totalItems;
+                ViewBag.TotalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+
+                return View(report);
+            }
+
+            return View(model);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating audit log report");
             TempData["ErrorMessage"] = "Error generating audit log report. Please try again.";
-            return View(new AuditLogReportViewModel());
+            return View(new AuditLogReportViewModel { IsGenerated = false });
         }
     }
 
@@ -589,44 +622,6 @@ public class ReportController : Controller
         return exportData;
     }
 
-    private List<Dictionary<string, object>> BuildDepartmentReportExportData(DepartmentPerformanceViewModel report, DateTime startDate, DateTime endDate)
-    {
-        var exportData = new List<Dictionary<string, object>>
-        {
-            new Dictionary<string, object>
-            {
-                ["Department Name"] = report.DepartmentName,
-                ["Department Code"] = report.DepartmentCode,
-                ["Period"] = $"{startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}",
-                ["Total Branches"] = report.TotalBranches,
-                ["Active Branches"] = report.ActiveBranches,
-                ["Total Employees"] = report.TotalEmployees,
-                ["Total Tasks"] = report.TotalTasks,
-                ["Completed Tasks"] = report.CompletedTasks,
-                ["Overall Completion Rate (%)"] = report.OverallCompletionRate,
-                ["Overall On-Time Rate (%)"] = report.OverallOnTimeRate
-            }
-        };
-
-        if (report.BranchPerformance?.Any() == true)
-        {
-            exportData.Add(new Dictionary<string, object> { [""] = "", ["BRANCH PERFORMANCE"] = "", [""] = "" });
-            foreach (var branch in report.BranchPerformance.OrderByDescending(b => b.Value.CompletionRate))
-            {
-                exportData.Add(new Dictionary<string, object>
-                {
-                    ["Branch Name"] = branch.Key,
-                    ["Total Tasks"] = branch.Value.TotalTasks,
-                    ["Completed Tasks"] = branch.Value.CompletedTasks,
-                    ["Completion Rate (%)"] = branch.Value.CompletionRate,
-                    ["On-Time Rate (%)"] = branch.Value.OnTimeRate,
-                    ["Employee Count"] = branch.Value.EmployeeCount
-                });
-            }
-        }
-
-        return exportData;
-    }
 
     private List<Dictionary<string, object>> BuildTaskReportExportData(TaskCompletionViewModel report, DateTime startDate, DateTime endDate)
     {

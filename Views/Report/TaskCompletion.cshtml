@@ -2,22 +2,27 @@
 @{
     ViewData["Title"] = "Task Completion Report";
 
-    var onTimePercentage = Model.OnTimeRate;
-    var latePercentage = Model.Completed > 0 ? Math.Round((double)Model.Late / Model.Completed * 100, 1) : 0;
-    var pendingPercentage = Model.TotalAssignments > 0 ? Math.Round((double)Model.Pending / Model.TotalAssignments * 100, 1) : 0;
+    bool isGenerated = Model?.IsGenerated ?? false;
 
-    string performanceRating;
-    string ratingIcon;
-    if (Model.CompletionRate >= 90 && Model.OnTimeRate >= 90) { performanceRating = "Excellent"; ratingIcon = "fa-trophy"; }
-    else if (Model.CompletionRate >= 75 && Model.OnTimeRate >= 75) { performanceRating = "Good"; ratingIcon = "fa-thumbs-up"; }
-    else if (Model.CompletionRate >= 60 || Model.OnTimeRate >= 60) { performanceRating = "Average"; ratingIcon = "fa-chart-line"; }
-    else { performanceRating = "Needs Improvement"; ratingIcon = "fa-exclamation-triangle"; }
+    var onTimePercentage = isGenerated ? Model.OnTimeRate : 0;
+    var latePercentage = isGenerated && Model.Completed > 0 ? Math.Round((double)Model.Late / Model.Completed * 100, 1) : 0;
+    var pendingPercentage = isGenerated && Model.TotalAssignments > 0 ? Math.Round((double)Model.Pending / Model.TotalAssignments * 100, 1) : 0;
 
-    var topBranch = Model.BranchStats?.OrderByDescending(b => b.Value.CompletionRate).FirstOrDefault();
-    var bottomBranch = Model.BranchStats?.OrderBy(b => b.Value.CompletionRate).FirstOrDefault();
-    var topEmployee = Model.EmployeeStats?.OrderByDescending(e => e.Value.CompletionRate).FirstOrDefault();
-    var bottomEmployee = Model.EmployeeStats?.OrderBy(e => e.Value.CompletionRate).FirstOrDefault();
-    var avgDailyCompletions = Model.DailyCompletions?.Any() == true ? Math.Round(Model.DailyCompletions.Values.Average(), 1) : 0;
+    string performanceRating = "N/A";
+    string ratingIcon = "fa-clock";
+    if (isGenerated)
+    {
+        if (Model.CompletionRate >= 90 && Model.OnTimeRate >= 90) { performanceRating = "Excellent"; ratingIcon = "fa-trophy"; }
+        else if (Model.CompletionRate >= 75 && Model.OnTimeRate >= 75) { performanceRating = "Good"; ratingIcon = "fa-thumbs-up"; }
+        else if (Model.CompletionRate >= 60 || Model.OnTimeRate >= 60) { performanceRating = "Average"; ratingIcon = "fa-chart-line"; }
+        else { performanceRating = "Needs Improvement"; ratingIcon = "fa-exclamation-triangle"; }
+    }
+
+    var topBranch = isGenerated ? Model.BranchStats?.OrderByDescending(b => b.Value.CompletionRate).FirstOrDefault() : null;
+    var bottomBranch = isGenerated ? Model.BranchStats?.OrderBy(b => b.Value.CompletionRate).FirstOrDefault() : null;
+    var topEmployee = isGenerated ? Model.EmployeeStats?.OrderByDescending(e => e.Value.CompletionRate).FirstOrDefault() : null;
+    var bottomEmployee = isGenerated ? Model.EmployeeStats?.OrderBy(e => e.Value.CompletionRate).FirstOrDefault() : null;
+    var avgDailyCompletions = isGenerated && Model.DailyCompletions?.Any() == true ? Math.Round(Model.DailyCompletions.Values.Average(), 1) : 0;
     var currentModel = Model;
 }
 
@@ -26,6 +31,7 @@
     <!-- Filter -->
     <div class="glass-card p-5">
         <form method="get" class="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="generate" value="true" />
             <div class="flex-1 min-w-[200px]">
                 <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Select Task</label>
                 <select name="taskId" class="dark-input">
@@ -44,8 +50,10 @@
                 <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">End Date</label>
                 <input type="date" name="endDate" class="dark-input" value="@ViewBag.EndDate">
             </div>
-            <button type="submit" class="btn-primary"><i class="fas fa-sync-alt"></i>Generate</button>
-            @if (Model != null && Model.TaskId > 0)
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-play text-xs mr-1"></i>Generate Report
+            </button>
+            @if (isGenerated && Model.TaskId > 0)
             {
                 <button onclick="exportReport()" type="button" class="px-4 py-2 rounded-xl text-xs font-semibold text-white transition flex items-center gap-1.5"
                         style="background: linear-gradient(135deg, #059669, #10b981);">
@@ -55,7 +63,7 @@
         </form>
     </div>
 
-    @if (Model != null && Model.TaskId > 0)
+    @if (isGenerated)
     {
         <!-- Header -->
         <div class="glass-card p-5 overflow-hidden relative">
@@ -215,31 +223,21 @@
                     {
                         @foreach (var branch in Model.BranchStats.OrderByDescending(b => b.Value.CompletionRate))
                         {
-                            var isTop = branch.Key == topBranch?.Key;
-                            var isBottom = branch.Key == bottomBranch?.Key;
-                            var pctColor = branch.Value.CompletionRate >= 80 ? "#10b981" : branch.Value.CompletionRate >= 60 ? "#f59e0b" : "#ef4444";
-                            <div class="rounded-xl p-3" style="background: @(isTop ? "rgba(16,185,129,0.08)" : isBottom ? "rgba(239,68,68,0.06)" : "rgba(255,255,255,0.04)"); border: 1px solid @(isTop ? "rgba(16,185,129,0.25)" : isBottom ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)");">
+                            var bTop = branch.Key == topBranch?.Key;
+                            var bBottom = branch.Key == bottomBranch?.Key;
+                            var bPctColor = branch.Value.CompletionRate >= 80 ? "#10b981" : branch.Value.CompletionRate >= 60 ? "#f59e0b" : "#ef4444";
+                            <div class="rounded-xl p-3" style="background: @(bTop ? "rgba(16,185,129,0.08)" : bBottom ? "rgba(239,68,68,0.06)" : "rgba(255,255,255,0.04)"); border: 1px solid @(bTop ? "rgba(16,185,129,0.25)" : bBottom ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)");">
                                 <div class="flex justify-between items-center mb-1">
                                     <div class="flex items-center gap-1.5">
                                         <span class="font-medium text-slate-200 text-sm">@branch.Key</span>
-                                        @if (isTop) { <span class="stat-badge" style="background: rgba(16,185,129,0.15);color:#6ee7b7;font-size:10px;"><i class="fas fa-trophy mr-0.5"></i>Best</span> }
-                                        @if (isBottom && !isTop) { <span class="stat-badge" style="background: rgba(239,68,68,0.12);color:#fca5a5;font-size:10px;">Needs Work</span> }
+                                        @if (bTop) { <span class="stat-badge" style="background: rgba(16,185,129,0.15);color:#6ee7b7;font-size:10px;"><i class="fas fa-trophy mr-0.5"></i>Best</span> }
+                                        @if (bBottom && !bTop) { <span class="stat-badge" style="background: rgba(239,68,68,0.12);color:#fca5a5;font-size:10px;">Needs Work</span> }
                                     </div>
-                                    <span class="text-sm font-bold" style="color: @pctColor;">@branch.Value.CompletionRate%</span>
+                                    <span class="text-sm font-bold" style="color: @bPctColor;">@branch.Value.CompletionRate%</span>
                                 </div>
                                 <div class="text-xs text-slate-500 mb-1">Completed: @branch.Value.Completed/@branch.Value.Total</div>
                                 <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
-                                    <div class="h-1.5 rounded-full" style="width: @branch.Value.CompletionRate%; background: @pctColor;"></div>
-                                </div>
-                            </div>
-                        }
-                        @if (topBranch.HasValue && bottomBranch.HasValue && topBranch.Value.Key != bottomBranch.Value.Key)
-                        {
-                            var gap = topBranch.Value.Value.CompletionRate - bottomBranch.Value.Value.CompletionRate;
-                            <div class="rounded-xl p-3 mt-1" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.12);">
-                                <div class="flex items-center justify-between text-xs">
-                                    <span class="text-slate-500"><i class="fas fa-chart-line text-indigo-400 mr-1"></i>Performance Gap: <strong class="@(gap > 30 ? "text-red-400" : "text-amber-400")">@gap%</strong></span>
-                                    <span class="text-slate-600">@topBranch.Value.Key leads by @gap pts</span>
+                                    <div class="h-1.5 rounded-full" style="width: @branch.Value.CompletionRate%; background: @bPctColor;"></div>
                                 </div>
                             </div>
                         }
@@ -257,68 +255,29 @@
                     {
                         @foreach (var emp in Model.EmployeeStats.OrderByDescending(e => e.Value.CompletionRate).Take(10))
                         {
-                            var isTop = emp.Key == topEmployee?.Key;
-                            var isBottom = emp.Key == bottomEmployee?.Key;
-                            var pctColor = emp.Value.CompletionRate >= 80 ? "#10b981" : emp.Value.CompletionRate >= 60 ? "#f59e0b" : "#ef4444";
+                            var eIsTop = emp.Key == topEmployee?.Key;
+                            var eIsBottom = emp.Key == bottomEmployee?.Key;
+                            var ePctColor = emp.Value.CompletionRate >= 80 ? "#10b981" : emp.Value.CompletionRate >= 60 ? "#f59e0b" : "#ef4444";
                             var initials = GetInitials(emp.Key);
-                            <div class="rounded-xl p-3" style="background: @(isTop ? "rgba(16,185,129,0.08)" : isBottom ? "rgba(239,68,68,0.06)" : "rgba(255,255,255,0.04)"); border: 1px solid @(isTop ? "rgba(16,185,129,0.2)" : isBottom ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)");">
+                            <div class="rounded-xl p-3" style="background: @(eIsTop ? "rgba(16,185,129,0.08)" : eIsBottom ? "rgba(239,68,68,0.06)" : "rgba(255,255,255,0.04)"); border: 1px solid @(eIsTop ? "rgba(16,185,129,0.2)" : eIsBottom ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)");">
                                 <div class="flex items-center gap-2">
                                     <div class="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
                                          style="background: linear-gradient(135deg, #6366f1, #7c3aed);">@initials</div>
                                     <div class="flex-1">
                                         <div class="flex justify-between items-center">
                                             <span class="font-medium text-slate-200 text-sm">@emp.Key</span>
-                                            <span class="text-sm font-bold" style="color: @pctColor;">@emp.Value.CompletionRate%</span>
+                                            <span class="text-sm font-bold" style="color: @ePctColor;">@emp.Value.CompletionRate%</span>
                                         </div>
                                         <div class="text-xs text-slate-500">@emp.Value.Completed/@emp.Value.Total completed</div>
                                         <div class="w-full rounded-full h-1 mt-1" style="background: rgba(255,255,255,0.08);">
-                                            <div class="h-1 rounded-full" style="width: @emp.Value.CompletionRate%; background: @pctColor;"></div>
+                                            <div class="h-1 rounded-full" style="width: @emp.Value.CompletionRate%; background: @ePctColor;"></div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         }
-                        @if (Model.EmployeeStats.Count > 10) { <div class="text-xs text-slate-600 text-center">+@(Model.EmployeeStats.Count - 10) more employees</div> }
                     }
                     else { <div class="text-center py-6 text-slate-500 text-sm">No employee data available</div> }
-                </div>
-            </div>
-        </div>
-
-        <!-- Insights & Recommendations -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div class="rounded-xl p-5" style="background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(6,182,212,0.06)); border: 1px solid rgba(99,102,241,0.15);">
-                <div class="flex items-start gap-3">
-                    <i class="fas fa-lightbulb text-amber-400 text-lg flex-shrink-0"></i>
-                    <div>
-                        <h4 class="font-bold text-white mb-2">📊 Key Insights</h4>
-                        <div class="space-y-1 text-xs">
-                            @if (Model.CompletionRate >= 90) { <p class="text-emerald-400">✅ <strong>Excellent completion rate!</strong> This task is being completed consistently.</p> }
-                            else if (Model.CompletionRate >= 70) { <p class="text-cyan-400">📈 <strong>Good completion rate.</strong> Slight room for improvement.</p> }
-                            else { <p class="text-red-400">⚠️ <strong>Low completion rate.</strong> This task needs attention.</p> }
-                            @if (Model.OnTimeRate >= 90) { <p class="text-emerald-400">⏰ <strong>Excellent punctuality!</strong> Most completions are on time.</p> }
-                            else if (Model.OnTimeRate >= 70) { <p class="text-cyan-400">📊 <strong>Good punctuality.</strong> Most completions meet deadlines.</p> }
-                            else { <p class="text-red-400">⌛ <strong>Punctuality needs improvement.</strong> Many completions are late.</p> }
-                            @if (topBranch.HasValue) { <p class="text-slate-400">🏆 <strong class="text-slate-200">Top Branch:</strong> @topBranch.Value.Key (@topBranch.Value.Value.CompletionRate%)</p> }
-                            @if (topEmployee.HasValue) { <p class="text-slate-400">⭐ <strong class="text-slate-200">Top Performer:</strong> @topEmployee.Value.Key (@topEmployee.Value.Value.CompletionRate%)</p> }
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="rounded-xl p-5" style="background: linear-gradient(135deg, rgba(124,58,237,0.1), rgba(16,185,129,0.06)); border: 1px solid rgba(124,58,237,0.15);">
-                <div class="flex items-start gap-3">
-                    <i class="fas fa-clipboard-list text-violet-400 text-lg flex-shrink-0"></i>
-                    <div>
-                        <h4 class="font-bold text-white mb-2">🎯 Recommendations</h4>
-                        <div class="space-y-1 text-xs text-slate-400">
-                            @if (Model.CompletionRate < 70) { <p>• Review why this task isn't being completed consistently</p><p>• Consider adjusting deadline or providing additional training</p> }
-                            @if (Model.OnTimeRate < 70 && Model.Completed > 0) { <p>• Start this task earlier in the day to meet deadlines</p><p>• Set reminders 30 minutes before deadline</p> }
-                            @if (Model.Pending > Model.Completed) { <p>• Prioritize this task over others when assigned</p> }
-                            @if (topBranch.HasValue && bottomBranch.HasValue && topBranch.Value.Key != bottomBranch.Value.Key) { <p>• Share best practices from @topBranch.Value.Key with @bottomBranch.Value.Key</p> }
-                            @if (topEmployee.HasValue && bottomEmployee.HasValue && topEmployee.Value.Key != bottomEmployee.Value.Key) { <p>• Pair @topEmployee.Value.Key with @bottomEmployee.Value.Key for mentoring</p> }
-                            @if (Model.CompletionRate >= 90 && Model.OnTimeRate >= 90) { <p class="text-emerald-400">🌟 Well-managed task. Consider using it as a template.</p> }
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -361,14 +320,11 @@
                                 <th class="text-center">Completed</th>
                                 <th class="text-center">Completion Rate</th>
                                 <th class="text-center">Status</th>
-                                <th class="text-center">Trend</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var branch in Model.BranchStats.OrderByDescending(b => b.Value.CompletionRate))
                             {
-                                var trend = branch.Value.CompletionRate >= 80 ? "↑ Excellent" : branch.Value.CompletionRate >= 60 ? "→ Average" : "↓ Needs Work";
-                                var trendColor = branch.Value.CompletionRate >= 80 ? "text-emerald-400" : branch.Value.CompletionRate >= 60 ? "text-amber-400" : "text-red-400";
                                 <tr>
                                     <td class="font-semibold text-white">@branch.Key</td>
                                     <td class="text-center text-slate-400">@branch.Value.Total</td>
@@ -386,13 +342,11 @@
                                             @(branch.Value.CompletionRate >= 80 ? "Good" : branch.Value.CompletionRate >= 60 ? "Average" : "Poor")
                                         </span>
                                     </td>
-                                    <td class="text-center @trendColor text-xs">@trend</td>
                                 </tr>
                             }
                         </tbody>
                     </table>
                 }
-                else { <div class="text-center py-8 text-slate-500 text-sm p-5">No branch data available</div> }
             </div>
 
             <!-- Employee Table (hidden by default) -->
@@ -410,7 +364,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @{ var rank = 1; }
+                            @{ var eRank = 1; }
                             @foreach (var emp in Model.EmployeeStats.OrderByDescending(e => e.Value.CompletionRate))
                             {
                                 <tr>
@@ -426,18 +380,17 @@
                                         </div>
                                     </td>
                                     <td class="text-center">
-                                        @if (rank == 1) { <span>🏆 1st</span> }
-                                        else if (rank == 2) { <span class="text-slate-400">🥈 2nd</span> }
-                                        else if (rank == 3) { <span>🥉 3rd</span> }
-                                        else { <span class="text-slate-500">@rank th</span> }
+                                        @if (eRank == 1) { <span>🏆 1st</span> }
+                                        else if (eRank == 2) { <span class="text-slate-400">🥈 2nd</span> }
+                                        else if (eRank == 3) { <span>🥉 3rd</span> }
+                                        else { <span class="text-slate-500">@eRank th</span> }
                                     </td>
                                 </tr>
-                                rank++;
+                                eRank++;
                             }
                         </tbody>
                     </table>
                 }
-                else { <div class="text-center py-8 text-slate-500 text-sm p-5">No employee data</div> }
             </div>
 
             <!-- Daily Table (hidden by default) -->
@@ -450,7 +403,6 @@
                                 <th>Date</th>
                                 <th class="text-center">Completions</th>
                                 <th class="text-center">vs Average</th>
-                                <th class="text-center">Performance</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -463,18 +415,11 @@
                                     <td class="text-slate-300">@DateTime.Parse(day.Key).ToString("MMM dd, yyyy")</td>
                                     <td class="text-center font-bold text-white">@day.Value</td>
                                     <td class="text-center @vsColor text-xs"><i class="fas @vsIcon mr-0.5"></i>@(vsAvg >= 0 ? "+" : "")@Math.Round(vsAvg, 1)</td>
-                                    <td class="text-center">
-                                        <div class="w-full rounded-full h-1.5 max-w-[80px] mx-auto" style="background: rgba(255,255,255,0.08);">
-                                            <div class="@(day.Value >= avgDailyCompletions ? "bg-emerald-500" : "bg-red-500") h-1.5 rounded-full"
-                                                 style="width: @Math.Min(100, day.Value / (avgDailyCompletions > 0 ? avgDailyCompletions : 1) * 100)%"></div>
-                                        </div>
-                                    </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
                 }
-                else { <div class="text-center py-8 text-slate-500 text-sm p-5">No daily data</div> }
             </div>
         </div>
 
@@ -486,12 +431,14 @@
     }
     else
     {
-        <div class="glass-card p-12 text-center">
-            <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style="background: rgba(99,102,241,0.1);">
-                <i class="fas fa-tasks text-indigo-400 text-2xl"></i>
+        <div class="glass-card p-12 text-center flex flex-col items-center justify-center space-y-4 min-h-[400px]">
+            <div class="w-20 h-20 rounded-full bg-slate-800/50 flex items-center justify-center text-3xl text-slate-600">
+                <i class="fas fa-tasks"></i>
             </div>
-            <h3 class="font-semibold text-slate-300 mb-1">No Task Selected</h3>
-            <p class="text-slate-500 text-sm">Please select a task and date range to view completion report</p>
+            <h2 class="text-2xl font-bold text-white">Task Completion Analysis Ready</h2>
+            <p class="text-slate-400 max-w-md mx-auto">
+                Select a task definition and specific date range, then click "Generate Report" to visualize historical performance and branch metrics.
+            </p>
         </div>
     }
 </div>
@@ -499,64 +446,62 @@
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        const statusCtx = document.getElementById('statusChart');
-        if (statusCtx) {
-            new Chart(statusCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Completed', 'Pending'],
-                    datasets: [{ data: [@(Model?.Completed ?? 0), @(Model?.Pending ?? 0)], backgroundColor: ['#10b981', 'rgba(245,158,11,0.6)'], borderWidth: 0, borderRadius: 4 }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10 } } } }
-            });
-        }
-
-        const dailyCtx = document.getElementById('dailyTrendChart');
-        if (dailyCtx) {
-            @{
-                var dailyCompletions = (Model?.DailyCompletions ?? new Dictionary<string, int>());
-                var sortedDates = dailyCompletions.Keys.OrderBy(k => k).ToList();
-                var sortedValues = dailyCompletions.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList();
-                var avgVal = (double)avgDailyCompletions;
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusCtx = document.getElementById('statusChart');
+            if (statusCtx) {
+                new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Completed', 'Pending'],
+                        datasets: [{ data: [@(Model?.Completed ?? 0), @(Model?.Pending ?? 0)], backgroundColor: ['#10b981', 'rgba(245,158,11,0.6)'], borderWidth: 0, borderRadius: 4 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10 } } } }
+                });
             }
-            const dailyDates = @Html.Raw(Json.Serialize(sortedDates));
-            const dailyValues = @Html.Raw(Json.Serialize(sortedValues));
-            const avgValue = @avgVal;
-            new Chart(dailyCtx, {
-                type: 'line',
-                data: {
-                    labels: dailyDates.map(d => { const p = d.split('-'); return p[1] + '/' + p[2]; }),
-                    datasets: [
-                        { label: 'Daily Completions', data: dailyValues, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.12)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: '#7c3aed', pointBorderColor: '#0b0b18' },
-                        { label: 'Daily Average', data: Array(dailyValues.length).fill(avgValue), borderColor: '#f59e0b', borderWidth: 2, borderDash: [5, 5], fill: false, pointRadius: 0 }
-                    ]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'top', labels: { color: '#94a3b8', boxWidth: 10 } }, tooltip: { callbacks: { label: ctx => ctx.dataset.label === 'Daily Average' ? 'Average: ' + ctx.raw.toFixed(1) : ctx.dataset.label + ': ' + ctx.raw } } },
-                    scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b', maxRotation: 45, minRotation: 45 } } }
+
+            const dailyCtx = document.getElementById('dailyTrendChart');
+            if (dailyCtx) {
+                @{
+                    var dailyCompletions = (Model?.DailyCompletions ?? new Dictionary<string, int>());
+                    var sortedDates = dailyCompletions.Keys.OrderBy(k => k).ToList();
+                    var sortedValues = dailyCompletions.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList();
+                    var avgVal = (double)avgDailyCompletions;
                 }
-            });
-        }
+                const dailyDates = @Html.Raw(Json.Serialize(sortedDates));
+                const dailyValues = @Html.Raw(Json.Serialize(sortedValues));
+                const avgValue = @avgVal;
+                new Chart(dailyCtx, {
+                    type: 'line',
+                    data: {
+                        labels: dailyDates.map(d => { const p = d.split('-'); return p[1] + '/' + p[2]; }),
+                        datasets: [
+                            { label: 'Daily Completions', data: dailyValues, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.12)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: '#7c3aed', pointBorderColor: '#0b0b18' },
+                            { label: 'Daily Average', data: Array(dailyValues.length).fill(avgValue), borderColor: '#f59e0b', borderWidth: 2, borderDash: [5, 5], fill: false, pointRadius: 0 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { color: '#94a3b8', boxWidth: 10 } }, tooltip: { callbacks: { label: ctx => ctx.dataset.label === 'Daily Average' ? 'Average: ' + ctx.raw.toFixed(1) : ctx.dataset.label + ': ' + ctx.raw } } },
+                        scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b', maxRotation: 45, minRotation: 45 } } }
+                    }
+                });
+            }
+        });
 
         function toggleTable(tableId) {
             ['branchTable', 'employeeTable', 'dailyTable'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
                 const btn = document.getElementById('btn-' + id);
                 if (btn) { btn.style.background = 'rgba(255,255,255,0.06)'; btn.style.color = '#94a3b8'; }
             });
-            document.getElementById(tableId).classList.remove('hidden');
+            const activeEl = document.getElementById(tableId);
+            if (activeEl) activeEl.classList.remove('hidden');
             const activeBtn = document.getElementById('btn-' + tableId);
             if (activeBtn) { activeBtn.style.background = 'rgba(6,182,212,0.2)'; activeBtn.style.color = '#67e8f9'; }
         }
 
         function exportReport() {
-            const format = prompt('Export format? (excel/csv/pdf)', 'excel');
-            if (format && ['excel', 'csv', 'pdf'].includes(format)) {
-                window.location.href = '@Url.Action("ExportTaskReport", "Report")?taskId=' + @(currentModel?.TaskId ?? 0) +
-                    '&startDate=' + '@(currentModel?.StartDate.ToString("yyyy-MM-dd"))' +
-                    '&endDate=' + '@(currentModel?.EndDate.ToString("yyyy-MM-dd"))' +
-                    '&format=' + format;
             } else if (format) { alert('Invalid format. Use excel, csv, or pdf'); }
         }
 

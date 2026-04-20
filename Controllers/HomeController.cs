@@ -368,33 +368,45 @@ public async Task<IActionResult> BulkUpdate([FromBody] BulkUpdateRequest request
         var created = 0;
         var updated = 0;
         var notFound = 0;
-        
+
+        // ---- Batch load #1: all relevant branches in one query ----
+        var branchList = await _context.Branches
+            .Where(b => request.branchIds.Contains(b.Id))
+            .AsNoTracking()
+            .ToListAsync();
+        var branchLookup = branchList.ToDictionary(b => b.Id);
+
+        // ---- Batch load #2: all existing DailyTasks for this date+task in one query ----
+        var existingTasks = await _context.DailyTasks
+            .Where(dt => request.branchIds.Contains(dt.BranchId) &&
+                         dt.TaskItemId == request.taskItemId &&
+                         dt.TaskDate >= utcStart &&
+                         dt.TaskDate <= utcEnd)
+            .ToListAsync();
+        var existingLookup = existingTasks.ToDictionary(dt => dt.BranchId);
+
         foreach (var branchId in request.branchIds)
         {
             _logger.LogDebug("Processing branch {BranchId} for task {TaskId}", branchId, request.taskItemId);
             
-            // Check if task is hidden for this branch
-            var branch = await _context.Branches.FindAsync(branchId);
-            if (branch?.HiddenTasks?.Contains(task.Name) == true)
+            // Check if task is hidden for this branch (in-memory lookup)
+            if (!branchLookup.TryGetValue(branchId, out var branch))
+            {
+                _logger.LogDebug("Branch {BranchId} not found, skipping", branchId);
+                notFound++;
+                continue;
+            }
+
+            if (branch.HiddenTasks?.Contains(task.Name) == true)
             {
                 _logger.LogDebug("Task {TaskName} is hidden for branch {BranchId}, skipping", task.Name, branchId);
                 skippedHidden++;
                 continue;
             }
             
-            var dailyTask = await _context.DailyTasks
-                .FirstOrDefaultAsync(dt => dt.BranchId == branchId &&
-                                           dt.TaskItemId == request.taskItemId &&
-                                           dt.TaskDate >= utcStart &&
-                                           dt.TaskDate <= utcEnd);
-            
-            _logger.LogDebug("Query for BranchId={BranchId}, TaskId={TaskId}, DateRange: {Start} to {End} -> Found: {Found}", 
-                branchId, request.taskItemId, utcStart.ToString("yyyy-MM-dd HH:mm:ss"), utcEnd.ToString("yyyy-MM-dd HH:mm:ss"), dailyTask != null);
-            
-            if (dailyTask == null)
+            if (!existingLookup.TryGetValue(branchId, out var dailyTask))
             {
                 _logger.LogDebug("No existing task found - creating new for branch {BranchId}", branchId);
-                // Create new daily task
                 dailyTask = new DailyTask
                 {
                     BranchId = branchId,
@@ -411,8 +423,7 @@ public async Task<IActionResult> BulkUpdate([FromBody] BulkUpdateRequest request
             }
             else
             {
-                _logger.LogDebug("Found existing task {TaskId} for branch {BranchId}, updating", dailyTask.Id, branchId);
-                // Update existing task (even if already completed)
+                _logger.LogDebug("Updating existing task {TaskId} for branch {BranchId}", dailyTask.Id, branchId);
                 dailyTask.IsCompleted = true;
                 dailyTask.CompletedAt = utcCompletionTime;
                 dailyTask.IsBulkUpdated = true;
@@ -517,33 +528,36 @@ public async Task<IActionResult> CompleteAllForTask(int taskItemId, string date)
         if (task == null)
             return Json(new { success = false, message = "Task not found" });
         
-        var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
-        var count = 0;
+        // Batch load branches + existing daily tasks in 2 queries (no N+1)
+        var branches = await _context.Branches.Where(b => b.IsActive).AsNoTracking().ToListAsync();
+        var activeBranchIds = branches.Select(b => b.Id).ToList();
         var now = DateTime.UtcNow;
+
+        var existingTasks = await _context.DailyTasks
+            .Where(dt => activeBranchIds.Contains(dt.BranchId) &&
+                         dt.TaskItemId == taskItemId &&
+                         dt.TaskDate >= utcStart &&
+                         dt.TaskDate <= utcEnd)
+            .ToListAsync();
+        var existingLookup = existingTasks.ToDictionary(dt => dt.BranchId);
+
+        var count = 0;
         
         foreach (var branch in branches)
         {
-            // Skip if task is hidden for this branch
             if (branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name))
                 continue;
             
-            var dailyTask = await _context.DailyTasks
-                .FirstOrDefaultAsync(dt => dt.BranchId == branch.Id &&
-                                           dt.TaskItemId == taskItemId &&
-                                           dt.TaskDate >= utcStart &&
-                                           dt.TaskDate <= utcEnd);
-            
-            if (dailyTask == null)
+            if (!existingLookup.TryGetValue(branch.Id, out var dailyTask))
             {
-                dailyTask = new DailyTask
+                _context.DailyTasks.Add(new DailyTask
                 {
                     BranchId = branch.Id,
                     TaskItemId = taskItemId,
                     TaskDate = utcStart,
                     IsCompleted = true,
                     CompletedAt = now
-                };
-                _context.DailyTasks.Add(dailyTask);
+                });
                 count++;
             }
             else if (!dailyTask.IsCompleted)
@@ -555,7 +569,6 @@ public async Task<IActionResult> CompleteAllForTask(int taskItemId, string date)
         }
         
         await _context.SaveChangesAsync();
-        
         return Json(new { success = true, count = count });
     }
     catch (Exception ex)
@@ -748,7 +761,21 @@ public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, st
             if (task == null)
                 return Json(new { success = false, message = "Task not found" });
 
-            var branches = await _context.Branches.Where(b => b.IsActive).ToListAsync();
+            // Batch load: branches + existing daily tasks in 2 queries (no N+1)
+            var branches = await _context.Branches.Where(b => b.IsActive).AsNoTracking().ToListAsync();
+            var activeBranchIds = branches.Select(b => b.Id).ToList();
+
+            var existingTasks = await _context.DailyTasks
+                .Where(dt => activeBranchIds.Contains(dt.BranchId) &&
+                             dt.TaskItemId == taskItemId &&
+                             dt.TaskDate >= utcStart &&
+                             dt.TaskDate <= utcEnd)
+                .ToListAsync();
+            var existingLookup = existingTasks.ToDictionary(dt => dt.BranchId);
+
+            // Calculate deadline once (same for all branches for this task+date)
+            var deadline = await _taskCalculationService.CalculateDeadline(task, utcStart);
+
             var count = 0;
             var taskData = new Dictionary<int, object>();
 
@@ -757,11 +784,7 @@ public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, st
                 if (branch.HiddenTasks != null && branch.HiddenTasks.Contains(task.Name))
                     continue;
 
-                var dailyTask = await _context.DailyTasks
-                    .FirstOrDefaultAsync(dt => dt.BranchId == branch.Id &&
-                                               dt.TaskItemId == taskItemId &&
-                                               dt.TaskDate >= utcStart &&
-                                               dt.TaskDate <= utcEnd);
+                existingLookup.TryGetValue(branch.Id, out var dailyTask);
 
                 if (dailyTask != null && dailyTask.IsCompleted)
                 {
@@ -770,10 +793,8 @@ public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, st
                     count++;
                 }
 
-                var deadline = await _taskCalculationService.CalculateDeadline(task, utcStart);
                 var adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0;
-                var adjustedDeadline = deadline.AddMinutes(adjustmentMinutes);
-                var localDeadline = _timezoneService.ConvertToLocalTime(adjustedDeadline);
+                var localDeadline = _timezoneService.ConvertToLocalTime(deadline.AddMinutes(adjustmentMinutes));
 
                 taskData[branch.Id] = new
                 {
@@ -783,21 +804,15 @@ public async Task<IActionResult> UpdateTaskTime(int branchId, int taskItemId, st
                     completedAt = (DateTime?)null,
                     delayType = "pending",
                     delayText = "Pending",
-                    adjustmentMinutes = dailyTask?.AdjustmentMinutes ?? 0,
+                    adjustmentMinutes,
                     adjustmentReason = dailyTask?.AdjustmentReason ?? "",
-                    assignedTo = dailyTask?.TaskAssignment?.Employee?.Name ?? "",
                     deadline = localDeadline
                 };
             }
 
             await _context.SaveChangesAsync();
 
-            return Json(new
-            {
-                success = true,
-                count = count,
-                taskData = taskData
-            });
+            return Json(new { success = true, count, taskData });
         }
         catch (Exception ex)
         {

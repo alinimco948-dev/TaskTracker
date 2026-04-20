@@ -30,8 +30,6 @@
     var previousDate = SafeAddDays(safeCurrentDate, -1);
     var previousDateKey = previousDate.ToString("yyyy-MM-dd");
     
-    var hiddenTasksDict = ViewBag.HiddenTasks as Dictionary<int, List<string>> ?? new Dictionary<int, List<string>>();
-
     var token = "";
     if (Context != null)
     {
@@ -43,17 +41,10 @@
         }
     }
     
+    var hiddenTasksDict = Model.HiddenTasksDict ?? new Dictionary<int, List<string>>();
     var notesDict = Model.NotesData ?? new Dictionary<string, string>();
-    var completedTasks = Model.TaskData.Values.Count(v => v?.IsCompleted == true);
-
-    // Dynamic stats for pending
-    var totalVisibleAssignments = 0;
-    foreach (var branch in Model.Branches)
-    {
-        var hiddenNames = hiddenTasksDict.ContainsKey(branch.Id) ? hiddenTasksDict[branch.Id] : new List<string>();
-        totalVisibleAssignments += Model.Tasks.Count(t => !hiddenNames.Contains(t.Name));
-    }
-    var pendingTasksCount = totalVisibleAssignments - completedTasks;
+    var pendingTasksCount = Model.ComputedPendingTasks;
+    var completedTasks = Model.ComputedTotalAssignments - pendingTasksCount;
 }
 
 @section Styles {

@@ -21,7 +21,6 @@ public interface IReportService
     Task<object> ExecuteReportAsync(int reportId, Dictionary<string, object>? parameters = null);
     Task<EmployeePerformanceViewModel> ExecuteEmployeeReportAsync(int employeeId, DateTime startDate, DateTime endDate);
     Task<BranchPerformanceViewModel> ExecuteBranchReportAsync(int branchId, DateTime startDate, DateTime endDate);
-    Task<DepartmentPerformanceViewModel> ExecuteDepartmentReportAsync(int departmentId, DateTime startDate, DateTime endDate);
     Task<TaskCompletionViewModel> ExecuteTaskReportAsync(int taskId, DateTime startDate, DateTime endDate);
     Task<AuditLogReportViewModel> ExecuteAuditReportAsync(DateTime startDate, DateTime endDate, string? action = null, string? entityType = null);
     Task<List<Dictionary<string, object>>> ExecuteCustomReportAsync(CustomReportRequest request);

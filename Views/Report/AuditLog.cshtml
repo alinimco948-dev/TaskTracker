@@ -19,6 +19,7 @@
     <!-- Filter Bar -->
     <div class="glass-card p-5">
         <form method="get" class="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="generate" value="true" />
             <div>
                 <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Start Date</label>
                 <input type="date" name="startDate" class="dark-input" value="@ViewBag.StartDate">
@@ -48,113 +49,128 @@
                 </select>
             </div>
             <button type="submit" class="btn-primary">
-                <i class="fas fa-search"></i>Filter
+                <i class="fas fa-play text-xs mr-1"></i>Generate Report
             </button>
         </form>
     </div>
 
-    <!-- Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="glass-card p-5 flex items-center justify-between">
-            <div>
-                <p class="text-xs text-slate-400 uppercase tracking-wider">Total Events</p>
-                <p class="text-3xl font-bold text-indigo-400 mt-1">@Model.TotalEvents</p>
-            </div>
-            <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(99,102,241,0.15);">
-                <i class="fas fa-list-alt text-indigo-400 text-xl"></i>
-            </div>
-        </div>
-    </div>
-
-    <!-- Summary Charts Row -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <!-- Events by Action -->
-        <div class="glass-card overflow-hidden">
-            <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(99,102,241,0.08);">
-                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-bolt text-indigo-400"></i>Events by Action</h3>
-            </div>
-            <div class="p-5 space-y-3">
-                @foreach (var action in Model.EventsByAction)
-                {
-                    var maxVal = Model.EventsByAction.Values.Max();
-                    var pct = maxVal > 0 ? (action.Value * 100 / maxVal) : 0;
-                    <div>
-                        <div class="flex justify-between text-sm mb-1">
-                            <span class="text-slate-300">@action.Key</span>
-                            <span class="font-bold text-white">@action.Value</span>
-                        </div>
-                        <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
-                            <div class="h-1.5 rounded-full" style="width: @pct%; background: linear-gradient(90deg,#6366f1,#7c3aed);"></div>
-                        </div>
-                    </div>
-                }
+    @if (Model.IsGenerated)
+    {
+        <!-- Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="glass-card p-5 flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">Total Events</p>
+                    <p class="text-3xl font-bold text-indigo-400 mt-1">@Model.TotalEvents</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(99,102,241,0.15);">
+                    <i class="fas fa-list-alt text-indigo-400 text-xl"></i>
+                </div>
             </div>
         </div>
 
-        <!-- Events by Entity -->
-        <div class="glass-card overflow-hidden">
-            <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(124,58,237,0.08);">
-                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-database text-violet-400"></i>Events by Entity</h3>
-            </div>
-            <div class="p-5 space-y-3">
-                @foreach (var entity in Model.EventsByEntity)
-                {
-                    var maxVal = Model.EventsByEntity.Values.Max();
-                    var pct = maxVal > 0 ? (entity.Value * 100 / maxVal) : 0;
-                    <div>
-                        <div class="flex justify-between text-sm mb-1">
-                            <span class="text-slate-300">@entity.Key</span>
-                            <span class="font-bold text-white">@entity.Value</span>
-                        </div>
-                        <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
-                            <div class="h-1.5 rounded-full" style="width: @pct%; background: linear-gradient(90deg,#7c3aed,#a855f7);"></div>
-                        </div>
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-
-    <!-- Event Details Table -->
-    <div class="glass-card overflow-hidden">
-        <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(6,182,212,0.08);">
-            <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-table text-cyan-400"></i>Event Details</h3>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full dark-table">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>User</th>
-                        <th>Action</th>
-                        <th>Entity</th>
-                        <th>Description</th>
-                        <th>IP Address</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var evt in Model.Events)
+        <!-- Summary Charts Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <!-- Events by Action -->
+            <div class="glass-card overflow-hidden">
+                <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(99,102,241,0.08);">
+                    <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-bolt text-indigo-400"></i>Events by Action</h3>
+                </div>
+                <div class="p-5 space-y-3">
+                    @foreach (var action in Model.EventsByAction)
                     {
-                        <tr>
-                            <td class="text-slate-400 whitespace-nowrap">@evt.Timestamp.ToString("yyyy-MM-dd HH:mm")</td>
-                            <td class="text-slate-300">@evt.UserName</td>
-                            <td>
-                                <span class="stat-badge" style="background: rgba(99,102,241,0.15); color: #a5b4fc; font-size: 10px;">@evt.Action</span>
-                            </td>
-                            <td class="text-slate-400">@evt.EntityType</td>
-                            <td class="text-slate-300">@evt.Description</td>
-                            <td class="text-slate-500 font-mono text-xs">@evt.IpAddress</td>
-                        </tr>
+                        var maxVal = Model.EventsByAction.Values.Max();
+                        var pct = maxVal > 0 ? (action.Value * 100 / maxVal) : 0;
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-slate-300">@action.Key</span>
+                                <span class="font-bold text-white">@action.Value</span>
+                            </div>
+                            <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
+                                <div class="h-1.5 rounded-full" style="width: @pct%; background: linear-gradient(90deg,#6366f1,#7c3aed);"></div>
+                            </div>
+                        </div>
                     }
-                </tbody>
-            </table>
-        </div>
-        @if (!Model.Events.Any())
-        {
-            <div class="text-center py-12 text-slate-500">
-                <i class="fas fa-shield-alt text-3xl mb-2 block text-slate-600"></i>
-                No audit events found for the selected filters
+                </div>
             </div>
-        }
-    </div>
+
+            <!-- Events by Entity -->
+            <div class="glass-card overflow-hidden">
+                <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(124,58,237,0.08);">
+                    <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-database text-violet-400"></i>Events by Entity</h3>
+                </div>
+                <div class="p-5 space-y-3">
+                    @foreach (var entity in Model.EventsByEntity)
+                    {
+                        var maxVal = Model.EventsByEntity.Values.Max();
+                        var pct = maxVal > 0 ? (entity.Value * 100 / maxVal) : 0;
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-slate-300">@entity.Key</span>
+                                <span class="font-bold text-white">@entity.Value</span>
+                            </div>
+                            <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
+                                <div class="h-1.5 rounded-full" style="width: @pct%; background: linear-gradient(90deg,#7c3aed,#a855f7);"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Event Details Table -->
+        <div class="glass-card overflow-hidden">
+            <div class="px-5 py-4 border-b" style="border-color: rgba(255,255,255,0.06); background: rgba(6,182,212,0.08);">
+                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-table text-cyan-400"></i>Event Details</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full dark-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Entity</th>
+                            <th>Description</th>
+                            <th>IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var evt in Model.Events)
+                        {
+                            <tr>
+                                <td class="text-slate-400 whitespace-nowrap">@evt.Timestamp.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="text-slate-300">@evt.UserName</td>
+                                <td>
+                                    <span class="stat-badge" style="background: rgba(99,102,241,0.15); color: #a5b4fc; font-size: 10px;">@evt.Action</span>
+                                </td>
+                                <td class="text-slate-400">@evt.EntityType</td>
+                                <td class="text-slate-300">@evt.Description</td>
+                                <td class="text-slate-500 font-mono text-xs">@evt.IpAddress</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (!Model.Events.Any())
+            {
+                <div class="text-center py-12 text-slate-500">
+                    <i class="fas fa-shield-alt text-3xl mb-2 block text-slate-600"></i>
+                    No audit events found for the selected filters
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="glass-card p-12 text-center flex flex-col items-center justify-center space-y-4 min-h-[400px]">
+            <div class="w-20 h-20 rounded-full bg-slate-800/50 flex items-center justify-center text-3xl text-slate-600">
+                <i class="fas fa-history"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-white">Audit Log Ready</h2>
+            <p class="text-slate-400 max-w-md mx-auto">
+                Select your filters and click "Generate Report" to retrieve the security and activity logs for the selected period.
+            </p>
+        </div>
+    }
 </div>

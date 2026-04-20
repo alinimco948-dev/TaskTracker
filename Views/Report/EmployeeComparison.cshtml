@@ -1,6 +1,7 @@
 @model TaskTracker.Models.ViewModels.EmployeeComparisonViewModel
 @{
     ViewData["Title"] = "Employee Performance Comparison";
+    bool isGenerated = Model?.IsGenerated ?? false;
 }
 
 <div class="space-y-6 animate-fade-up">
@@ -17,10 +18,13 @@
             <p class="text-slate-400 mt-1">Compare performance metrics across employees</p>
         </div>
         <div class="flex gap-2">
-            <button onclick="exportReport('excel')" class="px-3 py-2 rounded-xl text-xs font-medium text-white flex items-center gap-1.5"
-                    style="background: linear-gradient(135deg, #059669, #10b981);">
-                <i class="fas fa-file-excel"></i>Export
-            </button>
+            @if (isGenerated && Model.Employees.Any())
+            {
+                <button onclick="exportReport('excel')" class="px-3 py-2 rounded-xl text-xs font-medium text-white flex items-center gap-1.5"
+                        style="background: linear-gradient(135deg, #059669, #10b981);">
+                    <i class="fas fa-file-excel"></i>Export
+                </button>
+            }
             <button onclick="window.print()" class="px-3 py-2 rounded-xl text-xs font-medium text-slate-300 border border-white/10 hover:bg-white/5 transition flex items-center gap-1.5">
                 <i class="fas fa-print"></i>Print
             </button>
@@ -30,6 +34,7 @@
     <!-- Filter -->
     <div class="glass-card overflow-hidden">
         <form method="get" id="comparisonForm">
+            <input type="hidden" name="generate" value="true" />
             <div class="p-5">
                 <div class="flex flex-wrap items-end gap-3">
                     <!-- Mode Selector -->
@@ -90,305 +95,321 @@
                     </div>
 
                     <button type="submit" class="btn-primary">
-                        <i class="fas fa-chart-line"></i>Generate
+                        <i class="fas fa-play text-xs mr-1"></i>Generate Report
                     </button>
                 </div>
             </div>
         </form>
     </div>
 
-    @if (Model.Employees.Any())
+    @if (isGenerated)
     {
-        <!-- Quick Stats -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div class="glass-card p-4 text-center">
-                <div class="text-2xl font-bold text-indigo-400">@Model.TotalEmployeesCompared</div>
-                <div class="text-xs text-slate-500 mt-1">Employees</div>
+        @if (Model.Employees.Any())
+        {
+            <!-- Quick Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div class="glass-card p-4 text-center">
+                    <div class="text-2xl font-bold text-indigo-400">@Model.TotalEmployeesCompared</div>
+                    <div class="text-xs text-slate-500 mt-1">Employees</div>
+                </div>
+                <div class="glass-card p-4 text-center">
+                    <div class="text-2xl font-bold text-emerald-400">@Model.AverageScore%</div>
+                    <div class="text-xs text-slate-500 mt-1">Avg Score</div>
+                </div>
+                <div class="glass-card p-4 text-center">
+                    <div class="text-2xl font-bold text-amber-400">@Model.HighestScore%</div>
+                    <div class="text-xs text-slate-500 mt-1">Highest</div>
+                </div>
+                <div class="glass-card p-4 text-center">
+                    <div class="text-2xl font-bold text-red-400">@Model.LowestScore%</div>
+                    <div class="text-xs text-slate-500 mt-1">Lowest</div>
+                </div>
+                <div class="glass-card p-4 text-center">
+                    <div class="text-2xl font-bold text-violet-400">@Math.Round(Model.HighestScore - Model.LowestScore, 1)%</div>
+                    <div class="text-xs text-slate-500 mt-1">Gap</div>
+                </div>
             </div>
-            <div class="glass-card p-4 text-center">
-                <div class="text-2xl font-bold text-emerald-400">@Model.AverageScore%</div>
-                <div class="text-xs text-slate-500 mt-1">Avg Score</div>
-            </div>
-            <div class="glass-card p-4 text-center">
-                <div class="text-2xl font-bold text-amber-400">@Model.HighestScore%</div>
-                <div class="text-xs text-slate-500 mt-1">Highest</div>
-            </div>
-            <div class="glass-card p-4 text-center">
-                <div class="text-2xl font-bold text-red-400">@Model.LowestScore%</div>
-                <div class="text-xs text-slate-500 mt-1">Lowest</div>
-            </div>
-            <div class="glass-card p-4 text-center">
-                <div class="text-2xl font-bold text-violet-400">@Math.Round(Model.HighestScore - Model.LowestScore, 1)%</div>
-                <div class="text-xs text-slate-500 mt-1">Gap</div>
-            </div>
-        </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <!-- LEFT COLUMN (Wide) -->
-            <div class="lg:col-span-2 flex flex-col gap-5">
-                
-                <!-- Performance Table -->
-                <div class="glass-card overflow-hidden flex-1">
-                    <div class="px-5 py-4 border-b flex justify-between items-center" style="border-color: rgba(255,255,255,0.06); background: rgba(99,102,241,0.08);">
-                        <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-list text-indigo-400"></i>Performance Ranking</h3>
-                        <span class="text-xs px-2 py-1 rounded-full bg-slate-800/50 text-slate-400 border border-slate-700">Top 10% Highlighted</span>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full dark-table">
-                            <thead>
-                                <tr>
-                                    <th class="text-left pl-5">Employee</th>
-                                    <th class="text-left">Position</th>
-                                    <th class="text-left">Performance Score</th>
-                                    <th class="text-center">Completion Rate</th>
-                                    <th class="text-center">On-Time %</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var emp in Model.Employees.OrderByDescending(e => e.PerformanceScore))
-                                {
-                                    var scoreColor = emp.PerformanceScore >= 90 ? "text-emerald-400" : emp.PerformanceScore >= 75 ? "text-cyan-400" : emp.PerformanceScore >= 60 ? "text-indigo-400" : "text-indigo-400";
-                                    var barColor = emp.PerformanceScore >= 90 ? "bg-emerald-400" : emp.PerformanceScore >= 75 ? "bg-cyan-400" : emp.PerformanceScore >= 60 ? "bg-indigo-500" : "bg-indigo-600";
-                                    
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <!-- LEFT COLUMN (Wide) -->
+                <div class="lg:col-span-2 flex flex-col gap-5">
+                    
+                    <!-- Performance Table -->
+                    <div class="glass-card overflow-hidden flex-1">
+                        <div class="px-5 py-4 border-b flex justify-between items-center" style="border-color: rgba(255,255,255,0.06); background: rgba(99,102,241,0.08);">
+                            <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-list text-indigo-400"></i>Performance Ranking</h3>
+                            <span class="text-xs px-2 py-1 rounded-full bg-slate-800/50 text-slate-400 border border-slate-700">Top 10% Highlighted</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full dark-table">
+                                <thead>
                                     <tr>
-                                        <td class="pl-5">
-                                            <div class="flex items-center gap-3">
-                                                <div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs"
-                                                     style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
-                                                    @emp.Name.Substring(0, 1).ToUpper()@emp.Name.Split(' ').LastOrDefault()?.Substring(0,1).ToUpper()
-                                                </div>
-                                                <div>
-                                                    <div class="font-semibold text-slate-200 text-sm">@emp.Name</div>
-                                                    <div class="text-slate-500" style="font-size: 0.65rem;">ID: #88@emp.Id</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="text-slate-400 text-xs">@emp.Position</td>
-                                        <td>
-                                            <div class="flex items-center gap-3">
-                                                <div class="w-24 rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
-                                                    <div class="@barColor h-1.5 rounded-full" style="width: @emp.PerformanceScore%"></div>
-                                                </div>
-                                                <span class="font-bold text-slate-300 text-xs">@emp.PerformanceScore%</span>
-                                            </div>
-                                        </td>
-                                        <td class="text-center">
-                                            @{
-                                                var compBadge = emp.CompletionRate >= 90 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-slate-500/10 text-slate-400 border-slate-500/20";
-                                            }
-                                            <div class="inline-flex flex-col items-center">
-                                                <span class="@compBadge border px-2 py-0.5 rounded text-xs font-medium">@emp.CompletionRate%</span>
-                                                <span class="text-[0.6rem] text-slate-500 mt-1 uppercase tracking-wider">Complete</span>
-                                            </div>
-                                        </td>
-                                        <td class="text-center">
-                                            <span class="font-bold @scoreColor text-sm">@emp.OnTimeRate%</span>
-                                        </td>
+                                        <th class="text-left pl-5">Employee</th>
+                                        <th class="text-left">Position</th>
+                                        <th class="text-left">Performance Score</th>
+                                        <th class="text-center">Completion Rate</th>
+                                        <th class="text-center">On-Time %</th>
                                     </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var emp in Model.Employees.OrderByDescending(e => e.PerformanceScore))
+                                    {
+                                        var scoreColor = emp.PerformanceScore >= 90 ? "text-emerald-400" : emp.PerformanceScore >= 75 ? "text-cyan-400" : emp.PerformanceScore >= 60 ? "text-indigo-400" : "text-indigo-400";
+                                        var barColor = emp.PerformanceScore >= 90 ? "bg-emerald-400" : emp.PerformanceScore >= 75 ? "bg-cyan-400" : emp.PerformanceScore >= 60 ? "bg-indigo-500" : "bg-indigo-600";
+                                        
+                                        <tr>
+                                            <td class="pl-5">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                                                         style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
+                                                        @emp.Name.Substring(0, 1).ToUpper()@emp.Name.Split(' ').LastOrDefault()?.Substring(0,1).ToUpper()
+                                                    </div>
+                                                    <div>
+                                                        <div class="font-semibold text-slate-200 text-sm">@emp.Name</div>
+                                                        <div class="text-slate-500" style="font-size: 0.65rem;">ID: #88@emp.Id</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="text-slate-400 text-xs">@emp.Position</td>
+                                            <td>
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-24 rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
+                                                        <div class="@barColor h-1.5 rounded-full" style="width: @emp.PerformanceScore%"></div>
+                                                    </div>
+                                                    <span class="font-bold text-slate-300 text-xs">@emp.PerformanceScore%</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                @{
+                                                    var compBadge = emp.CompletionRate >= 90 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-slate-500/10 text-slate-400 border-slate-500/20";
+                                                }
+                                                <div class="inline-flex flex-col items-center">
+                                                    <span class="@compBadge border px-2 py-0.5 rounded text-xs font-medium">@emp.CompletionRate%</span>
+                                                    <span class="text-[0.6rem] text-slate-500 mt-1 uppercase tracking-wider">Complete</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="font-bold @scoreColor text-sm">@emp.OnTimeRate%</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Insights Panel -->
+                    <div class="glass-card overflow-hidden">
+                        <div class="p-6">
+                            <h3 class="font-bold text-white text-lg flex items-center gap-2 mb-6">
+                                <i class="fas fa-sparkles text-indigo-400"></i>Key Insights
+                            </h3>
+                            
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <!-- Strengths -->
+                                <div class="rounded-xl p-4 border" style="background: rgba(16,185,129,0.03); border-color: rgba(16,185,129,0.15);">
+                                    <h4 class="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">Strengths</h4>
+                                    <div class="flex flex-wrap gap-2">
+                                        @if (Model.ComparisonResult.CommonStrengths.Any())
+                                        {
+                                            @foreach (var s in Model.ComparisonResult.CommonStrengths.Take(2))
+                                            {
+                                                <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">@s</span>
+                                            }
+                                        }
+                                        else if (Model.AverageScore >= 75)
+                                        {
+                                            <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Strong Performance</span>
+                                            <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Good Teamwork</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-400 shadow-sm">Developing Skills</span>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                <!-- Focus Areas -->
+                                <div class="rounded-xl p-4 border" style="background: rgba(239,68,68,0.03); border-color: rgba(239,68,68,0.15);">
+                                    <h4 class="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">Focus Areas</h4>
+                                    <div class="flex flex-wrap gap-2">
+                                        @if (Model.ComparisonResult.CommonWeaknesses.Any())
+                                        {
+                                            @foreach (var w in Model.ComparisonResult.CommonWeaknesses.Take(2))
+                                            {
+                                                <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">@w</span>
+                                            }
+                                        }
+                                        else if (Model.ComparisonResult.ScoreDifference > 10)
+                                        {
+                                            <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Performance Variance</span>
+                                            <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Process Standardization</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-400 shadow-sm">No significant issues</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-4">
+                                @if (Model.ComparisonResult.BestPerformer != null && Model.ComparisonResult.BestPerformer.PerformanceScore > 0)
+                                {
+                                    <div class="flex gap-4 items-start">
+                                        <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-1 border border-indigo-500/20">
+                                            <i class="fas fa-medal text-indigo-400"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="text-sm font-bold text-slate-200">Top Performer: @(Model.ComparisonResult.BestPerformer.Name)</h5>
+                                            <p class="text-xs text-slate-400 mt-1 leading-relaxed">Exhibits exceptional operational efficiency with a @(Model.ComparisonResult.BestPerformer.PerformanceScore)% composite score, consistently exceeding target completion rates.</p>
+                                        </div>
+                                    </div>
                                 }
-                            </tbody>
-                        </table>
+                                @if (Model.ComparisonResult.ScoreDifference > 0)
+                                {
+                                    <div class="flex gap-4 items-start">
+                                        <div class="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 mt-1 border border-slate-700">
+                                            <i class="fas fa-chart-line text-slate-400"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="text-sm font-bold text-slate-200">Performance Gap Noted</h5>
+                                            <p class="text-xs text-slate-400 mt-1 leading-relaxed">There is a @Model.ComparisonResult.ScoreDifference% variance between the highest and lowest performers. Standardizing workflow tools could bridge this gap.</p>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Insights Panel -->
-                <div class="glass-card overflow-hidden">
-                    <div class="p-6">
-                        <h3 class="font-bold text-white text-lg flex items-center gap-2 mb-6">
-                            <i class="fas fa-sparkles text-indigo-400"></i>Key Insights
-                        </h3>
-                        
-                        <div class="grid grid-cols-2 gap-4 mb-6">
-                            <!-- Strengths -->
-                            <div class="rounded-xl p-4 border" style="background: rgba(16,185,129,0.03); border-color: rgba(16,185,129,0.15);">
-                                <h4 class="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">Strengths</h4>
-                                <div class="flex flex-wrap gap-2">
-                                    @if (Model.ComparisonResult.CommonStrengths.Any())
+                <!-- RIGHT COLUMN (Narrow) -->
+                <div class="lg:col-span-1 flex flex-col gap-5">
+                    
+                    <!-- Metric Comparison Matrix -->
+                    <div class="glass-card overflow-hidden">
+                        <div class="px-5 py-4">
+                            <h3 class="font-bold text-white text-lg">Metric Comparison Matrix</h3>
+                        </div>
+                        <div class="p-5 pt-0 space-y-6">
+                            
+                            <!-- OVERALL SCORE SECTION -->
+                            <div>
+                                <div class="flex justify-between items-end mb-3">
+                                    <h4 class="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">Overall Score</h4>
+                                    <span class="text-xs font-semibold text-indigo-400">Avg: @Model.AverageScore%</span>
+                                </div>
+                                <div class="space-y-3">
+                                    @foreach (var emp in Model.Employees.OrderByDescending(e => e.PerformanceScore).Take(2))
                                     {
-                                        @foreach (var s in Model.ComparisonResult.CommonStrengths.Take(2))
-                                        {
-                                            <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">@s</span>
-                                        }
+                                        <div class="flex justify-between items-center text-xs">
+                                            <div class="flex-1 font-medium text-slate-300">@emp.Name</div>
+                                            <div class="flex-1 px-3">
+                                                <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
+                                                    <div class="bg-indigo-600 h-1.5 rounded-full" style="width: @emp.PerformanceScore%"></div>
+                                                </div>
+                                            </div>
+                                            <div class="w-8 text-right font-bold text-slate-200 block">@emp.PerformanceScore%</div>
+                                        </div>
                                     }
-                                    else if (Model.AverageScore >= 75)
+                                </div>
+                            </div>
+
+                            <!-- TASK COMPLETION SECTION -->
+                            <div class="pt-4 border-t border-white/5">
+                                <div class="flex justify-between items-end mb-3">
+                                    <h4 class="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">Task Completion</h4>
+                                    <span class="text-xs font-semibold text-indigo-400">Avg: @Math.Round(Model.Employees.Average(e => e.CompletionRate), 0)%</span>
+                                </div>
+                                <div class="space-y-3">
+                                    @foreach (var emp in Model.Employees.OrderByDescending(e => e.CompletionRate).Take(2))
                                     {
-                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Strong Performance</span>
-                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Good Teamwork</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-400 shadow-sm">Developing Skills</span>
+                                        <div class="flex justify-between items-center text-xs">
+                                            <div class="flex-1 font-medium text-slate-300">@emp.Name</div>
+                                            <div class="flex-1 px-3">
+                                                <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
+                                                    <div class="bg-emerald-600 h-1.5 rounded-full" style="width: @emp.CompletionRate%"></div>
+                                                </div>
+                                            </div>
+                                            <div class="w-8 text-right font-bold text-slate-200 block">@emp.CompletionRate%</div>
+                                        </div>
                                     }
                                 </div>
                             </div>
                             
-                            <!-- Focus Areas -->
-                            <div class="rounded-xl p-4 border" style="background: rgba(239,68,68,0.03); border-color: rgba(239,68,68,0.15);">
-                                <h4 class="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">Focus Areas</h4>
-                                <div class="flex flex-wrap gap-2">
-                                    @if (Model.ComparisonResult.CommonWeaknesses.Any())
-                                    {
-                                        @foreach (var w in Model.ComparisonResult.CommonWeaknesses.Take(2))
-                                        {
-                                            <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">@w</span>
-                                        }
-                                    }
-                                    else if (Model.ComparisonResult.ScoreDifference > 10)
-                                    {
-                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Performance Variance</span>
-                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-300 shadow-sm">Process Standardization</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-xs px-2.5 py-1 rounded bg-white/5 border border-white/10 text-slate-400 shadow-sm">No significant issues</span>
-                                    }
+                            <!-- DISTRIBUTION ANALYSIS BARS -->
+                            <div class="pt-4 border-t border-white/5">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h4 class="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">Distribution Analysis</h4>
+                                    <span class="text-[0.65rem] font-bold text-emerald-400">+5.2% vs Prev Month</span>
+                                </div>
+                                <div class="flex items-end justify-between h-20 gap-1 mt-2">
+                                    <div class="w-full bg-slate-700/30 rounded-t h-[30%]"></div>
+                                    <div class="w-full bg-slate-700/50 rounded-t h-[50%]"></div>
+                                    <div class="w-full bg-indigo-600 rounded-t h-[80%]"></div>
+                                    <div class="w-full bg-indigo-500 rounded-t h-[95%]"></div>
+                                    <div class="w-full bg-slate-700/50 rounded-t h-[45%]"></div>
+                                    <div class="w-full bg-slate-700/30 rounded-t h-[25%]"></div>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="space-y-4">
-                            @if (Model.ComparisonResult.BestPerformer != null && Model.ComparisonResult.BestPerformer.PerformanceScore > 0)
-                            {
-                                <div class="flex gap-4 items-start">
-                                    <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-1 border border-indigo-500/20">
-                                        <i class="fas fa-medal text-indigo-400"></i>
-                                    </div>
-                                    <div>
-                                        <h5 class="text-sm font-bold text-slate-200">Top Performer: @(Model.ComparisonResult.BestPerformer.Name)</h5>
-                                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">Exhibits exceptional operational efficiency with a @(Model.ComparisonResult.BestPerformer.PerformanceScore)% composite score, consistently exceeding target completion rates.</p>
-                                    </div>
-                                </div>
-                            }
-                            @if (Model.ComparisonResult.ScoreDifference > 0)
-                            {
-                                <div class="flex gap-4 items-start">
-                                    <div class="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 mt-1 border border-slate-700">
-                                        <i class="fas fa-chart-line text-slate-400"></i>
-                                    </div>
-                                    <div>
-                                        <h5 class="text-sm font-bold text-slate-200">Performance Gap Noted</h5>
-                                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">There is a @Model.ComparisonResult.ScoreDifference% variance between the highest and lowest performers. Standardizing workflow tools could bridge this gap.</p>
-                                    </div>
-                                </div>
-                            }
-                        </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- RIGHT COLUMN (Narrow) -->
-            <div class="lg:col-span-1 flex flex-col gap-5">
-                
-                <!-- Metric Comparison Matrix -->
-                <div class="glass-card overflow-hidden">
-                    <div class="px-5 py-4">
-                        <h3 class="font-bold text-white text-lg">Metric Comparison Matrix</h3>
-                    </div>
-                    <div class="p-5 pt-0 space-y-6">
+                    <!-- Strategic Recommendation block -->
+                    <div class="rounded-2xl p-6 shadow-xl flex-1 flex flex-col justify-center relative overflow-hidden" 
+                         style="background: linear-gradient(135deg, #0f172a, #1e3a8a); border: 1px solid rgba(59,130,246,0.3);">
+                        <!-- Decorative background element -->
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mt-10 -mr-10"></div>
                         
-                        <!-- OVERALL SCORE SECTION -->
-                        <div>
-                            <div class="flex justify-between items-end mb-3">
-                                <h4 class="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">Overall Score</h4>
-                                <span class="text-xs font-semibold text-indigo-400">Avg: @Model.AverageScore%</span>
+                        <div class="relative z-10">
+                            <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm border border-white/10">
+                                <i class="fas fa-lightbulb text-blue-100 text-lg"></i>
                             </div>
-                            <div class="space-y-3">
-                                @foreach (var emp in Model.Employees.OrderByDescending(e => e.PerformanceScore).Take(2))
+                            <h3 class="text-xl font-bold text-white mb-3">Strategic Recommendation</h3>
+                            <p class="text-blue-100/80 text-sm leading-relaxed mb-6">
+                                @if (Model.ComparisonResult.ScoreDifference > 15)
                                 {
-                                    <div class="flex justify-between items-center text-xs">
-                                        <div class="flex-1 font-medium text-slate-300">@emp.Name</div>
-                                        <div class="flex-1 px-3">
-                                            <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
-                                                <div class="bg-indigo-600 h-1.5 rounded-full" style="width: @emp.PerformanceScore%"></div>
-                                            </div>
-                                        </div>
-                                        <div class="w-8 text-right font-bold text-slate-200 block">@emp.PerformanceScore%</div>
-                                    </div>
+                                    <text>The current data suggests that the performance variance is linked to workflow management. We recommend scheduling a peer-mentoring session where top performers share their logging workflows with the rest of the branch staff.</text>
                                 }
-                            </div>
-                        </div>
-
-                        <!-- TASK COMPLETION SECTION -->
-                        <div class="pt-4 border-t border-white/5">
-                            <div class="flex justify-between items-end mb-3">
-                                <h4 class="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">Task Completion</h4>
-                                <span class="text-xs font-semibold text-indigo-400">Avg: @Math.Round(Model.Employees.Average(e => e.CompletionRate), 0)%</span>
-                            </div>
-                            <div class="space-y-3">
-                                @foreach (var emp in Model.Employees.OrderByDescending(e => e.CompletionRate).Take(2))
+                                else if (Model.Employees.Any(e => e.OnTimeRate < 70))
                                 {
-                                    <div class="flex justify-between items-center text-xs">
-                                        <div class="flex-1 font-medium text-slate-300">@emp.Name</div>
-                                        <div class="flex-1 px-3">
-                                            <div class="w-full rounded-full h-1.5" style="background: rgba(255,255,255,0.08);">
-                                                <div class="bg-emerald-600 h-1.5 rounded-full" style="width: @emp.CompletionRate%"></div>
-                                            </div>
-                                        </div>
-                                        <div class="w-8 text-right font-bold text-slate-200 block">@emp.CompletionRate%</div>
-                                    </div>
+                                    <text>The data suggests that the team struggles with punctuality. Focus on time management training for employees with &lt;70% on-time rate to improve efficiency.</text>
                                 }
-                            </div>
-                        </div>
-                        
-                        <!-- DISTRIBUTION ANALYSIS BARS -->
-                        <div class="pt-4 border-t border-white/5">
-                            <div class="flex justify-between items-center mb-4">
-                                <h4 class="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">Distribution Analysis</h4>
-                                <span class="text-[0.65rem] font-bold text-emerald-400">+5.2% vs Prev Month</span>
-                            </div>
-                            <div class="flex items-end justify-between h-20 gap-1 mt-2">
-                                <div class="w-full bg-slate-700/30 rounded-t h-[30%]"></div>
-                                <div class="w-full bg-slate-700/50 rounded-t h-[50%]"></div>
-                                <div class="w-full bg-indigo-600 rounded-t h-[80%]"></div>
-                                <div class="w-full bg-indigo-500 rounded-t h-[95%]"></div>
-                                <div class="w-full bg-slate-700/50 rounded-t h-[45%]"></div>
-                                <div class="w-full bg-slate-700/30 rounded-t h-[25%]"></div>
-                            </div>
+                                else
+                                {
+                                    <text>The current data suggests strong, consistent performance. Maintain current performance levels and recognize top performers for their operational excellence.</text>
+                                }
+                            </p>
+                            <button class="w-full py-3 bg-white text-blue-900 font-bold rounded-xl text-sm hover:bg-blue-50 transition shadow-lg outline-none">
+                                Apply Strategy to Branch
+                            </button>
                         </div>
                     </div>
-                </div>
-
-                <!-- Strategic Recommendation block -->
-                <div class="rounded-2xl p-6 shadow-xl flex-1 flex flex-col justify-center relative overflow-hidden" 
-                     style="background: linear-gradient(135deg, #0f172a, #1e3a8a); border: 1px solid rgba(59,130,246,0.3);">
-                    <!-- Decorative background element -->
-                    <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mt-10 -mr-10"></div>
                     
-                    <div class="relative z-10">
-                        <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm border border-white/10">
-                            <i class="fas fa-lightbulb text-blue-100 text-lg"></i>
-                        </div>
-                        <h3 class="text-xl font-bold text-white mb-3">Strategic Recommendation</h3>
-                        <p class="text-blue-100/80 text-sm leading-relaxed mb-6">
-                            @if (Model.ComparisonResult.ScoreDifference > 15)
-                            {
-                                <text>The current data suggests that the performance variance is linked to workflow management. We recommend scheduling a peer-mentoring session where top performers share their logging workflows with the rest of the branch staff.</text>
-                            }
-                            else if (Model.Employees.Any(e => e.OnTimeRate < 70))
-                            {
-                                <text>The data suggests that the team struggles with punctuality. Focus on time management training for employees with &lt;70% on-time rate to improve efficiency.</text>
-                            }
-                            else
-                            {
-                                <text>The current data suggests strong, consistent performance. Maintain current performance levels and recognize top performers for their operational excellence.</text>
-                            }
-                        </p>
-                        <button class="w-full py-3 bg-white text-blue-900 font-bold rounded-xl text-sm hover:bg-blue-50 transition shadow-lg outline-none">
-                            Apply Strategy to Branch
-                        </button>
-                    </div>
                 </div>
-                
             </div>
-        </div>
+        }
+        else
+        {
+            <div class="glass-card p-12 text-center">
+                <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style="background: rgba(239,68,68,0.1);">
+                    <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
+                </div>
+                <h3 class="font-semibold text-slate-300 mb-1">No Data Found</h3>
+                <p class="text-slate-500">No performance records found for the selected criteria and date range.</p>
+            </div>
+        }
     }
     else
     {
-        <div class="glass-card p-12 text-center">
-            <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style="background: rgba(99,102,241,0.1);">
-                <i class="fas fa-chart-line text-indigo-400 text-2xl"></i>
+        <div class="glass-card p-12 text-center flex flex-col items-center justify-center space-y-4 min-h-[400px]">
+            <div class="w-20 h-20 rounded-full bg-slate-800/50 flex items-center justify-center text-3xl text-slate-600">
+                <i class="fas fa-users-cog"></i>
             </div>
-            <p class="text-slate-400">Select a branch or employees to view comparison</p>
+            <h2 class="text-2xl font-bold text-white">Employee Comparison Ready</h2>
+            <p class="text-slate-400 max-w-md mx-auto">
+                Toggle between branch-wide comparison or specific employee sets to analyze performance variances, operational scores, and punctuality gaps.
+            </p>
         </div>
     }
 </div>
@@ -423,7 +444,7 @@
         const employeeIds = $('#employeeIds').val() || [];
         const startDate = $('input[name="startDate"]').val(), endDate = $('input[name="endDate"]').val();
         let url = '@Url.Action("ExportEmployeeComparison", "Report")?format=' + format +
-                  '&comparisonMode=' + mode + '&branchId=' + branchId + '&startDate=' + startDate + '&endDate=' + endDate;
+                  '&comparisonMode=' + mode + '&branchId=' + branchId + '&startDate=' + startDate + '&endDate=' + endDate + '&generate=true';
         for (let i = 0; i < employeeIds.length; i++) url += '&employeeIds=' + employeeIds[i];
         window.location.href = url;
     }

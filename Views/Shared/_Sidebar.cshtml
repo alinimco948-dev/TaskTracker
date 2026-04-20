@@ -6,7 +6,7 @@
      DESKTOP SIDEBAR
 ════════════════════════════════════════ -->
 <aside id="sidebar" class="sidebar w-64 flex-shrink-0 flex flex-col shadow-2xl hidden lg:flex"
-       style="background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%); border-right: 1px solid rgba(255,255,255,0.06);">
+       style="background: #000000; border-right: 1px solid rgba(255,255,255,0.08);">
 
     <!-- Logo -->
     <div class="px-4 py-5 flex items-center justify-between" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
@@ -102,9 +102,6 @@
                     <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
                         <i class="fas fa-store mr-2 text-emerald-400/70"></i>Branch Performance
                     </a>
-                    <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
-                        <i class="fas fa-building mr-2 text-violet-400/70"></i>Dept Performance
-                    </a>
                     <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
                         <i class="fas fa-check-double mr-2 text-rose-400/70"></i>Task Completion
                     </a>
@@ -137,7 +134,7 @@
 <div id="mobileSidebarOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden lg:hidden" onclick="closeMobileSidebar()"></div>
 
 <div id="mobileSidebar" class="fixed top-0 left-0 w-64 h-full z-50 flex flex-col lg:hidden"
-     style="background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%); border-right: 1px solid rgba(255,255,255,0.06);">
+     style="background: #000000; border-right: 1px solid rgba(255,255,255,0.08);">
 
     <div class="px-4 py-5 flex items-center justify-between" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
         <div class="flex items-center gap-3">
@@ -169,7 +166,6 @@
                     <a href="@Url.Action("EmployeePerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Employee Performance</a>
                     <a href="@Url.Action("EmployeeComparison", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Employee Insights</a>
                     <a href="@Url.Action("BranchPerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Branch Performance</a>
-                    <a href="@Url.Action("DepartmentPerformance", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Dept Performance</a>
                     <a href="@Url.Action("TaskCompletion", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Task Completion</a>
                     <a href="@Url.Action("AuditLog", "Report")" class="block px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">Audit Log</a>
                 </div>
@@ -192,12 +188,12 @@
 <style>
     /* Active nav item */
     .active-nav {
-        background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(124,58,237,0.15));
-        color: #e0e7ff;
-        border: 1px solid rgba(99,102,241,0.3);
-        box-shadow: 0 0 12px rgba(99,102,241,0.1);
+        background: rgba(255,255,255,0.1);
+        color: #ffffff;
+        border: 1px solid rgba(255,255,255,0.15);
+        box-shadow: 0 0 12px rgba(255,255,255,0.05);
     }
-    .active-nav i { color: #818cf8 !important; }
+    .active-nav i { color: #ffffff !important; }
 
     /* Sidebar collapsed */
     .sidebar.collapsed { width: 72px; }

@@ -3,14 +3,12 @@ using System.Collections.Generic;
 
 namespace TaskTracker.Models.ViewModels
 {
-    public class EmployeeComparisonViewModel
+    public class EmployeeComparisonViewModel : ReportBaseViewModel
     {
         // Report Parameters
         public int? BranchId { get; set; }
         public string BranchName { get; set; } = string.Empty;
         public List<int> SelectedEmployeeIds { get; set; } = new();
-        public DateTime StartDate { get; set; }
-        public DateTime EndDate { get; set; }
         public string ComparisonMode { get; set; } = "branch"; // "branch", "selected"
         
         // Summary Statistics

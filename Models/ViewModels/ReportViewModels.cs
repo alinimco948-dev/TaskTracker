@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -12,6 +12,7 @@ public class ReportBaseViewModel
     public string ReportType { get; set; } = string.Empty;
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
+    public bool IsGenerated { get; set; }
     public Dictionary<string, object> Filters { get; set; } = new();
     public List<string> Columns { get; set; } = new();
 }
@@ -44,6 +45,15 @@ public class TaskPerformanceStats
     public double OnTimeRate { get; set; }
 }
 
+public class GroupedTaskPerformance
+{
+    public string TaskName { get; set; } = string.Empty;
+    public int Count { get; set; }
+    public List<string> Dates { get; set; } = new();
+    public List<DateTime> DateObjects { get; set; } = new();
+    public List<DailyPerformance> Details { get; set; } = new();
+}
+
 // ========== Branch Stat ViewModel ==========
 public class BranchStatViewModel
 {
@@ -74,6 +84,7 @@ public class DailyPerformance
     public int? AdjustmentMinutes { get; set; }
     public string AdjustmentReason { get; set; } = string.Empty;
     public int Score { get; set; }
+    public string DelayText { get; set; } = string.Empty;
 }
 
 // ========== Employee Performance ==========
@@ -108,6 +119,17 @@ public class EmployeePerformanceViewModel : ReportBaseViewModel
     public Dictionary<string, TaskPerformanceStats> TaskBreakdown { get; set; } = new();
     public List<DailyPerformance> DailyBreakdown { get; set; } = new();
     public Dictionary<string, BranchStatViewModel> BranchBreakdown { get; set; } = new();
+
+    // Pre-calculated grouped collections for View rendering
+    public List<KeyValuePair<string, TaskPerformanceStats>> HighPriorityTasks { get; set; } = new();
+    public List<KeyValuePair<string, TaskPerformanceStats>> NeedsImprovementTasks { get; set; } = new();
+    public List<KeyValuePair<string, TaskPerformanceStats>> StrongTasks { get; set; } = new();
+    public bool HasStruggleTasks { get; set; }
+    
+    // Grouped lists for the accordion UI
+    public List<GroupedTaskPerformance> PendingTasksList { get; set; } = new();
+    public List<GroupedTaskPerformance> LateTasksList { get; set; } = new();
+
 
     // Insights
     public List<string> Insights { get; set; } = new();
@@ -196,57 +218,6 @@ public class EmployeePerformanceSummary
     public double Score { get; set; }
 }
 
-// ========== Department Performance ==========
-public class DepartmentPerformanceViewModel : ReportBaseViewModel
-{
-    public int DepartmentId { get; set; }
-    public string DepartmentName { get; set; } = string.Empty;
-    public string DepartmentCode { get; set; } = string.Empty;
-    public string Manager { get; set; } = string.Empty;
-    public int? SelectedDepartmentId { get; set; }
-
-    // Summary Stats
-    public int TotalBranches { get; set; }
-    public int ActiveBranches { get; set; }
-    public int TotalEmployees { get; set; }
-    public int ActiveEmployees { get; set; }
-    public int TotalTasks { get; set; }
-    public int CompletedTasks { get; set; }
-    public double OverallCompletionRate { get; set; }
-    public double OverallOnTimeRate { get; set; }
-
-    // Branch Performance
-    public Dictionary<string, BranchPerformanceSummary> BranchPerformance { get; set; } = new();
-
-    // Task Matrix
-    public Dictionary<string, Dictionary<string, TaskStatSummary>> TaskMatrix { get; set; } = new();
-
-    // Rankings
-    public List<BranchPerformanceSummary> TopBranches { get; set; } = new();
-    public List<BranchPerformanceSummary> BottomBranches { get; set; } = new();
-
-    // Insights
-    public List<string> Insights { get; set; } = new();
-    public List<string> Recommendations { get; set; } = new();
-}
-
-public class BranchPerformanceSummary
-{
-    public int BranchId { get; set; }
-    public string BranchName { get; set; } = string.Empty;
-    public int TotalTasks { get; set; }
-    public int CompletedTasks { get; set; }
-    public double CompletionRate { get; set; }
-    public double OnTimeRate { get; set; }
-    public int EmployeeCount { get; set; }
-}
-
-public class TaskStatSummary
-{
-    public int Total { get; set; }
-    public int Completed { get; set; }
-    public double CompletionRate { get; set; }
-}
 
 // ========== Task Completion ==========
 // REMOVED duplicate BranchTaskStat and EmployeeTaskStat - using from ReportSharedViewModels.cs

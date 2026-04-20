@@ -26,6 +26,8 @@ public interface ITaskCalculationService
     Task<DateTime> AdjustDeadlineForHolidaysAsync(DateTime deadline);
     Task<DateTime> AdjustDeadlineForHolidaysAsync(DateTime deadline, DateTime stopAtDate);
     Task<TaskDelayInfo> GetHolidayAdjustedDelayInfoAsync(DailyTask dailyTask);
+    /// <summary>Pass a pre-fetched holiday list to avoid a DB round-trip per row.</summary>
+    Task<TaskDelayInfo> GetHolidayAdjustedDelayInfoAsync(DailyTask dailyTask, List<Holiday> holidays);
     
     // ========== Task Visibility ==========
     bool IsTaskVisibleOnDate(TaskItem task, DateTime date);

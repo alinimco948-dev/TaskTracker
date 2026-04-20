@@ -134,18 +134,26 @@ public async Task<EmployeeComparisonViewModel> ExecuteEmployeeComparisonReportAs
             };
         }
         
+        // ---- Batch load: branch assignments for ALL employees in one query ----
+        var empIds = employees.Select(e => e.Id).ToList();
+        var allBranchAssignments = await _context.BranchAssignments
+            .Include(ba => ba.Branch)
+            .Where(ba => empIds.Contains(ba.EmployeeId) && 
+                        (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
+            .AsNoTracking()
+            .ToListAsync();
+        var branchAssignmentsByEmp = allBranchAssignments
+            .GroupBy(ba => ba.EmployeeId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(ba => ba.Branch?.Name ?? string.Empty).Where(n => !string.IsNullOrEmpty(n)).ToList());
+
         var employeeComparisons = new List<EmployeeComparisonItem>();
         
         foreach (var emp in employees)
         {
-            // Get employee's branches
-            var employeeBranches = await _context.BranchAssignments
-                .Include(ba => ba.Branch)
-                .Where(ba => ba.EmployeeId == emp.Id && 
-                            (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date))
-                .Select(ba => ba.Branch != null ? ba.Branch.Name : string.Empty)
-                .Where(n => !string.IsNullOrEmpty(n))
-                .ToListAsync();
+            // In-memory lookup instead of DB call
+            var employeeBranches = branchAssignmentsByEmp.TryGetValue(emp.Id, out var eb) ? eb : new List<string>();
             
             // Get task statistics
             var stats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(emp.Id, utcStartDate, utcEndDate);
@@ -203,12 +211,12 @@ public async Task<EmployeeComparisonViewModel> ExecuteEmployeeComparisonReportAs
             employeeComparisons.Add(comparison);
         }
         
-        // Sort employees by performance score
+        // Sort employees by performance score — compute average ONCE (was O(N²) before)
+        var avgScore = employeeComparisons.Any() ? employeeComparisons.Average(e => e.PerformanceScore) : 0;
         var sortedEmployees = employeeComparisons.OrderByDescending(e => e.PerformanceScore).ToList();
         for (int i = 0; i < sortedEmployees.Count; i++)
         {
             sortedEmployees[i].Rank = i + 1;
-            var avgScore = employeeComparisons.Average(e => e.PerformanceScore);
             sortedEmployees[i].VsAverage = Math.Round(sortedEmployees[i].PerformanceScore - avgScore, 1);
         }
         
@@ -329,12 +337,16 @@ private async Task<List<DailyTaskComparison>> GetEmployeeDailyTasksAsync(int emp
                         dt.TaskDate <= endDate)
             .OrderByDescending(dt => dt.TaskDate)
             .Take(20)
+            .AsNoTracking()
             .ToListAsync();
         
+        // Pre-fetch holidays once instead of per row
+        var holidays = await _holidayService.GetAllHolidaysAsync();
+
         var result = new List<DailyTaskComparison>();
         foreach (var dt in dailyTasks)
         {
-            var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt);
+            var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt, holidays);
             result.Add(new DailyTaskComparison
             {
                 Date = _timezoneService.ConvertToLocalTime(dt.TaskDate),
@@ -492,9 +504,7 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
                 "branch" => await ExecuteBranchReportAsync(
                     parameters?.ContainsKey("branchId") == true ? Convert.ToInt32(parameters["branchId"]) : 0,
                     startDate, endDate),
-                "department" => await ExecuteDepartmentReportAsync(
-                    parameters?.ContainsKey("departmentId") == true ? Convert.ToInt32(parameters["departmentId"]) : 0,
-                    startDate, endDate),
+
                 "task" => await ExecuteTaskReportAsync(
                     parameters?.ContainsKey("taskId") == true ? Convert.ToInt32(parameters["taskId"]) : 0,
                     startDate, endDate),
@@ -572,11 +582,15 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
             var branchBreakdown = new Dictionary<string, BranchStatViewModel>();
             var todayLocal = _timezoneService.GetCurrentLocalTime().Date;
 
+            // Pre-fetch holidays once (cached) to avoid N async calls inside the loop
+            var holidays = await _holidayService.GetAllHolidaysAsync();
+
             foreach (var dt in dailyTasks)
             {
                 if (dt.TaskItem == null) continue;
 
-                var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt);
+                // Compute deadline in-memory using the cached holiday list
+                var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt, holidays);
                 var taskName = dt.TaskItem.Name;
                 var localTaskDate = _timezoneService.ConvertToLocalTime(dt.TaskDate);
 
@@ -595,7 +609,8 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
                     AssignedTo = employee.Name,
                     AdjustmentMinutes = dt.AdjustmentMinutes,
                     AdjustmentReason = dt.AdjustmentReason ?? "",
-                    Score = dt.IsCompleted ? (delayInfo.IsOnTime ? 100 : 50) : 0
+                    Score = dt.IsCompleted ? (delayInfo.IsOnTime ? 100 : 50) : 0,
+                    DelayText = delayInfo.DelayText
                 });
 
                 if (!taskBreakdown.ContainsKey(taskName))
@@ -716,6 +731,27 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
                 .Select(type => dailyBreakdown.Count(d => d.TaskType == type))
                 .ToList();
 
+            // Offloading Razor view logic to Backend
+            var highPriorityTasks = taskBreakdown.Where(t => t.Value.Pending >= 3 || t.Value.Late >= 3 || t.Value.CompletionRate < 40).ToList();
+            var needsImprovementTasks = taskBreakdown.Where(t => t.Value.CompletionRate >= 40 && t.Value.CompletionRate < 70).ToList();
+            var strongTasks = taskBreakdown.Where(t => t.Value.CompletionRate >= 90 && t.Value.OnTimeRate >= 85).ToList();
+
+            var pendingTasksList = dailyBreakdown.Where(d => d.Status != "Completed")
+                .GroupBy(t => t.TaskName).Select(g => new GroupedTaskPerformance {
+                    TaskName = g.Key, Count = g.Count(),
+                    Dates = g.Select(t => t.Date.ToString("MMM dd")).Distinct().OrderBy(d => d).ToList(),
+                    DateObjects = g.Select(t => t.Date).Distinct().OrderBy(d => d).ToList(),
+                    Details = g.OrderByDescending(t => t.Date).ToList()
+                }).OrderByDescending(t => t.Count).ToList();
+
+            var lateTasksList = dailyBreakdown.Where(d => d.Status == "Completed" && !d.IsOnTime)
+                .GroupBy(t => t.TaskName).Select(g => new GroupedTaskPerformance {
+                    TaskName = g.Key, Count = g.Count(),
+                    Dates = g.Select(t => t.Date.ToString("MMM dd")).Distinct().OrderBy(d => d).ToList(),
+                    DateObjects = g.Select(t => t.Date).Distinct().OrderBy(d => d).ToList(),
+                    Details = g.OrderByDescending(t => t.Date).ToList()
+                }).OrderByDescending(t => t.Count).ToList();
+
             return new EmployeePerformanceViewModel
             {
                 EmployeeId = employeeId,
@@ -745,7 +781,13 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
                 DailyOnTimeRates = dailyOnTimeRates,
                 TaskTypeLabels = taskTypeLabels,
                 TaskTypeValues = taskTypeValues,
-                AverageCompletionTimes = new List<double>()
+                AverageCompletionTimes = new List<double>(),
+                HighPriorityTasks = highPriorityTasks,
+                NeedsImprovementTasks = needsImprovementTasks,
+                StrongTasks = strongTasks,
+                HasStruggleTasks = highPriorityTasks.Any() || needsImprovementTasks.Any(),
+                PendingTasksList = pendingTasksList,
+                LateTasksList = lateTasksList
             };
         }
         catch (Exception ex)
@@ -787,9 +829,12 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
             var dailyBreakdown = new List<BranchDailyTaskViewModel>();
             var taskBreakdown = new Dictionary<string, BranchTaskStats>();
 
+            // Pre-fetch holidays once (cached) so we don't await per row
+            var holidays = await _holidayService.GetAllHolidaysAsync();
+
             foreach (var dt in dailyTasks)
             {
-                var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt);
+                var delayInfo = await _taskCalculationService.GetHolidayAdjustedDelayInfoAsync(dt, holidays);
                 
                 dailyBreakdown.Add(new BranchDailyTaskViewModel
                 {
@@ -829,17 +874,24 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
                 task.OnTimeRate = task.Completed > 0 ? Math.Round((double)task.OnTime / task.Completed * 100, 1) : 0;
             }
 
+            // Batch: load employees and compute their stats concurrently
+            var employees = await _context.Employees
+                .Where(e => e.BranchAssignments.Any(ba => ba.BranchId == branchId &&
+                            (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)))
+                .AsNoTracking()
+                .ToListAsync();
+
             var topPerformers = new List<EmployeePerformanceSummary>();
             var needsImprovement = new List<EmployeePerformanceSummary>();
 
-            var employees = await _context.Employees
-                .Where(e => e.BranchAssignments.Any(ba => ba.BranchId == branchId && (ba.EndDate == null || ba.EndDate.Value.Date >= DateTime.UtcNow.Date)))
-                .ToListAsync();
+            // Run all employee stat fetches concurrently instead of sequentially
+            var empStatTasks = employees.Select(emp =>
+                _taskCalculationService.GetEmployeeTaskStatisticsAsync(emp.Id, startDate, endDate)
+                    .ContinueWith(t => (emp, stats: t.Result))).ToList();
+            var empResults = await Task.WhenAll(empStatTasks);
 
-            foreach (var emp in employees)
+            foreach (var (emp, empStats) in empResults)
             {
-                var empStats = await _taskCalculationService.GetEmployeeTaskStatisticsAsync(emp.Id, startDate, endDate);
-                
                 var summary = new EmployeePerformanceSummary
                 {
                     EmployeeId = emp.Id,
@@ -907,101 +959,6 @@ private List<string> GetUniqueItems(List<string> itemsList, string employeeName)
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing branch report for {BranchId}", branchId);
-            throw;
-        }
-    }
-
-    public async Task<DepartmentPerformanceViewModel> ExecuteDepartmentReportAsync(int departmentId, DateTime startDate, DateTime endDate)
-    {
-        try
-        {
-            var department = await _context.Departments
-                .FirstOrDefaultAsync(d => d.Id == departmentId);
-
-            if (department == null)
-                return new DepartmentPerformanceViewModel 
-                { 
-                    DepartmentId = departmentId, 
-                    DepartmentName = "Unknown", 
-                    StartDate = _timezoneService.ConvertToLocalTime(startDate), 
-                    EndDate = _timezoneService.ConvertToLocalTime(endDate) 
-                };
-
-            var stats = await _taskCalculationService.GetDepartmentTaskStatisticsAsync(departmentId, startDate, endDate);
-
-            var branches = await _context.Branches
-                .Where(b => b.DepartmentId == departmentId && b.IsActive)
-                .ToListAsync();
-
-            var branchPerformance = new Dictionary<string, BranchPerformanceSummary>();
-            var topBranches = new List<BranchPerformanceSummary>();
-            var bottomBranches = new List<BranchPerformanceSummary>();
-
-            foreach (var branch in branches)
-            {
-                var branchStats = await _taskCalculationService.GetBranchTaskStatisticsAsync(branch.Id, startDate, endDate);
-                
-                var summary = new BranchPerformanceSummary
-                {
-                    BranchId = branch.Id,
-                    BranchName = branch.Name,
-                    TotalTasks = branchStats.TotalTasks,
-                    CompletedTasks = branchStats.CompletedTasks,
-                    CompletionRate = branchStats.CompletionRate,
-                    OnTimeRate = branchStats.OnTimeRate,
-                    EmployeeCount = branchStats.EmployeeScores.Count
-                };
-
-                branchPerformance[branch.Name] = summary;
-
-                if (branchStats.CompletionRate >= 80)
-                    topBranches.Add(summary);
-                else if (branchStats.CompletionRate < 60)
-                    bottomBranches.Add(summary);
-            }
-
-            var insights = new List<string>();
-            if (stats.CompletionRate >= 90)
-                insights.Add($"🏆 Excellent department completion rate of {stats.CompletionRate}%");
-            else if (stats.CompletionRate < 70)
-                insights.Add($"⚠️ Department completion rate is low ({stats.CompletionRate}%) - needs attention");
-
-            if (topBranches.Any())
-                insights.Add($"🌟 Top performing branch: {topBranches.First().BranchName} ({topBranches.First().CompletionRate}%)");
-
-            var recommendations = new List<string>();
-            if (bottomBranches.Any())
-                recommendations.Add($"📋 Focus on improving: {string.Join(", ", bottomBranches.Take(3).Select(b => b.BranchName))}");
-
-            var localStartDate = _timezoneService.ConvertToLocalTime(startDate);
-            var localEndDate = _timezoneService.ConvertToLocalTime(endDate);
-
-            return new DepartmentPerformanceViewModel
-            {
-                DepartmentId = departmentId,
-                DepartmentName = department.Name,
-                DepartmentCode = department.Code ?? "N/A",
-                StartDate = localStartDate,
-                EndDate = localEndDate,
-                TotalBranches = branches.Count,
-                ActiveBranches = branches.Count,
-                TotalEmployees = branchPerformance.Sum(b => b.Value.EmployeeCount),
-                ActiveEmployees = branchPerformance.Sum(b => b.Value.EmployeeCount),
-                TotalTasks = stats.TotalTasks,
-                CompletedTasks = stats.CompletedTasks,
-                OverallCompletionRate = stats.CompletionRate,
-                OverallOnTimeRate = stats.OnTimeRate,
-                BranchPerformance = branchPerformance,
-                TaskMatrix = new Dictionary<string, Dictionary<string, TaskStatSummary>>(),
-                TopBranches = topBranches.OrderByDescending(b => b.CompletionRate).Take(5).ToList(),
-                BottomBranches = bottomBranches.OrderBy(b => b.CompletionRate).Take(5).ToList(),
-                Insights = insights,
-                Recommendations = recommendations
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing department report for {DepartmentId}", departmentId);
             throw;
         }
     }

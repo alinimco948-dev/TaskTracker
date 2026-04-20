@@ -10,18 +10,18 @@ public class TaskCalculationService : ITaskCalculationService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<TaskCalculationService> _logger;
     private readonly ITimezoneService _timezoneService;
-    private List<Holiday>? _cachedHolidays;
-    private DateTime _holidayCacheDate = DateTime.MinValue;
+    private readonly IHolidayService _holidayService;
 
     public TaskCalculationService(
         ApplicationDbContext context,
         ILogger<TaskCalculationService> logger,
-        ITimezoneService timezoneService)
+        ITimezoneService timezoneService,
+        IHolidayService holidayService)
     {
         _context = context;
         _logger = logger;
         _timezoneService = timezoneService;
-        _cachedHolidays = new List<Holiday>();
+        _holidayService = holidayService;
     }
 
     public DateTime GetCurrentUtcDate() => DateTime.UtcNow.Date;
@@ -111,27 +111,38 @@ public class TaskCalculationService : ITaskCalculationService
 
     #region Holiday-Safe Deadline Adjustment
 
-    private async Task<DateTime> SkipHolidaysAsync(DateTime deadline)
+    /// <summary>Skip holidays forward using a pre-fetched in-memory holiday list (no DB call).</summary>
+    private async Task<DateTime> SkipHolidaysWithList(DateTime deadline, List<Holiday> holidays)
     {
-        var current = deadline.Date;
-        var timeOfDay = deadline.TimeOfDay;
+        // Ensure we are working with local time of the deadline
+        var localDeadline = deadline.Kind == DateTimeKind.Utc 
+            ? _timezoneService.ConvertToLocalTime(deadline) 
+            : deadline;
+
+        var currentLocal = localDeadline.Date;
+        var timeOfDay = localDeadline.TimeOfDay;
         var maxDays = 30;
         
         for (int i = 0; i < maxDays; i++)
         {
-            if (!await IsHolidayAsync(current))
+            var dayOfWeek = (int)currentLocal.DayOfWeek;
+            bool isHoliday = holidays.Any(h =>
+                (!h.IsWeekly && h.HolidayDate.Date == currentLocal) ||
+                (h.IsWeekly && h.WeekDay == dayOfWeek));
+                
+            if (!isHoliday) 
             {
-                if (i > 0)
-                {
-                    _logger.LogInformation("Deadline moved from {OldDate} to {NewDate} due to holiday(s)", deadline.Date, current);
-                }
-                return current.Add(timeOfDay);
+                return currentLocal.Add(timeOfDay);
             }
-            _logger.LogDebug("Skipping holiday: {Date}", current);
-            current = current.AddDays(1);
+            currentLocal = currentLocal.AddDays(1);
         }
-        
-        return current.Add(timeOfDay);
+        return localDeadline;
+    }
+
+    private async Task<DateTime> SkipHolidaysAsync(DateTime deadline)
+    {
+        var holidays = await GetCachedHolidaysAsync();
+        return await SkipHolidaysWithList(deadline, holidays);
     }
 
     #endregion
@@ -140,71 +151,17 @@ public class TaskCalculationService : ITaskCalculationService
 
     private async Task<List<Holiday>> GetCachedHolidaysAsync()
     {
-        if (_cachedHolidays == null || DateTime.UtcNow - _holidayCacheDate > TimeSpan.FromHours(1))
-        {
-            _cachedHolidays = await _context.Holidays.AsNoTracking().ToListAsync();
-            _holidayCacheDate = DateTime.UtcNow;
-            _logger.LogInformation("Holiday cache refreshed: {Count} holidays loaded", _cachedHolidays.Count);
-        }
-        return _cachedHolidays;
+        return await _holidayService.GetAllHolidaysAsync();
     }
 
     public async Task<bool> IsHolidayAsync(DateTime date)
     {
-        try
-        {
-            var holidays = await GetCachedHolidaysAsync();
-            var localDate = _timezoneService.ConvertToLocalTime(date).Date;
-            
-            var isSpecificHoliday = holidays.Any(h => !h.IsWeekly && h.HolidayDate.Date == localDate);
-            if (isSpecificHoliday) return true;
-            
-            var dayOfWeek = (int)localDate.DayOfWeek;
-            var isWeeklyHoliday = holidays.Any(h => h.IsWeekly && h.WeekDay == dayOfWeek);
-            
-            _logger.LogDebug("IsHolidayAsync({Date}): Specific={Specific}, Weekly={Weekly}", localDate, isSpecificHoliday, isWeeklyHoliday);
-            return isWeeklyHoliday;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error checking if date is holiday");
-            return false;
-        }
+        return await _holidayService.IsHolidayAsync(date);
     }
 
     public async Task<List<DateTime>> GetHolidaysInRangeAsync(DateTime startDate, DateTime endDate)
     {
-        try
-        {
-            var holidays = await GetCachedHolidaysAsync();
-            var holidayDates = new List<DateTime>();
-            var start = startDate.Date;
-            var end = endDate.Date;
-
-            var specificHolidays = holidays
-                .Where(h => !h.IsWeekly && h.HolidayDate.Date >= start && h.HolidayDate.Date <= end)
-                .Select(h => h.HolidayDate.Date)
-                .ToList();
-            holidayDates.AddRange(specificHolidays);
-
-            var weeklyHolidays = holidays.Where(h => h.IsWeekly && h.WeekDay.HasValue).ToList();
-            
-            for (var current = start; current <= end; current = current.AddDays(1))
-            {
-                var dayOfWeek = (int)current.DayOfWeek;
-                if (weeklyHolidays.Any(h => h.WeekDay == dayOfWeek) && !holidayDates.Contains(current))
-                {
-                    holidayDates.Add(current);
-                }
-            }
-
-            return holidayDates.OrderBy(d => d).ToList();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting holidays in range");
-            return new List<DateTime>();
-        }
+        return await _holidayService.GetHolidaysInRangeAsync(startDate, endDate);
     }
 
     public async Task<DateTime> GetNextWorkingDayAsync(DateTime date)
@@ -331,6 +288,78 @@ public class TaskCalculationService : ITaskCalculationService
             delayText = FormatDuration(diffMinutes, "late");
         }
         
+        return new TaskDelayInfo
+        {
+            IsOnTime = isOnTime,
+            DelayType = delayType,
+            DelayText = delayText,
+            Deadline = localDeadline,
+            CompletedAt = localCompleted,
+            AdjustmentMinutes = dailyTask.AdjustmentMinutes,
+            WasAdjustedForHoliday = wasAdjusted,
+            HolidayAdjustmentNote = holidayNote
+        };
+    }
+
+    /// <summary>
+    /// Fast overload: accepts a pre-loaded holiday list so no DB call is made per row.
+    /// Use in report loops after fetching holidays once with GetAllHolidaysAsync().
+    /// </summary>
+    public async Task<TaskDelayInfo> GetHolidayAdjustedDelayInfoAsync(DailyTask dailyTask, List<Holiday> holidays)
+    {
+        if (dailyTask == null || !dailyTask.IsCompleted || !dailyTask.CompletedAt.HasValue)
+        {
+            return new TaskDelayInfo
+            {
+                IsOnTime = false, DelayType = "pending", DelayText = "Pending",
+                Deadline = null, CompletedAt = null,
+                AdjustmentMinutes = dailyTask?.AdjustmentMinutes,
+                WasAdjustedForHoliday = false, HolidayAdjustmentNote = string.Empty
+            };
+        }
+
+        if (dailyTask.TaskItem == null)
+        {
+            return new TaskDelayInfo
+            {
+                IsOnTime = false, DelayType = "unknown", DelayText = "Unknown",
+                Deadline = null, CompletedAt = dailyTask.CompletedAt,
+                AdjustmentMinutes = dailyTask.AdjustmentMinutes,
+                WasAdjustedForHoliday = false, HolidayAdjustmentNote = string.Empty
+            };
+        }
+
+        var task = dailyTask.TaskItem;
+        var localTaskDate = _timezoneService.ConvertToLocalTime(dailyTask.TaskDate).Date;
+
+        // Build base deadline — same logic as CalculateDeadline but synchronous
+        var baseDeadlineDate = task.IsSameDay ? localTaskDate : localTaskDate.AddDays(1);
+        var baseDeadline = baseDeadlineDate.Add(task.Deadline);
+
+        // Skip holidays fully in-memory using pre-fetched list
+        var localDeadline = await SkipHolidaysWithList(baseDeadline, holidays);
+
+        // Apply adjustment minutes
+        if (dailyTask.AdjustmentMinutes.HasValue && dailyTask.AdjustmentMinutes.Value > 0)
+            localDeadline = localDeadline.AddMinutes(dailyTask.AdjustmentMinutes.Value);
+
+        var localCompleted = _timezoneService.ConvertToLocalTime(dailyTask.CompletedAt.Value);
+        var diffMinutes = (localCompleted - localDeadline).TotalMinutes;
+
+        var originalDeadline = task.IsSameDay
+            ? localTaskDate.Add(task.Deadline)
+            : localTaskDate.AddDays(1).Add(task.Deadline);
+        var wasAdjusted = localDeadline.Date != originalDeadline.Date;
+        var holidayNote = wasAdjusted
+            ? $"Deadline moved from {originalDeadline:MMM d} to {localDeadline:MMM d} for holiday"
+            : string.Empty;
+
+        bool isOnTime = diffMinutes >= -5 && diffMinutes <= 5;
+        string delayType, delayText;
+        if (diffMinutes < -5)       { delayType = "early";   delayText = FormatDuration(Math.Abs(diffMinutes), "early"); }
+        else if (isOnTime)          { delayType = "on-time"; delayText = "On Time"; }
+        else                        { delayType = "late";    delayText = FormatDuration(diffMinutes, "late"); }
+
         return new TaskDelayInfo
         {
             IsOnTime = isOnTime,
@@ -493,7 +522,7 @@ public class TaskCalculationService : ITaskCalculationService
         var firstOccurrence = firstDayOfMonth.AddDays((targetWeekday - (int)firstDayOfMonth.DayOfWeek + 7) % 7);
         var targetDate = firstOccurrence.AddDays(7 * (weekNumber - 1));
 
-        return date.Date == targetDate.Date && date.Month == date.Month;
+        return date.Date == targetDate.Date && date.Month == targetDate.Month;
     }
 
     private int GetWeekNumber(string ordinal) => ordinal.ToLower() switch

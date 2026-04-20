@@ -1,9 +1,8 @@
 namespace TaskTracker.Models.ViewModels;
 
-public class ExecutiveSummaryViewModel
+public class ExecutiveSummaryViewModel : ReportBaseViewModel
 {
-    public DateTime StartDate { get; set; }
-    public DateTime EndDate { get; set; }
+
     
     // Global Health
     public int TotalTasksAssigned { get; set; }

@@ -40,10 +40,11 @@ public class DashboardService : IDashboardService
             var utcStart = _timezoneService.GetStartOfDayLocal(localDate);
             var utcEnd = _timezoneService.GetEndOfDayLocal(localDate);
             
-            // Get branches
+            // Get branches (single query – reused for notes too)
             var branches = await _context.Branches
                 .Where(b => b.IsActive)
                 .OrderBy(b => b.Name)
+                .AsNoTracking()
                 .ToListAsync();
             
             // Get tasks visible on this date
@@ -54,6 +55,7 @@ public class DashboardService : IDashboardService
             var dailyTasks = await _context.DailyTasks
                 .Include(dt => dt.TaskItem)
                 .Where(dt => dt.TaskDate >= utcStart && dt.TaskDate <= utcEnd)
+                .AsNoTracking()
                 .ToListAsync();
             
             foreach (var dt in dailyTasks)
@@ -61,18 +63,25 @@ public class DashboardService : IDashboardService
                 taskData[$"{dt.BranchId}_{dt.TaskItemId}"] = dt;
             }
             
-            // Get branch assignments
-            var branchAssignments = await _context.BranchAssignments
+            // Get branch assignments – use GroupBy to safely handle branches with multiple
+            // active assignments; last assignment wins (most recent by StartDate).
+            var rawAssignments = await _context.BranchAssignments
                 .Include(ba => ba.Employee)
                 .Where(ba => ba.StartDate <= utcEnd && (ba.EndDate == null || ba.EndDate >= utcStart))
-                .ToDictionaryAsync(ba => ba.BranchId, ba => ba.Employee?.Name ?? "");
+                .AsNoTracking()
+                .ToListAsync();
+
+            var branchAssignments = rawAssignments
+                .GroupBy(ba => ba.BranchId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(ba => ba.StartDate).First().Employee?.Name ?? "");
+
+            // Build notes dict from already-loaded branches (avoids second DB round-trip)
+            var notesData = branches
+                .ToDictionary(b => b.Id.ToString(), b => b.Notes ?? "");
             
-            // Get notes data
-            var notesData = await _context.Branches
-                .Where(b => b.IsActive)
-                .ToDictionaryAsync(b => b.Id.ToString(), b => b.Notes ?? "");
-            
-            // Check if today is a holiday (using the holiday service)
+            // Check if today is a holiday (uses cache internally)
             var isHoliday = await _holidayService.IsHolidayAsync(utcStart);
             var holidayName = "";
             
@@ -82,9 +91,20 @@ public class DashboardService : IDashboardService
                 var holiday = holidays.FirstOrDefault(h => 
                     (h.IsWeekly && h.WeekDay == (int)localDate.DayOfWeek) ||
                     (!h.IsWeekly && h.HolidayDate.Date == localDate.Date));
-                holidayName = holiday?.Description ?? (isHoliday ? "Holiday" : "");
+                holidayName = holiday?.Description ?? "Holiday";
             }
             
+            var hiddenTasksDict = new Dictionary<int, List<string>>();
+            var totalVisibleAssignments = 0;
+            foreach (var branch in branches)
+            {
+                var hiddenForBranch = branch.HiddenTasks ?? new List<string>();
+                hiddenTasksDict[branch.Id] = hiddenForBranch;
+                totalVisibleAssignments += tasks.Count(t => !hiddenForBranch.Contains(t.Name));
+            }
+
+            var completedTasks = taskData.Values.Count(v => v?.IsCompleted == true);
+
             return new DashboardViewModel
             {
                 CurrentDate = localDate,
@@ -94,7 +114,10 @@ public class DashboardService : IDashboardService
                 BranchAssignments = branchAssignments,
                 NotesData = notesData,
                 IsHoliday = isHoliday,
-                HolidayName = holidayName
+                HolidayName = holidayName,
+                HiddenTasksDict = hiddenTasksDict,
+                ComputedTotalAssignments = totalVisibleAssignments,
+                ComputedPendingTasks = totalVisibleAssignments - completedTasks
             };
         }
         catch (Exception ex)

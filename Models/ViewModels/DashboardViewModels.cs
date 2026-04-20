@@ -1,4 +1,4 @@
-﻿using TaskTracker.Models.Entities;
+using TaskTracker.Models.Entities;
 
 namespace TaskTracker.Models.ViewModels;
 
@@ -21,4 +21,8 @@ public class DashboardViewModel
     public int PendingTasks => (Branches.Count * Tasks.Count) - CompletedTasks;
     public bool IsHoliday { get; set; }
     public string HolidayName { get; set; } = string.Empty;
+
+    public int ComputedTotalAssignments { get; set; }
+    public int ComputedPendingTasks { get; set; }
+    public Dictionary<int, List<string>> HiddenTasksDict { get; set; } = new();
 }
